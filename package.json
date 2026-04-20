@@ -5,7 +5,8 @@
   "description": "A Tower-inspired Git GUI client",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg"
   },
   "keywords": [
     "git",
@@ -17,6 +18,24 @@
   "type": "commonjs",
   "devDependencies": {
     "canvas": "^3.2.3",
-    "electron": "^41.2.1"
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.keep.app",
+    "productName": "Keep",
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "git.js",
+      "renderer/**/*",
+      "assets/icon.png",
+      "package.json"
+    ]
   }
 }
