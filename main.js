@@ -17,6 +17,21 @@ function saveRepos(repos) {
 
 app.setName('Keep');
 
+// Override the dock tooltip in dev mode on macOS
+if (process.platform === 'darwin') {
+  const plistPath = path.join(path.dirname(process.execPath), '..', 'Info.plist');
+  try {
+    let plist = fs.readFileSync(plistPath, 'utf-8');
+    if (plist.includes('<string>Electron</string>')) {
+      plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>Electron<\/string>/,
+        '<key>CFBundleName</key>\n\t<string>Keep</string>');
+      plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>Electron<\/string>/,
+        '<key>CFBundleDisplayName</key>\n\t<string>Keep</string>');
+      fs.writeFileSync(plistPath, plist);
+    }
+  } catch {}
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
