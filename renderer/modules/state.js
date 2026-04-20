@@ -4,6 +4,7 @@ export const state = {
   currentView: 'welcome',
   selectedFile: null,
   selectedCommit: null,
+  selectedBranch: null,
   statusFiles: [],
   commits: [],
   branchList: [],
