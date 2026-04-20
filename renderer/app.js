@@ -1,4 +1,4 @@
-import { $, $$, state, switchView } from './modules/state.js';
+import { $, $$, state, switchView, updateTitlebar } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal } from './modules/modal.js';
@@ -18,9 +18,12 @@ async function refresh() {
     refreshRemotes(refresh),
     refreshStashes(),
   ]);
+  updateTitlebar();
 }
 
 // ── Enter workspace mode ──
+let _pollTimer = null;
+
 async function enterWorkspace(path) {
   state.repoPath = path;
   state.selectedBranch = null;
@@ -33,6 +36,19 @@ async function enterWorkspace(path) {
   $$('#toolbar button').forEach(b => b.disabled = false);
   switchView('working-copy');
   await refresh();
+  startPolling();
+}
+
+function startPolling() {
+  stopPolling();
+  _pollTimer = setInterval(async () => {
+    if (!state.repoPath) return;
+    await refreshStatus();
+  }, 3000);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
 // ── Navigation ──

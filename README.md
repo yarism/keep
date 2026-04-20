@@ -2,7 +2,9 @@
 
 A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Electron.
 
-![Keep](assets/icon.png)
+![Working Copy](screenshots/working_copy.png)
+
+![History](screenshots/history.png)
 
 ## Features
 

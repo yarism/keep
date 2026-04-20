@@ -7,8 +7,16 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Titlebar -->
+  <!-- Titlebar row: traffic lights + centered title -->
   <div id="titlebar">
+    <div id="titlebar-title" class="titlebar-title" hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="titlebar-title-icon"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      <span id="titlebar-title-text"></span>
+    </div>
+  </div>
+
+  <!-- Toolbar row: buttons -->
+  <div id="toolbar-row">
     <div id="toolbar">
       <div class="toolbar-group">
         <button id="btn-open" title="Open Repository">
