@@ -1,5 +1,5 @@
 import { $, escapeHtml, state, switchView } from './state.js';
-import { showBranchContextMenu } from './context-menu.js';
+import { showBranchContextMenu, confirmCheckout } from './context-menu.js';
 import { refreshHistory } from './history.js';
 
 function highlightBranch(name) {
@@ -42,11 +42,15 @@ export async function refreshBranches(refresh) {
   list.innerHTML = '';
   state.branchList.filter(b => !b.isRemote).forEach(b => {
     const item = document.createElement('div');
-    item.className = 'branch-item' + (b.current ? ' current' : '');
+    item.className = 'branch-item' + (b.current ? ' current' : '') + (b.detached ? ' detached' : '');
     item.dataset.branch = b.name;
+    const icon = b.detached
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>`;
+    const label = b.detached ? `(HEAD detached at ${b.name})` : b.name;
     item.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>
-      <span>${escapeHtml(b.name)}</span>
+      ${icon}
+      <span>${escapeHtml(label)}</span>
       ${b.current ? '<span class="head-badge">HEAD</span>' : ''}
     `;
     item.addEventListener('click', async () => {
@@ -58,7 +62,7 @@ export async function refreshBranches(refresh) {
     item.addEventListener('contextmenu', (e) => { e.preventDefault(); showBranchContextMenu(e, b, refresh); });
     item.addEventListener('dblclick', async () => {
       if (b.current) return;
-      try { await window.git.checkout(state.repoPath, b.name); await refresh(); } catch (e) { alert(e.message); }
+      confirmCheckout(b.name, refresh);
     });
     list.appendChild(item);
   });

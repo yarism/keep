@@ -63,14 +63,29 @@ exports.log = async (repoPath, branch, limit = 100) => {
 
 exports.branches = async (repoPath) => {
   const out = await run(repoPath, ['branch', '-a', '--format=%(refname:short) %(HEAD) %(upstream:short)']);
-  return out.trim().split('\n').filter(Boolean).map(line => {
+  const branches = [];
+  let detachedHead = false;
+  out.trim().split('\n').filter(Boolean).forEach(line => {
     const parts = line.trim().split(' ');
     const name = parts[0];
     const current = parts[1] === '*';
     const upstream = parts[2] || null;
     const isRemote = name.startsWith('origin/');
-    return { name, current, upstream, isRemote };
+    // Detect detached HEAD — git outputs "(HEAD" as the name
+    if (name.startsWith('(HEAD')) {
+      detachedHead = true;
+      return; // skip this pseudo-branch
+    }
+    branches.push({ name, current, upstream, isRemote });
   });
+  // If detached, find the current commit hash
+  if (detachedHead) {
+    try {
+      const hash = (await run(repoPath, ['rev-parse', '--short', 'HEAD'])).trim();
+      branches.unshift({ name: hash, current: true, upstream: null, isRemote: false, detached: true });
+    } catch {}
+  }
+  return branches;
 };
 
 exports.tags = async (repoPath) => {

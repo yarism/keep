@@ -15,6 +15,8 @@ function saveRepos(repos) {
   fs.writeFileSync(reposFile, JSON.stringify(repos, null, 2));
 }
 
+app.setName('Keep');
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -22,6 +24,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -33,7 +36,13 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    const { nativeImage } = require('electron');
+    app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')));
+  }
+  createWindow();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 

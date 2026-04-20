@@ -50,12 +50,24 @@ function clearSearch() {
 export async function refreshHistory(refresh, branchOverride) {
   _refresh = refresh;
   if ($('#search-input').value.trim()) return;
-  // Use override if provided, otherwise use stored selection, otherwise current branch
-  if (branchOverride !== undefined) state.selectedBranch = branchOverride;
-  const branchName = state.selectedBranch || (state.branchList.find(b => b.current) || {}).name || null;
+  const currentBranch = state.branchList.find(b => b.current);
+  let branchName;
+  if (branchOverride !== undefined) {
+    state.selectedBranch = branchOverride;
+    branchName = branchOverride;
+  } else if (state.selectedBranch) {
+    branchName = state.selectedBranch;
+  } else if (currentBranch) {
+    branchName = currentBranch.detached ? 'HEAD' : currentBranch.name;
+  } else {
+    branchName = null;
+  }
   try {
     state.commits = await window.git.log(state.repoPath, branchName, 200);
-    $('#history-branch-label').textContent = branchName || 'History';
+    const displayLabel = currentBranch && currentBranch.detached && branchName === 'HEAD'
+      ? `HEAD (${currentBranch.name})`
+      : (branchName || 'History');
+    $('#history-branch-label').textContent = displayLabel;
   } catch { state.commits = []; }
   renderCommitList(refresh);
 }
