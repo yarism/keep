@@ -7,74 +7,81 @@ function drawIcon(size) {
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d');
 
-  const pad = size * 0.09;
-  const bw = size - pad * 2;
-  const r = bw * 0.22;
+  // macOS convention: icon body fills ~80% of canvas, the rest is transparent bleed.
+  const pad = size * 0.10;
+  const inner = size - pad * 2;
+  const left = pad;
+  const top = pad;
+  const cx = size / 2;
+  const cy = size / 2;
+  const cornerR = inner * 0.2237; // Apple's standard corner radius ratio
 
-  // Deep navy background
-  const bg = ctx.createLinearGradient(pad, pad, pad + bw, pad + bw);
-  bg.addColorStop(0, '#080d28');
-  bg.addColorStop(1, '#160c38');
+  // Background gradient — richer indigo, no bright highlight in the corner.
   ctx.beginPath();
-  ctx.roundRect(pad, pad, bw, bw, r);
+  ctx.roundRect(left, top, inner, inner, cornerR);
+  const bg = ctx.createLinearGradient(left, top, left + inner, top + inner);
+  bg.addColorStop(0, '#7a86f5');   // indigo-400-ish (toned down from periwinkle)
+  bg.addColorStop(0.55, '#4f46e5'); // indigo-600
+  bg.addColorStop(1, '#1e1b4b');   // indigo-950 — near-black navy from app chrome
   ctx.fillStyle = bg;
   ctx.fill();
 
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(pad, pad, bw, bw, r);
+  ctx.roundRect(left, top, inner, inner, cornerR);
   ctx.clip();
 
-  // Subtle inner glow behind the keep
-  const glow = ctx.createRadialGradient(size * 0.5, size * 0.48, 0, size * 0.5, size * 0.5, size * 0.5);
-  glow.addColorStop(0, 'rgba(70, 100, 230, 0.22)');
-  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, size, size);
+  // Gentle top sheen — centered and much softer so it doesn't blow out the corner.
+  const hi = ctx.createRadialGradient(cx, top + inner * 0.08, 0, cx, top + inner * 0.3, inner * 0.7);
+  hi.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+  hi.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = hi;
+  ctx.fillRect(left, top, inner, inner);
 
-  // === Castle Keep ===
-  const tW = size * 0.56;
-  const tX = (size - tW) / 2;
-  const tTop = size * 0.305;
-  const tBot = size * 0.83;
-  const mH = size * 0.10;
+  // Darken toward the bottom for weight.
+  const sh = ctx.createLinearGradient(0, top + inner * 0.55, 0, top + inner);
+  sh.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  sh.addColorStop(1, 'rgba(10, 5, 40, 0.28)');
+  ctx.fillStyle = sh;
+  ctx.fillRect(left, top, inner, inner);
+
+  // === Castle Keep (relative to inner box) ===
+  const tW = inner * 0.46;
+  const tX = left + (inner - tW) / 2;
+  const tTop = top + inner * 0.335;
+  const tBot = top + inner * 0.775;
+  const mH = inner * 0.08;
   const u = tW / 5;
 
-  // Arched doorway
-  const dW = size * 0.13;
+  const dW = inner * 0.11;
   const archR = dW / 2;
-  const archCY = tBot - size * 0.13;
+  const archCY = tBot - inner * 0.105;
 
-  // Arrow slit
-  const slitW = size * 0.038;
-  const slitH = size * 0.115;
+  const slitW = inner * 0.032;
+  const slitH = inner * 0.10;
   const archTop = archCY - archR;
   const slitY = tTop + (archTop - tTop - slitH) * 0.5;
 
-  ctx.shadowColor = 'rgba(180, 200, 255, 0.28)';
-  ctx.shadowBlur = size * 0.05;
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.93)';
+  ctx.shadowColor = 'rgba(15, 10, 50, 0.4)';
+  ctx.shadowBlur = inner * 0.028;
+  ctx.shadowOffsetY = inner * 0.006;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
 
   ctx.beginPath();
 
-  // Tower body + crenellations (clockwise from bottom-right)
+  // Tower body + crenellations (clockwise from bottom-right).
   ctx.moveTo(tX + tW, tBot);
   ctx.lineTo(tX, tBot);
   ctx.lineTo(tX, tTop);
 
-  // Left merlon
   ctx.lineTo(tX, tTop - mH);
   ctx.lineTo(tX + u, tTop - mH);
   ctx.lineTo(tX + u, tTop);
-  // Gap 1
   ctx.lineTo(tX + 2 * u, tTop);
-  // Middle merlon
   ctx.lineTo(tX + 2 * u, tTop - mH);
   ctx.lineTo(tX + 3 * u, tTop - mH);
   ctx.lineTo(tX + 3 * u, tTop);
-  // Gap 2
   ctx.lineTo(tX + 4 * u, tTop);
-  // Right merlon
   ctx.lineTo(tX + 4 * u, tTop - mH);
   ctx.lineTo(tX + tW, tTop - mH);
   ctx.lineTo(tX + tW, tTop);
@@ -82,15 +89,15 @@ function drawIcon(size) {
   ctx.lineTo(tX + tW, tBot);
   ctx.closePath();
 
-  // Arched door (evenodd cutout)
-  ctx.moveTo(size / 2 - archR, tBot);
-  ctx.lineTo(size / 2 - archR, archCY);
-  ctx.arc(size / 2, archCY, archR, Math.PI, 0, false);
-  ctx.lineTo(size / 2 + archR, tBot);
+  // Arched door (evenodd cutout).
+  ctx.moveTo(cx - archR, tBot);
+  ctx.lineTo(cx - archR, archCY);
+  ctx.arc(cx, archCY, archR, Math.PI, 0, false);
+  ctx.lineTo(cx + archR, tBot);
   ctx.closePath();
 
-  // Arrow slit (evenodd cutout)
-  ctx.roundRect(size / 2 - slitW / 2, slitY, slitW, slitH, slitW / 2);
+  // Arrow slit (evenodd cutout).
+  ctx.roundRect(cx - slitW / 2, slitY, slitW, slitH, slitW / 2);
 
   ctx.fill('evenodd');
 
