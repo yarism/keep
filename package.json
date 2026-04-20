@@ -1,5 +1,6 @@
 {
   "name": "keep",
+  "productName": "Keep",
   "version": "1.0.0",
   "description": "A Tower-inspired Git GUI client",
   "main": "main.js",
