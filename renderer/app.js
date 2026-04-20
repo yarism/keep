@@ -60,7 +60,53 @@ function setupToolbar() {
     try { await window.git.stashSave(state.repoPath, msg); await refresh(); } catch (e) { alert(e.message); }
   });
   $('#btn-stash-apply').addEventListener('click', async () => {
-    try { await window.git.stashApply(state.repoPath, 0); await refresh(); } catch (e) { alert(e.message); }
+    try {
+      const stashes = await window.git.stashes(state.repoPath);
+      if (stashes.length === 0) { alert('No stashes to apply.'); return; }
+      // Build a simple picker using the modal with a select
+      const overlay = $('#modal-overlay');
+      const modal = overlay.querySelector('.modal');
+      $('#modal-title').textContent = 'Apply Stash';
+      // Replace input with a select temporarily
+      const input = $('#modal-input');
+      const select = document.createElement('select');
+      select.id = 'stash-select';
+      select.className = input.className;
+      select.style.cssText = input.style.cssText;
+      stashes.forEach((s, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = s.message;
+        select.appendChild(opt);
+      });
+      input.style.display = 'none';
+      input.parentNode.insertBefore(select, input);
+      overlay.hidden = false;
+      select.focus();
+
+      await new Promise(resolve => {
+        function cleanup() {
+          overlay.hidden = true;
+          select.remove();
+          input.style.display = '';
+          $('#modal-ok').removeEventListener('click', onOk);
+          $('#modal-cancel').removeEventListener('click', onCancel);
+          select.removeEventListener('keydown', onKey);
+        }
+        async function onOk() {
+          const idx = parseInt(select.value);
+          cleanup();
+          try { await window.git.stashApply(state.repoPath, idx); await refresh(); }
+          catch (err) { alert(err.message); }
+          resolve();
+        }
+        function onCancel() { cleanup(); resolve(); }
+        function onKey(e) { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); }
+        $('#modal-ok').addEventListener('click', onOk);
+        $('#modal-cancel').addEventListener('click', onCancel);
+        select.addEventListener('keydown', onKey);
+      });
+    } catch (e) { alert(e.message); }
   });
   $('#btn-merge').addEventListener('click', async () => {
     const name = await showModal('Merge', 'Branch name to merge into current');
