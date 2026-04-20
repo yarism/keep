@@ -43,6 +43,8 @@ function startPolling() {
   stopPolling();
   _pollTimer = setInterval(async () => {
     if (!state.repoPath) return;
+    // Don't refresh while user is typing a commit message
+    if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     await refreshStatus();
   }, 3000);
 }
