@@ -17,17 +17,31 @@ function saveRepos(repos) {
 
 app.setName('Keep');
 
-// Override the dock tooltip in dev mode on macOS
+// Override the dock tooltip and icon in dev mode on macOS
 if (process.platform === 'darwin') {
   const plistPath = path.join(path.dirname(process.execPath), '..', 'Info.plist');
+  const resourcesDir = path.join(path.dirname(process.execPath), '..', 'Resources');
   try {
     let plist = fs.readFileSync(plistPath, 'utf-8');
+    let changed = false;
     if (plist.includes('<string>Electron</string>')) {
       plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>Electron<\/string>/,
         '<key>CFBundleName</key>\n\t<string>Keep</string>');
       plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>Electron<\/string>/,
         '<key>CFBundleDisplayName</key>\n\t<string>Keep</string>');
-      fs.writeFileSync(plistPath, plist);
+      changed = true;
+    }
+    if (!plist.includes('<string>keep.icns</string>')) {
+      plist = plist.replace(/<key>CFBundleIconFile<\/key>\s*<string>[^<]*<\/string>/,
+        '<key>CFBundleIconFile</key>\n\t<string>keep.icns</string>');
+      changed = true;
+    }
+    if (changed) fs.writeFileSync(plistPath, plist);
+    // Copy icon into app bundle
+    const destIcon = path.join(resourcesDir, 'keep.icns');
+    const srcIcon = path.join(__dirname, 'assets', 'icon.icns');
+    if (fs.existsSync(srcIcon) && !fs.existsSync(destIcon)) {
+      fs.copyFileSync(srcIcon, destIcon);
     }
   } catch {}
 }
