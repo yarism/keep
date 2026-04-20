@@ -69,7 +69,7 @@ Output goes to the `dist/` folder.
 
 ### Windows
 
-1. Run the `.exe` installer from the `dist/` folder
+1. Run the `.exe` installer from the `dist/` folde
 2. Follow the setup wizard
 3. Launch Keep from the Start Menu or Desktop shortcut
 
