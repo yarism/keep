@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Tower Lite</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Titlebar -->
+  <div id="titlebar">
+    <div id="toolbar">
+      <div class="toolbar-group">
+        <button id="btn-open" title="Open Repository">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          <span>Open</span>
+        </button>
+      </div>
+      <div class="toolbar-sep"></div>
+      <div class="toolbar-group">
+        <button id="btn-fetch" title="Fetch" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Fetch</span>
+        </button>
+        <button id="btn-pull" title="Pull" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="18" x2="12" y2="6"/><path d="M3 6h18"/></svg>
+          <span>Pull</span>
+        </button>
+        <button id="btn-push" title="Push" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/><path d="M3 18h18"/></svg>
+          <span>Push</span>
+        </button>
+      </div>
+      <div class="toolbar-sep"></div>
+      <div class="toolbar-group">
+        <button id="btn-merge" title="Merge" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 009 9"/></svg>
+          <span>Merge</span>
+        </button>
+        <button id="btn-rebase" title="Rebase" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" y1="9" x2="6" y2="15"/><path d="M18 9v3a3 3 0 01-3 3H9"/></svg>
+          <span>Rebase</span>
+        </button>
+      </div>
+      <div class="toolbar-sep"></div>
+      <div class="toolbar-group">
+        <button id="btn-stash-apply" title="Apply Stash" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><polyline points="8 15 12 11 16 15"/></svg>
+          <span>Apply Stash</span>
+        </button>
+        <button id="btn-stash" title="Save Stash" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+          <span>Save Stash</span>
+        </button>
+      </div>
+      <span id="repo-name"></span>
+    </div>
+  </div>
+
+  <!-- Breadcrumb -->
+  <div id="breadcrumb">
+    <span id="breadcrumb-repos" class="breadcrumb-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      Repositories
+    </span>
+    <span id="breadcrumb-sep" class="breadcrumb-sep" hidden>›</span>
+    <span id="breadcrumb-repo" class="breadcrumb-current" hidden>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      <span id="breadcrumb-repo-name"></span>
+    </span>
+  </div>
+
+  <div id="app">
+    <!-- Left sidebar -->
+    <aside id="sidebar">
+      <!-- Repo list mode -->
+      <div id="repo-list-section">
+        <div class="section-header sidebar-header-row">
+          Repositories
+          <button id="btn-add-repo" class="sidebar-add-btn" title="Add Repository">+</button>
+        </div>
+        <div id="repo-list" class="section-list"></div>
+      </div>
+
+      <!-- Workspace mode -->
+      <div id="workspace-nav" hidden>
+        <div class="section-header">Workspace</div>
+        <nav id="sidebar-nav">
+          <div class="nav-item active" data-view="working-copy">
+            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Working Copy
+            <span id="wc-badge" class="badge" hidden>0</span>
+          </div>
+          <div class="nav-item" data-view="history">
+            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            History
+          </div>
+          <div class="nav-item" data-view="stashes">
+            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+            Stashes
+          </div>
+        </nav>
+
+        <div class="sidebar-section">
+          <div class="section-header">Branches</div>
+          <div id="branches-list" class="section-list"></div>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-header">Tags</div>
+          <div id="tags-list" class="section-list"></div>
+        </div>
+        <div class="sidebar-section">
+          <div class="section-header">Remotes</div>
+          <div id="remotes-list" class="section-list"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Sidebar resize handle -->
+    <div id="sidebar-resize"></div>
+
+    <!-- Main content -->
+    <main id="content">
+      <!-- Welcome / repo detail -->
+      <div id="welcome-view" class="view active">
+        <div class="welcome">
+          <h1>Git Tower Lite</h1>
+          <p>Select a repository or click Open to add one</p>
+          <button id="btn-open-welcome">Open Repository</button>
+        </div>
+      </div>
+
+      <!-- Working Copy -->
+      <div id="working-copy-view" class="view">
+        <div id="wc-container">
+          <div id="wc-files-panel">
+            <div id="commit-box">
+              <input type="text" id="commit-subject" placeholder="Commit Subject">
+              <div id="commit-actions">
+                <button id="btn-stage-all">Stage All</button>
+                <button id="btn-commit" disabled>Commit</button>
+              </div>
+            </div>
+            <div class="panel-header"><span>Changed Files</span></div>
+            <div id="wc-file-list" class="file-list"></div>
+          </div>
+          <div id="wc-diff-panel">
+            <div class="panel-header"><span id="diff-filename">No file selected</span></div>
+            <div id="diff-content" class="diff-view"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="history-view" class="view">
+        <div id="history-container">
+          <div id="history-list-panel">
+            <div class="panel-header"><span id="history-branch-label">master</span></div>
+            <div id="history-list" class="commit-list"></div>
+          </div>
+          <div id="history-detail-panel">
+            <div id="commit-info"></div>
+            <div id="commit-changeset"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stashes -->
+      <div id="stashes-view" class="view">
+        <div id="stash-list" class="commit-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Context menu -->
+  <div id="context-menu" class="context-menu" hidden>
+    <div id="context-menu-items"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-title" id="modal-title"></div>
+      <input type="text" id="modal-input" class="modal-input">
+      <div class="modal-actions">
+        <button id="modal-cancel">Cancel</button>
+        <button id="modal-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

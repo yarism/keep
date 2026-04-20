@@ -1,0 +1,16 @@
+{
+  "name": "git-tower-lite",
+  "version": "1.0.0",
+  "description": "A Tower-inspired Git GUI client",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": ["git", "gui", "electron"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^41.2.1"
+  }
+}
