@@ -1,6 +1,6 @@
 import { $ } from './state.js';
 
-export function showModal(title, placeholder, defaultValue = '') {
+export function showModal(title, placeholder, defaultValue = '', { allowEmpty = false } = {}) {
   return new Promise(resolve => {
     const overlay = $('#modal-overlay');
     const input = $('#modal-input');
@@ -12,7 +12,7 @@ export function showModal(title, placeholder, defaultValue = '') {
     input.focus();
     input.select();
     function cleanup() { overlay.hidden = true; $('#modal-ok').removeEventListener('click', onOk); $('#modal-cancel').removeEventListener('click', onCancel); input.removeEventListener('keydown', onKey); }
-    function onOk() { cleanup(); resolve(input.value.trim() || null); }
+    function onOk() { cleanup(); resolve(allowEmpty ? (input.value.trim()) : (input.value.trim() || null)); }
     function onCancel() { cleanup(); resolve(null); }
     function onKey(e) { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); }
     $('#modal-ok').addEventListener('click', onOk);

@@ -27,12 +27,17 @@ let _pollTimer = null;
 async function enterWorkspace(path) {
   state.repoPath = path;
   state.selectedBranch = null;
+  state.selectedFile = null;
+  state.selectedCommit = null;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;
   $('#breadcrumb-sep').hidden = false;
   $('#breadcrumb-repo').hidden = false;
   $('#breadcrumb-repo-name').textContent = name;
+  $('#diff-filename').textContent = 'No file selected';
+  $('#diff-content').innerHTML = '';
+  $('#commit-subject').value = '';
   $$('#toolbar button').forEach(b => b.disabled = false);
   switchView('working-copy');
   await refresh();
@@ -43,8 +48,9 @@ function startPolling() {
   stopPolling();
   _pollTimer = setInterval(async () => {
     if (!state.repoPath) return;
-    // Don't refresh while user is typing a commit message
+    // Don't refresh while user is typing a commit message or a modal is open
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
+    if (!$('#modal-overlay').hidden) return;
     await refreshStatus();
   }, 3000);
 }
@@ -74,7 +80,7 @@ function setupToolbar() {
     try { await window.git.push(state.repoPath); await refresh(); } catch (e) { alert(e.message); }
   });
   $('#btn-stash').addEventListener('click', async () => {
-    const msg = await showModal('Save Stash', 'Stash message (optional)');
+    const msg = await showModal('Save Stash', 'Stash message (optional)', '', { allowEmpty: true });
     if (msg === null) return;
     try { await window.git.stashSave(state.repoPath, msg); await refresh(); } catch (e) { alert(e.message); }
   });
