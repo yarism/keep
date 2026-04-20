@@ -159,10 +159,10 @@ export async function refreshStashes() {
         <div class="commit-subject-text">${escapeHtml(s.message)}</div>
       `;
       item.querySelector('[data-action="apply"]').addEventListener('click', async () => {
-        try { await window.git.stashApply(state.repoPath, i); } catch (e) { alert(e.message); }
+        try { await window.git.stashApply(state.repoPath, i); await refreshStashes(); } catch (e) { alert(e.message); }
       });
       item.querySelector('[data-action="drop"]').addEventListener('click', async () => {
-        try { await window.git.stashDrop(state.repoPath, i); } catch (e) { alert(e.message); }
+        try { await window.git.stashDrop(state.repoPath, i); await refreshStashes(); } catch (e) { alert(e.message); }
       });
       list.appendChild(item);
     });
