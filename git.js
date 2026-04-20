@@ -228,12 +228,25 @@ exports.commitFileDiff = async (repoPath, hash, filePath) => {
 
 exports.searchLog = async (repoPath, query, field, branch, limit = 200) => {
   const args = ['log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', String(limit)];
-  if (branch) args.push(branch);
-  if (field === 'message') args.push('--grep=' + query, '-i');
-  else if (field === 'author') args.push('--author=' + query, '-i');
-  else if (field === 'hash') args.push(query);
-  else if (field === 'file') args.push('--', query);
+  if (field === 'message') {
+    if (branch) args.push(branch);
+    args.push('--grep=' + query, '-i');
+  } else if (field === 'author') {
+    if (branch) args.push(branch);
+    args.push('--author=' + query, '-i');
+  } else if (field === 'hash') {
+    // For hash search, just show that single commit
+    args.length = 0;
+    args.push('log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', '1', query);
+  } else if (field === 'file') {
+    if (branch) args.push(branch);
+    // Wrap in quotes-safe glob: match filename anywhere in the tree
+    const safeQuery = query.replace(/[[\]{}()\\]/g, '\\$&');
+    args.push('--', ':(glob)**/*' + safeQuery + '*');
+  }
+  console.log('[git.searchLog] running: git', args.join(' '));
   const out = await run(repoPath, args);
+  if (!out.trim()) return [];
   const lines = out.trim().split('\n');
   const commits = [];
   for (let i = 0; i < lines.length; i += 5) {
