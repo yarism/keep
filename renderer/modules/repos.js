@@ -16,7 +16,6 @@ export function showRepoList() {
   $('#workspace-nav').hidden = true;
   $('#breadcrumb-sep').hidden = true;
   $('#breadcrumb-repo').hidden = true;
-  $('#repo-name').textContent = '';
   $$('#toolbar button:not(#btn-open)').forEach(b => b.disabled = true);
   switchView('welcome');
   renderRepoList();

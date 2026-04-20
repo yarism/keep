@@ -3,7 +3,7 @@ import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal } from './modules/modal.js';
 import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
-import { refreshHistory } from './modules/history.js';
+import { refreshHistory, setupHistorySearch } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 
 // ── Refresh all data ──
@@ -28,7 +28,6 @@ async function enterWorkspace(path) {
   $('#breadcrumb-sep').hidden = false;
   $('#breadcrumb-repo').hidden = false;
   $('#breadcrumb-repo-name').textContent = name;
-  $('#repo-name').textContent = name;
   $$('#toolbar button').forEach(b => b.disabled = false);
   switchView('working-copy');
   await refresh();
@@ -133,5 +132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupToolbar();
   setupContextMenu();
   setupCommitBox(refresh);
+  setupHistorySearch(refresh);
   showRepoList();
 });

@@ -75,6 +75,7 @@ ipcMain.handle('git-commit-detail', (_, repoPath, hash) => git.commitDetail(repo
 ipcMain.handle('git-commit-diff', (_, repoPath, hash) => git.commitDiff(repoPath, hash));
 ipcMain.handle('git-commit-files', (_, repoPath, hash) => git.commitFiles(repoPath, hash));
 ipcMain.handle('git-commit-file-diff', (_, repoPath, hash, filePath) => git.commitFileDiff(repoPath, hash, filePath));
+ipcMain.handle('git-search-log', (_, repoPath, query, field, branch, limit) => git.searchLog(repoPath, query, field, branch, limit));
 ipcMain.handle('git-stage', (_, repoPath, filePath) => git.stage(repoPath, filePath));
 ipcMain.handle('git-unstage', (_, repoPath, filePath) => git.unstage(repoPath, filePath));
 ipcMain.handle('git-stage-all', (_, repoPath) => git.stageAll(repoPath));
