@@ -6,7 +6,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --mac dmg"
+    "dist": "electron-builder --mac dmg",
+    "dist:win": "electron-builder --win nsis",
+    "dist:linux": "electron-builder --linux AppImage",
+    "dist:all": "electron-builder --mac dmg --win nsis --linux AppImage"
   },
   "keywords": [
     "git",
@@ -28,6 +31,15 @@
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": "dmg"
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": "nsis"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": "AppImage",
+      "category": "Development"
     },
     "files": [
       "main.js",

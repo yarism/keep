@@ -41,22 +41,42 @@ npm install
 npm start
 ```
 
-### 3. Build a distributable .dmg (macOS)
+### 3. Build distributables
 
 ```bash
+# macOS (.dmg)
 npm run dist
+
+# Windows (.exe installer)
+npm run dist:win
+
+# Linux (.AppImage)
+npm run dist:linux
+
+# All platforms
+npm run dist:all
 ```
 
-The `.dmg` file will be in the `dist/` folder. Open it and drag Keep to your Applications folder — no terminal needed after that.
+Output goes to the `dist/` folder.
 
 ## Installing Without Terminal
 
-If someone sends you the `.dmg` file:
+### macOS
 
 1. Double-click the `.dmg` to mount it
 2. Drag **Keep** into your **Applications** folder
-3. Open it from Applications or Spotlight
-4. On first launch, macOS may block it since it's unsigned — right-click the app → **Open** → click **Open** in the dialog
+3. On first launch, macOS may block it since it's unsigned — right-click the app → **Open** → click **Open** in the dialog
+
+### Windows
+
+1. Run the `.exe` installer from the `dist/` folder
+2. Follow the setup wizard
+3. Launch Keep from the Start Menu or Desktop shortcut
+
+### Linux
+
+1. Make the `.AppImage` executable: `chmod +x Keep-*.AppImage`
+2. Double-click it or run it from the terminal
 
 ## Project Structure
 
