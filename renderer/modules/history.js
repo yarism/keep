@@ -33,7 +33,11 @@ async function doSearch() {
   const branchName = (state.branchList.find(b => b.current) || {}).name || null;
   try {
     state.commits = await window.git.searchLog(state.repoPath, query, field, branchName, 200);
-  } catch { state.commits = []; }
+    console.log('[search] found', state.commits.length, 'commits for', field, ':', query);
+  } catch (e) {
+    console.error('[search] error:', e);
+    state.commits = [];
+  }
   renderCommitList(_refresh);
 }
 
