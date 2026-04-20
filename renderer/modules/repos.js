@@ -31,14 +31,33 @@ function renderRepoList() {
   state.repositories.forEach((r, i) => {
     const item = document.createElement('div');
     item.className = 'repo-item' + (state.repoPath === r.path ? ' active' : '');
+    item.tabIndex = 0;
     item.innerHTML = `
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
       <span>${escapeHtml(r.name)}</span>
-      <button class="repo-item-remove" title="Remove">×</button>
+      <button class="repo-item-remove" title="Remove" tabindex="-1">×</button>
     `;
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('repo-item-remove')) return;
       if (_onSelectRepo) _onSelectRepo(r.path);
+    });
+    item.addEventListener('keydown', (e) => {
+      const items = list.querySelectorAll('.repo-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = items[i + 1];
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = items[i - 1];
+        if (prev) prev.focus();
+      } else if (e.key === 'Enter') {
+        if (_onSelectRepo) _onSelectRepo(r.path);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        state.repositories.splice(i, 1);
+        window.git.saveRepos(state.repositories);
+        renderRepoList();
+      }
     });
     item.querySelector('.repo-item-remove').addEventListener('click', (e) => {
       e.stopPropagation();

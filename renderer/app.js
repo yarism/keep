@@ -9,10 +9,11 @@ import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refre
 // ── Refresh all data ──
 async function refresh() {
   if (!state.repoPath) return;
+  // Branches must load first since remotes and history depend on branchList
+  await refreshBranches(refresh);
   await Promise.all([
     refreshStatus(),
     refreshHistory(refresh),
-    refreshBranches(refresh),
     refreshTags(),
     refreshRemotes(refresh),
     refreshStashes(),
@@ -22,6 +23,7 @@ async function refresh() {
 // ── Enter workspace mode ──
 async function enterWorkspace(path) {
   state.repoPath = path;
+  state.selectedBranch = null;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;

@@ -18,12 +18,14 @@ function renderFileList() {
     list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">No changes</div>';
     return;
   }
-  state.statusFiles.forEach(f => {
+  state.statusFiles.forEach((f, idx) => {
     const item = document.createElement('div');
     const key = f.filePath + (f.staged ? ':staged' : ':unstaged');
     item.className = 'file-item' + (state.selectedFile === key ? ' selected' : '');
+    item.tabIndex = 0;
+    item.dataset.index = idx;
     item.innerHTML = `
-      <input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''}>
+      <input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1">
       <span class="file-status ${f.status}">${f.status[0].toUpperCase()}</span>
       <span class="file-name" title="${f.filePath}">${f.filePath.split('/').pop()}</span>
       <span class="file-path">${f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : ''}</span>
@@ -33,6 +35,21 @@ function renderFileList() {
       state.selectedFile = key;
       renderFileList();
       selectFile(f);
+    });
+    item.addEventListener('keydown', (e) => {
+      const items = list.querySelectorAll('.file-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = items[idx + 1];
+        if (next) { next.focus(); next.click(); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = items[idx - 1];
+        if (prev) { prev.focus(); prev.click(); }
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        item.querySelector('.file-checkbox').click();
+      }
     });
     item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
       e.stopPropagation();
@@ -47,6 +64,9 @@ function renderFileList() {
       showFileContextMenu(e, f);
     });
     list.appendChild(item);
+
+    // Auto-focus the selected item
+    if (state.selectedFile === key) requestAnimationFrame(() => item.focus());
   });
 }
 

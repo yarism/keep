@@ -47,12 +47,13 @@ function clearSearch() {
   if (_refresh) refreshHistory(_refresh);
 }
 
-export async function refreshHistory(refresh) {
+export async function refreshHistory(refresh, branchOverride) {
   _refresh = refresh;
-  // Don't overwrite search results if there's an active search
   if ($('#search-input').value.trim()) return;
+  // Use override if provided, otherwise use stored selection, otherwise current branch
+  if (branchOverride !== undefined) state.selectedBranch = branchOverride;
+  const branchName = state.selectedBranch || (state.branchList.find(b => b.current) || {}).name || null;
   try {
-    const branchName = (state.branchList.find(b => b.current) || {}).name || null;
     state.commits = await window.git.log(state.repoPath, branchName, 200);
     $('#history-branch-label').textContent = branchName || 'History';
   } catch { state.commits = []; }
@@ -62,9 +63,10 @@ export async function refreshHistory(refresh) {
 function renderCommitList(refresh) {
   const list = $('#history-list');
   list.innerHTML = '';
-  state.commits.forEach(c => {
+  state.commits.forEach((c, idx) => {
     const item = document.createElement('div');
     item.className = 'commit-item' + (state.selectedCommit === c.hash ? ' selected' : '');
+    item.tabIndex = 0;
     const date = new Date(c.date).toLocaleDateString('en-CA');
     item.innerHTML = `
       <div class="commit-item-header">
@@ -75,8 +77,21 @@ function renderCommitList(refresh) {
       <div class="commit-subject-text">${escapeHtml(c.subject)}</div>
     `;
     item.addEventListener('click', () => selectCommit(c, refresh));
+    item.addEventListener('keydown', (e) => {
+      const items = list.querySelectorAll('.commit-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = items[idx + 1];
+        if (next) { next.focus(); next.click(); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = items[idx - 1];
+        if (prev) { prev.focus(); prev.click(); }
+      }
+    });
     item.addEventListener('contextmenu', (e) => { e.preventDefault(); showCommitContextMenu(e, c, refresh); });
     list.appendChild(item);
+    if (state.selectedCommit === c.hash) requestAnimationFrame(() => item.focus());
   });
 }
 
