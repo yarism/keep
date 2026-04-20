@@ -1,5 +1,20 @@
 import { $, state } from './state.js';
-import { showModal } from './modal.js';
+import { showModal, showConfirm } from './modal.js';
+
+async function hasDirtyFiles() {
+  try {
+    const files = await window.git.status(state.repoPath);
+    return files.length > 0;
+  } catch { return false; }
+}
+
+export async function confirmCheckout(target, refresh) {
+  if (await hasDirtyFiles()) {
+    const ok = await showConfirm('Uncommitted Changes', `You have uncommitted changes. Checking out "${target}" may discard them.\n\nContinue?`);
+    if (!ok) return;
+  }
+  try { await window.git.checkout(state.repoPath, target); await refresh(); } catch (err) { alert(err.message); }
+}
 
 export function setupContextMenu() {
   document.addEventListener('click', () => hideContextMenu());
@@ -38,7 +53,7 @@ function hideContextMenu() {
 
 export function showBranchContextMenu(e, branch, refresh) {
   showContextMenu(e, [
-    { label: `Check Out "${branch.name}"`, disabled: branch.current, action: async () => { try { await window.git.checkout(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } }},
+    { label: `Check Out "${branch.name}"`, disabled: branch.current, action: () => confirmCheckout(branch.name, refresh) },
     { separator: true },
     { label: 'Pull...', action: async () => { try { await window.git.pull(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Push...', action: async () => { try { await window.git.push(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
@@ -60,9 +75,9 @@ export function showCommitContextMenu(e, commit, refresh) {
     { label: 'Copy Commit Hash to Clipboard', action: () => navigator.clipboard.writeText(commit.hash) },
     { label: 'Copy Commit Info to Clipboard', action: () => navigator.clipboard.writeText(`${commit.hash} ${commit.subject}\nAuthor: ${commit.author}\nDate: ${commit.date}`) },
     { separator: true },
-    { label: `Check Out "${h}"`, action: async () => { try { await window.git.checkout(state.repoPath, commit.hash); await refresh(); } catch (err) { alert(err.message); } }},
+    { label: `Check Out "${h}"`, action: () => confirmCheckout(commit.hash, refresh) },
     { separator: true },
-    { label: `Revert "${h}"...`, action: async () => { try { await window.git.revert(state.repoPath, commit.hash); await refresh(); } catch (err) { alert(err.message); } }},
+    { label: `Revert "${h}"...`, action: async () => { const ok = await showConfirm('Revert Commit', `Create a new commit that undoes changes from "${h}"?`); if (!ok) return; try { await window.git.revert(state.repoPath, commit.hash); await refresh(); } catch (err) { alert(err.message); } }},
     { separator: true },
     { label: `Create New Branch from "${h}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from ${h})`); if (n) { try { await window.git.createBranch(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
     { label: `Create New Tag from "${h}"...`, action: async () => { const n = await showModal('Create Tag', `Tag name (from ${h})`); if (n) { try { await window.git.createTag(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
