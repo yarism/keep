@@ -225,3 +225,20 @@ exports.commitFiles = async (repoPath, hash) => {
 exports.commitFileDiff = async (repoPath, hash, filePath) => {
   return run(repoPath, ['diff-tree', '-p', hash, '--', filePath]);
 };
+
+exports.searchLog = async (repoPath, query, field, branch, limit = 200) => {
+  const args = ['log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', String(limit)];
+  if (branch) args.push(branch);
+  if (field === 'message') args.push('--grep=' + query, '-i');
+  else if (field === 'author') args.push('--author=' + query, '-i');
+  else if (field === 'hash') args.push(query);
+  else if (field === 'file') args.push('--', query);
+  const out = await run(repoPath, args);
+  const lines = out.trim().split('\n');
+  const commits = [];
+  for (let i = 0; i < lines.length; i += 5) {
+    if (!lines[i]) break;
+    commits.push({ hash: lines[i], author: lines[i+1], email: lines[i+2], date: lines[i+3], subject: lines[i+4] });
+  }
+  return commits;
+};

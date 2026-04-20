@@ -23,4 +23,7 @@ export function switchView(view) {
   $$('.view').forEach(v => v.classList.remove('active'));
   const el = $(`#${view}-view`);
   if (el) el.classList.add('active');
+  // Show search bar only on history view
+  const searchBar = $('#history-search-bar');
+  if (searchBar) searchBar.hidden = (view !== 'history');
 }

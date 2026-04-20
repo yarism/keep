@@ -78,12 +78,6 @@ body {
 #toolbar button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border); }
 #toolbar button:disabled { opacity: 0.35; cursor: default; }
 
-#repo-name {
-  margin-left: auto;
-  color: var(--text-dim);
-  font-size: 12px;
-}
-
 #app {
   display: flex;
   flex: 1;
@@ -492,6 +486,73 @@ body {
 #history-detail-panel { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
 
 .commit-list { flex: 1; overflow-y: auto; }
+
+/* History search */
+#history-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  height: 28px;
+}
+#history-search-bar[hidden] { display: none; }
+
+#search-field {
+  background: var(--bg-hover);
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 11px;
+  outline: none;
+  height: 100%;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%238888aa' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 22px;
+}
+#search-field option { background: var(--bg-surface); color: var(--text); }
+
+#search-input-wrap {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  flex: 1;
+  height: 100%;
+}
+#search-input-wrap svg { color: var(--text-dim); flex-shrink: 0; }
+
+#search-input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 0;
+  font-size: 11px;
+  width: 160px;
+  outline: none;
+}
+#search-input::placeholder { color: var(--text-dim); }
+
+#search-clear {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+  display: none;
+}
+#search-clear.visible { display: block; }
+#search-clear:hover { color: var(--text); }
 
 .commit-item {
   padding: 10px 12px;

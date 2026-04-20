@@ -2,9 +2,53 @@ import { $, escapeHtml, state } from './state.js';
 import { renderDiff } from './diff.js';
 import { showCommitContextMenu } from './context-menu.js';
 
-export async function refreshHistory(refresh, branchOverride) {
+let _refresh = null;
+let _searchTimeout = null;
+
+export function setupHistorySearch(refresh) {
+  _refresh = refresh;
+  const input = $('#search-input');
+  const field = $('#search-field');
+  const clearBtn = $('#search-clear');
+
+  input.addEventListener('input', () => {
+    clearBtn.style.display = input.value ? 'block' : 'none';
+    clearTimeout(_searchTimeout);
+    _searchTimeout = setTimeout(() => doSearch(), 300);
+  });
+  field.addEventListener('change', () => {
+    if (input.value) doSearch();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { clearTimeout(_searchTimeout); doSearch(); }
+    if (e.key === 'Escape') { clearSearch(); }
+  });
+  clearBtn.addEventListener('click', clearSearch);
+}
+
+async function doSearch() {
+  const query = $('#search-input').value.trim();
+  if (!query) { clearSearch(); return; }
+  const field = $('#search-field').value;
+  const branchName = (state.branchList.find(b => b.current) || {}).name || null;
   try {
-    const branchName = branchOverride || (state.branchList.find(b => b.current) || {}).name || null;
+    state.commits = await window.git.searchLog(state.repoPath, query, field, branchName, 200);
+  } catch { state.commits = []; }
+  renderCommitList(_refresh);
+}
+
+function clearSearch() {
+  $('#search-input').value = '';
+  $('#search-clear').style.display = 'none';
+  if (_refresh) refreshHistory(_refresh);
+}
+
+export async function refreshHistory(refresh) {
+  _refresh = refresh;
+  // Don't overwrite search results if there's an active search
+  if ($('#search-input').value.trim()) return;
+  try {
+    const branchName = (state.branchList.find(b => b.current) || {}).name || null;
     state.commits = await window.git.log(state.repoPath, branchName, 200);
     $('#history-branch-label').textContent = branchName || 'History';
   } catch { state.commits = []; }

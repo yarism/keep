@@ -53,7 +53,19 @@
           <span>Rebase</span>
         </button>
       </div>
-      <span id="repo-name"></span>
+      <div id="history-search-bar" hidden>
+        <select id="search-field">
+          <option value="message">Message</option>
+          <option value="author">Author</option>
+          <option value="hash">Commit Hash</option>
+          <option value="file">File</option>
+        </select>
+        <div id="search-input-wrap">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search...">
+          <button id="search-clear" style="display:none">×</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -155,7 +167,9 @@
       <div id="history-view" class="view">
         <div id="history-container">
           <div id="history-list-panel">
-            <div class="panel-header"><span id="history-branch-label">master</span></div>
+            <div class="panel-header">
+              <span id="history-branch-label">master</span>
+            </div>
             <div id="history-list" class="commit-list"></div>
           </div>
           <div id="history-detail-panel">
