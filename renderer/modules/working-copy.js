@@ -2,6 +2,9 @@ import { $, escapeHtml, state } from './state.js';
 import { renderDiff } from './diff.js';
 import { showContextMenu } from './context-menu.js';
 
+let _selectedIndices = new Set();
+let _lastClickedIndex = null;
+
 export async function refreshStatus() {
   try { state.statusFiles = await window.git.status(state.repoPath); }
   catch { state.statusFiles = []; }
@@ -11,17 +14,26 @@ export async function refreshStatus() {
   renderFileList();
 }
 
+function fileKey(f) {
+  return f.filePath + (f.staged ? ':staged' : ':unstaged');
+}
+
 function renderFileList() {
   const list = $('#wc-file-list');
   list.innerHTML = '';
   if (state.statusFiles.length === 0) {
     list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">No changes</div>';
+    _selectedIndices.clear();
     return;
   }
+  // Clean up indices that are out of range
+  _selectedIndices.forEach(i => { if (i >= state.statusFiles.length) _selectedIndices.delete(i); });
+
   state.statusFiles.forEach((f, idx) => {
     const item = document.createElement('div');
-    const key = f.filePath + (f.staged ? ':staged' : ':unstaged');
-    item.className = 'file-item' + (state.selectedFile === key ? ' selected' : '');
+    const key = fileKey(f);
+    const isSelected = _selectedIndices.has(idx);
+    item.className = 'file-item' + (isSelected ? ' selected' : '');
     item.tabIndex = 0;
     item.dataset.index = idx;
     item.innerHTML = `
@@ -32,8 +44,9 @@ function renderFileList() {
     `;
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('file-checkbox')) return;
+      handleFileClick(idx, e);
+      // Show diff for the clicked file
       state.selectedFile = key;
-      renderFileList();
       selectFile(f);
     });
     item.addEventListener('keydown', (e) => {
@@ -61,13 +74,43 @@ function renderFileList() {
     });
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      showFileContextMenu(e, f);
+      // If right-clicking an unselected file, select only that one
+      if (!_selectedIndices.has(idx)) {
+        _selectedIndices.clear();
+        _selectedIndices.add(idx);
+        _lastClickedIndex = idx;
+        renderFileList();
+      }
+      if (_selectedIndices.size > 1) {
+        showMultiFileContextMenu(e);
+      } else {
+        showFileContextMenu(e, f);
+      }
     });
     list.appendChild(item);
 
-    // Auto-focus the selected item
-    if (state.selectedFile === key) requestAnimationFrame(() => item.focus());
+    if (isSelected && _selectedIndices.size === 1) requestAnimationFrame(() => item.focus());
   });
+}
+
+function handleFileClick(idx, e) {
+  if (e.shiftKey && _lastClickedIndex !== null) {
+    // Range select
+    const start = Math.min(_lastClickedIndex, idx);
+    const end = Math.max(_lastClickedIndex, idx);
+    if (!e.metaKey && !e.ctrlKey) _selectedIndices.clear();
+    for (let i = start; i <= end; i++) _selectedIndices.add(i);
+  } else if (e.metaKey || e.ctrlKey) {
+    // Toggle select
+    if (_selectedIndices.has(idx)) _selectedIndices.delete(idx);
+    else _selectedIndices.add(idx);
+  } else {
+    // Single select
+    _selectedIndices.clear();
+    _selectedIndices.add(idx);
+  }
+  _lastClickedIndex = idx;
+  renderFileList();
 }
 
 async function selectFile(f) {
@@ -86,7 +129,6 @@ async function selectFile(f) {
 }
 
 export function setupCommitBox(refresh) {
-  // Listen for refresh-status events from diff hunk buttons
   document.addEventListener('refresh-status', () => refreshStatus());
 
   const input = $('#commit-subject');
@@ -106,6 +148,52 @@ export function setupCommitBox(refresh) {
       await refreshStatus();
     } catch (e) { alert(e.message); }
   });
+}
+
+function getSelectedFiles() {
+  return [..._selectedIndices].sort((a, b) => a - b).map(i => state.statusFiles[i]).filter(Boolean);
+}
+
+function showMultiFileContextMenu(e) {
+  const files = getSelectedFiles();
+  const count = files.length;
+  const hasUnstaged = files.some(f => !f.staged);
+  const hasStaged = files.some(f => f.staged);
+  const discardable = files.filter(f => !f.staged && f.status !== 'untracked');
+  const trashable = files.filter(f => f.status === 'untracked');
+
+  showContextMenu(e, [
+    { label: `Stage ${count} Files`, disabled: !hasUnstaged, action: async () => {
+      try {
+        for (const f of files.filter(f2 => !f2.staged)) await window.git.stage(state.repoPath, f.filePath);
+        await refreshStatus();
+      } catch (err) { alert(err.message); }
+    }},
+    { label: `Unstage ${count} Files`, disabled: !hasStaged, action: async () => {
+      try {
+        for (const f of files.filter(f2 => f2.staged)) await window.git.unstage(state.repoPath, f.filePath);
+        await refreshStatus();
+      } catch (err) { alert(err.message); }
+    }},
+    { separator: true },
+    { label: `Discard Changes in ${discardable.length} File${discardable.length !== 1 ? 's' : ''}...`, disabled: discardable.length === 0, action: async () => {
+      if (!confirm(`Discard all local changes in ${discardable.length} file${discardable.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+      try {
+        for (const f of discardable) await window.git.discardFile(state.repoPath, f.filePath);
+        _selectedIndices.clear();
+        await refreshStatus();
+      } catch (err) { alert(err.message); }
+    }},
+    { label: `Move ${trashable.length || count} File${(trashable.length || count) !== 1 ? 's' : ''} to Trash...`, action: async () => {
+      const targets = trashable.length > 0 ? trashable : files;
+      if (!confirm(`Move ${targets.length} file${targets.length !== 1 ? 's' : ''} to Trash?`)) return;
+      try {
+        for (const f of targets) await window.git.trashFile(state.repoPath, f.filePath);
+        _selectedIndices.clear();
+        await refreshStatus();
+      } catch (err) { alert(err.message); }
+    }},
+  ]);
 }
 
 function showFileContextMenu(e, f) {
