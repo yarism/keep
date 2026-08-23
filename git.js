@@ -10,14 +10,25 @@ function run(repoPath, args) {
 }
 
 exports.status = async (repoPath) => {
-  const out = await run(repoPath, ['status', '--porcelain=v1', '-uall']);
+  // -z gives NUL-terminated records and turns off C-style quoting, so paths with
+  // spaces or non-ASCII characters arrive verbatim instead of as `"sp ace.txt"`
+  // or `"caf\303\251.txt"`. It also splits a rename into two fields rather than
+  // packing them into one "old -> new" string.
+  const out = await run(repoPath, ['status', '--porcelain=v1', '-uall', '-z']);
   const results = [];
-  // Split on newline but do NOT trim the whole output — leading spaces are significant
-  const lines = out.split('\n').filter(l => l.length >= 4);
-  lines.forEach(line => {
-    const x = line[0], y = line[1];
-    const filePath = line.substring(3);
-    if (!filePath) return;
+  const fields = out.split('\0');
+  for (let i = 0; i < fields.length; i++) {
+    const entry = fields[i];
+    if (entry.length < 4) continue;
+    const x = entry[0], y = entry[1];
+    const filePath = entry.substring(3);
+    if (!filePath) continue;
+
+    // A rename or copy is followed by a second field holding the original path.
+    // Under -z the new path comes first, so `filePath` above is already the one
+    // that exists on disk — the one every path-taking git command wants.
+    let oldPath = null;
+    if (x === 'R' || x === 'C') oldPath = fields[++i] || null;
 
     // Staged change (index vs HEAD)
     if (x !== ' ' && x !== '?') {
@@ -25,20 +36,20 @@ exports.status = async (repoPath) => {
       if (x === 'A') status = 'added';
       else if (x === 'D') status = 'deleted';
       else if (x === 'R') status = 'renamed';
-      results.push({ filePath, status, staged: true, x, y });
+      results.push({ filePath, oldPath, status, staged: true, x, y });
     }
 
     // Unstaged change (working tree vs index)
     if (y === 'M' || y === 'D') {
       let status = y === 'D' ? 'deleted' : 'modified';
-      results.push({ filePath, status, staged: false, x, y });
+      results.push({ filePath, oldPath, status, staged: false, x, y });
     }
 
     // Untracked
     if (x === '?' && y === '?') {
-      results.push({ filePath, status: 'untracked', staged: false, x, y });
+      results.push({ filePath, oldPath, status: 'untracked', staged: false, x, y });
     }
-  });
+  }
   return results;
 };
 
@@ -165,7 +176,12 @@ exports.commitDiff = async (repoPath, hash) => {
 };
 
 exports.stage = (repoPath, filePath) => run(repoPath, ['add', '--', filePath]);
-exports.unstage = (repoPath, filePath) => run(repoPath, ['reset', 'HEAD', '--', filePath]);
+// A staged rename is two index entries — dropping the new path alone would
+// leave the deletion of the old one staged, so pass both when there is a pair.
+exports.unstage = (repoPath, filePath, oldPath) => {
+  const paths = oldPath && oldPath !== filePath ? [filePath, oldPath] : [filePath];
+  return run(repoPath, ['reset', 'HEAD', '--', ...paths]);
+};
 exports.stageAll = (repoPath) => run(repoPath, ['add', '-A']);
 exports.commit = (repoPath, message) => run(repoPath, ['commit', '-m', message]);
 exports.checkout = (repoPath, branch) => run(repoPath, ['checkout', branch]);
@@ -247,17 +263,26 @@ exports.showInFinder = (repoPath, filePath) => {
 };
 
 exports.commitFiles = async (repoPath, hash) => {
-  const out = await run(repoPath, ['diff-tree', '--no-commit-id', '-r', '--name-status', hash]);
-  return out.trim().split('\n').filter(Boolean).map(line => {
-    const parts = line.split('\t');
-    const status = parts[0];
-    const filePath = parts[1];
+  // -M turns on rename detection (diff.renames is not honoured by diff-tree, so
+  // without this a rename always arrives as a delete plus an add). -z keeps
+  // paths unquoted and separates the two paths of a rename into their own
+  // fields, which is what makes the R record parseable at all.
+  const out = await run(repoPath, ['diff-tree', '--no-commit-id', '-r', '-M', '-z', '--name-status', hash]);
+  const fields = out.split('\0').filter(Boolean);
+  const files = [];
+  for (let i = 0; i < fields.length;) {
+    const code = fields[i++];
     let statusName = 'modified';
-    if (status === 'A') statusName = 'added';
-    else if (status === 'D') statusName = 'deleted';
-    else if (status.startsWith('R')) statusName = 'renamed';
-    return { filePath, status: statusName, statusCode: status[0] };
-  });
+    if (code[0] === 'A') statusName = 'added';
+    else if (code[0] === 'D') statusName = 'deleted';
+    else if (code[0] === 'R') statusName = 'renamed';
+    // R and C spell out both paths: the original first, then the new one.
+    const oldPath = (code[0] === 'R' || code[0] === 'C') ? fields[i++] : null;
+    const filePath = fields[i++];
+    if (!filePath) break;
+    files.push({ filePath, oldPath, status: statusName, statusCode: code[0] });
+  }
+  return files;
 };
 
 exports.commitFileDiff = async (repoPath, hash, filePath) => {
