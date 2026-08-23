@@ -4,7 +4,12 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Prose changes nothing that ships. Releases are safe from this filter either
+    # way: npm version always rewrites package.json, so a tag can never sit on a
+    # commit that only touched markdown.
+    paths-ignore: ['**.md', 'screenshots/**']
   pull_request:
+    paths-ignore: ['**.md', 'screenshots/**']
   workflow_dispatch:
 
 jobs:
