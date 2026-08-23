@@ -10,7 +10,7 @@
   <!-- Titlebar row: traffic lights + centered title -->
   <div id="titlebar">
     <div id="titlebar-title" class="titlebar-title" hidden>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="titlebar-title-icon"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      <span class="icon titlebar-title-icon" data-icon="folder" data-size="14"></span>
       <span id="titlebar-title-text"></span>
     </div>
   </div>
@@ -20,72 +20,84 @@
     <div id="toolbar">
       <div class="toolbar-group">
         <button id="btn-open" title="Open Repository">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          <span class="icon" data-icon="folder" data-size="17"></span>
           <span>Open</span>
         </button>
       </div>
       <div class="toolbar-sep"></div>
       <div class="toolbar-group">
         <button id="btn-fetch" title="Fetch" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="icon" data-icon="fetch" data-size="17"></span>
           <span>Fetch</span>
         </button>
         <button id="btn-pull" title="Pull" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="18" x2="12" y2="6"/><path d="M3 6h18"/></svg>
+          <span class="icon" data-icon="pull" data-size="17"></span>
           <span>Pull</span>
         </button>
         <button id="btn-push" title="Push" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="6" x2="12" y2="18"/><path d="M3 18h18"/></svg>
+          <span class="icon" data-icon="push" data-size="17"></span>
           <span>Push</span>
         </button>
       </div>
       <div class="toolbar-sep"></div>
       <div class="toolbar-group">
         <button id="btn-stash-apply" title="Apply Stash" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><polyline points="8 15 12 11 16 15"/></svg>
+          <span class="icon" data-icon="stash-apply" data-size="17"></span>
           <span>Apply Stash</span>
         </button>
         <button id="btn-stash" title="Save Stash" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+          <span class="icon" data-icon="stash-save" data-size="17"></span>
           <span>Save Stash</span>
         </button>
       </div>
       <div class="toolbar-sep"></div>
       <div class="toolbar-group">
         <button id="btn-merge" title="Merge" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 009 9"/></svg>
+          <span class="icon" data-icon="merge" data-size="17"></span>
           <span>Merge</span>
         </button>
         <button id="btn-rebase" title="Rebase" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" y1="9" x2="6" y2="15"/><path d="M18 9v3a3 3 0 01-3 3H9"/></svg>
+          <span class="icon" data-icon="rebase" data-size="17"></span>
           <span>Rebase</span>
         </button>
       </div>
-      <div id="history-search-bar" hidden>
-        <select id="search-field">
-          <option value="message">Message</option>
-          <option value="author">Author</option>
-          <option value="hash">Commit Hash</option>
-          <option value="file">File</option>
-        </select>
-        <div id="search-input-wrap">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="search-input" placeholder="Search...">
-          <button id="search-clear" style="display:none">×</button>
+
+      <div class="toolbar-right">
+        <div id="history-search-bar" hidden>
+          <select id="search-field">
+            <option value="message">Message</option>
+            <option value="author">Author</option>
+            <option value="hash">Commit Hash</option>
+            <option value="file">File</option>
+          </select>
+          <div id="search-input-wrap">
+            <span class="icon" data-icon="search" data-size="13"></span>
+            <input type="text" id="search-input" placeholder="Search...">
+            <button id="search-clear" style="display:none" title="Clear"><span class="icon" data-icon="close" data-size="12"></span></button>
+          </div>
         </div>
+        <button id="btn-theme" class="icon-button" title="Theme" aria-haspopup="true">
+          <span class="icon" data-icon="palette" data-size="17"></span>
+        </button>
       </div>
+    </div>
+
+    <!-- Theme picker -->
+    <div id="theme-menu" class="popover" role="menu" hidden>
+      <div class="popover-header">Theme</div>
+      <div id="theme-menu-items"></div>
     </div>
   </div>
 
   <!-- Breadcrumb -->
   <div id="breadcrumb">
     <span id="breadcrumb-repos" class="breadcrumb-link">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      <span class="icon" data-icon="globe" data-size="14"></span>
       Repositories
     </span>
-    <span id="breadcrumb-sep" class="breadcrumb-sep" hidden>›</span>
+    <span id="breadcrumb-sep" class="breadcrumb-sep icon" data-icon="chevron" data-size="12" hidden></span>
     <span id="breadcrumb-repo" class="breadcrumb-current" hidden>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      <span class="icon" data-icon="folder" data-size="14"></span>
       <span id="breadcrumb-repo-name"></span>
     </span>
   </div>
@@ -97,7 +109,7 @@
       <div id="repo-list-section">
         <div class="section-header sidebar-header-row">
           Repositories
-          <button id="btn-add-repo" class="sidebar-add-btn" title="Add Repository">+</button>
+          <button id="btn-add-repo" class="sidebar-add-btn" title="Add Repository"><span class="icon" data-icon="plus" data-size="14"></span></button>
         </div>
         <div id="repo-list" class="section-list"></div>
       </div>
@@ -107,16 +119,16 @@
         <div class="section-header">Workspace</div>
         <nav id="sidebar-nav">
           <div class="nav-item active" data-view="working-copy">
-            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span class="icon" data-icon="file" data-size="16"></span>
             Working Copy
             <span id="wc-badge" class="badge" hidden>0</span>
           </div>
           <div class="nav-item" data-view="history">
-            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="icon" data-icon="clock" data-size="16"></span>
             History
           </div>
           <div class="nav-item" data-view="stashes">
-            <svg class="nav-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+            <span class="icon" data-icon="stash" data-size="16"></span>
             Stashes
           </div>
         </nav>

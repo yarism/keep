@@ -5,6 +5,13 @@ import { showModal } from './modules/modal.js';
 import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
+import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
+import { hydrateIcons } from './icons.js';
+
+// Before anything renders: the stored theme, read synchronously, so the window
+// never flashes the default palette on the way to the chosen one.
+initTheme();
+hydrateIcons();
 
 // ── Refresh all data ──
 async function refresh() {
@@ -44,7 +51,7 @@ async function enterWorkspace(path) {
   $('#diff-filename').textContent = 'No file selected';
   $('#diff-content').innerHTML = '';
   $('#commit-subject').value = '';
-  $$('#toolbar button').forEach(b => b.disabled = false);
+  $$('#toolbar .toolbar-group button').forEach(b => b.disabled = false);
   switchView('working-copy');
   await refresh();
   startPolling();
@@ -182,8 +189,11 @@ function setupToolbar() {
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
+  hydrateIcons();
+  setupThemePicker();
   state.repositories = await window.git.loadRepos();
   const settings = await window.git.loadSettings();
+  syncThemeFromSettings(settings);
   if (settings.sidebarWidth) {
     $('#sidebar').style.width = settings.sidebarWidth + 'px';
   }

@@ -1,6 +1,7 @@
 import { $, escapeHtml, state } from './state.js';
 import { renderDiff } from './diff.js';
 import { showCommitContextMenu } from './context-menu.js';
+import { icon } from '../icons.js';
 
 let _refresh = null;
 let _searchTimeout = null;
@@ -164,7 +165,7 @@ function renderChangeset(hash, files) {
     header.className = 'changeset-file-header';
     const statusLabel = f.statusCode;
     header.innerHTML = `
-      <span class="expand-arrow">▶</span>
+      <span class="expand-arrow">${icon('chevron', 12)}</span>
       <span class="file-status ${f.status}">${statusLabel}</span>
       <span class="file-name">${escapeHtml(f.filePath.split('/').pop())}</span>
       <span class="file-path">${escapeHtml(f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : '')}</span>

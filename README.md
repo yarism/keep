@@ -19,6 +19,27 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 - Multi-repository support
 - Detached HEAD state handling
 - Context menus throughout (right-click on branches, commits, files)
+- Six colour themes, switchable from the toolbar
+
+## Themes
+
+Click the palette button at the right of the toolbar to switch themes. Hovering
+a theme previews it live; clicking picks it, and the choice is remembered
+between launches.
+
+| Theme | |
+|---|---|
+| **Graphite Light** | the default — neutral greys, blue accent |
+| **Graphite Dark** | the same palette after dark |
+| **Midnight** | Keep's original purple-tinted dark theme |
+| **Nord** | cool blue-greys |
+| **Gruvbox** | warm retro dark |
+| **Solarized Light** | the classic cream |
+
+A theme is just a map of CSS custom properties in `renderer/themes.js` — no
+colour is written literally in `styles.css`, so adding one means adding an entry
+to that file and nothing else. `test/theme.test.mjs` enforces both halves of
+that rule.
 
 ## Requirements
 
@@ -88,7 +109,9 @@ keep/
 ├── renderer/
 │   ├── index.html       # App shell
 │   ├── app.js           # App initialization and navigation
-│   ├── styles.css       # All styles
+│   ├── styles.css       # All styles (colours come from themes.js)
+│   ├── themes.js        # Colour themes as CSS custom property maps
+│   ├── icons.js         # The app's icon set
 │   └── modules/
 │       ├── state.js         # Shared state and DOM helpers
 │       ├── working-copy.js  # Working copy / staging view
@@ -97,6 +120,7 @@ keep/
 │       ├── context-menu.js  # Right-click context menus
 │       ├── diff.js          # Diff rendering
 │       ├── modal.js         # Modal dialogs
+│       ├── theme.js         # Theme switching and the picker
 │       └── repos.js         # Repository list management
 ├── assets/
 │   ├── icon.icns        # macOS app icon
