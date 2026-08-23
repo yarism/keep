@@ -168,6 +168,22 @@ button .icon-svg { pointer-events: none; }
 #toolbar button:active:not(:disabled) { background: var(--bg-active); }
 #toolbar button:disabled { opacity: 0.35; cursor: default; }
 
+/* While a command runs the button says so and stops taking clicks. */
+#toolbar button { position: relative; }
+#toolbar button.busy { color: var(--text-dim); cursor: default; }
+#toolbar button.busy .icon { visibility: hidden; }
+#toolbar button.busy::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--text-dim) 35%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: keep-spin 620ms linear infinite;
+}
+
 #toolbar .icon-button {
   flex-direction: row;
   min-width: 0;
@@ -896,6 +912,68 @@ button .icon-svg { pointer-events: none; }
   font-family: inherit;
 }
 .stash-item-actions button:hover { background: var(--bg-active); }
+
+/* Toasts ------------------------------------------------------------------ */
+
+@keyframes keep-spin { to { transform: rotate(360deg); } }
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 420px;
+  padding: 9px 13px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-menu);
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.toast.shown { opacity: 1; transform: none; }
+.toast.leaving { opacity: 0; transform: translateY(6px); }
+
+.toast-icon { display: inline-flex; padding-top: 1px; color: var(--text-dim); }
+.toast-success .toast-icon { color: var(--green); }
+.toast-error .toast-icon { color: var(--red); }
+.toast-error { border-color: color-mix(in srgb, var(--red) 45%, var(--border-strong)); }
+
+/* git's output is several short lines; keep them as written. */
+.toast-text {
+  white-space: pre-line;
+  line-height: 1.45;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+.toast-busy .toast-text { font-family: var(--font-ui); font-size: 12.5px; }
+
+.spinner {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--text-dim) 35%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: keep-spin 620ms linear infinite;
+}
 
 /* Scrollbars -------------------------------------------------------------- */
 

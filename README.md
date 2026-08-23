@@ -20,12 +20,14 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 - Detached HEAD state handling
 - Context menus throughout (right-click on branches, commits, files)
 - Six colour themes, switchable from the toolbar
+- Progress and results reported for every toolbar command
 
 ## Themes
 
 Click the palette button at the right of the toolbar to switch themes. Hovering
-a theme previews it live; clicking picks it, and the choice is remembered
-between launches.
+a theme previews it live without committing to it — the tick stays on the one
+you actually chose — and the preview is undone if you leave the list. The choice
+is remembered between launches.
 
 | Theme | |
 |---|---|
@@ -33,8 +35,8 @@ between launches.
 | **Graphite Dark** | the same palette after dark |
 | **Midnight** | Keep's original purple-tinted dark theme |
 | **Nord** | cool blue-greys |
-| **Gruvbox** | warm retro dark |
-| **Solarized Light** | the classic cream |
+| **Ivory** | warm paper, espresso ink, bronze — the restrained one |
+| **Synthwave** | deep indigo with magenta and mint — the loud one |
 
 A theme is just a map of CSS custom properties in `renderer/themes.js` — no
 colour is written literally in `styles.css`, so adding one means adding an entry
@@ -112,6 +114,7 @@ keep/
 │   ├── styles.css       # All styles (colours come from themes.js)
 │   ├── themes.js        # Colour themes as CSS custom property maps
 │   ├── icons.js         # The app's icon set
+│   ├── git-output.js    # Turns raw git output into a readable line or two
 │   └── modules/
 │       ├── state.js         # Shared state and DOM helpers
 │       ├── working-copy.js  # Working copy / staging view
@@ -121,6 +124,7 @@ keep/
 │       ├── diff.js          # Diff rendering
 │       ├── modal.js         # Modal dialogs
 │       ├── theme.js         # Theme switching and the picker
+│       ├── toast.js         # Transient status messages
 │       └── repos.js         # Repository list management
 ├── assets/
 │   ├── icon.icns        # macOS app icon

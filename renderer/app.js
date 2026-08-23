@@ -6,6 +6,8 @@ import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
+import { busyToast, toast } from './modules/toast.js';
+import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
 
 // Before anything renders: the stored theme, read synchronously, so the window
@@ -111,25 +113,44 @@ function setupNavigation() {
 }
 
 // ── Toolbar ──
+
+// Every toolbar command runs through here so that all of them behave the same:
+// the button shows it is working and refuses a second click, and the outcome —
+// git's own words, or its error — always lands somewhere visible.
+async function runAction(selector, label, work) {
+  const btn = $(selector);
+  if (btn.dataset.busy) return;
+  btn.dataset.busy = '1';
+  btn.classList.add('busy');
+  const status = busyToast(`${label}\u2026`);
+  try {
+    const output = await work();
+    await refresh();
+    status.done(describeResult(label, output));
+  } catch (e) {
+    status.fail(e.message.trim() || `${label} failed`);
+  } finally {
+    delete btn.dataset.busy;
+    btn.classList.remove('busy');
+  }
+}
+
 function setupToolbar() {
-  $('#btn-fetch').addEventListener('click', async () => {
-    try { await window.git.fetch(state.repoPath); await refresh(); } catch (e) { alert(e.message); }
-  });
-  $('#btn-pull').addEventListener('click', async () => {
-    try { await window.git.pull(state.repoPath); await refresh(); } catch (e) { alert(e.message); }
-  });
-  $('#btn-push').addEventListener('click', async () => {
-    try { await window.git.push(state.repoPath); await refresh(); } catch (e) { alert(e.message); }
-  });
+  $('#btn-fetch').addEventListener('click', () =>
+    runAction('#btn-fetch', 'Fetch', () => window.git.fetch(state.repoPath)));
+  $('#btn-pull').addEventListener('click', () =>
+    runAction('#btn-pull', 'Pull', () => window.git.pull(state.repoPath)));
+  $('#btn-push').addEventListener('click', () =>
+    runAction('#btn-push', 'Push', () => window.git.push(state.repoPath)));
   $('#btn-stash').addEventListener('click', async () => {
     const msg = await showModal('Save Stash', 'Stash message (optional)', '', { allowEmpty: true });
     if (msg === null) return;
-    try { await window.git.stashSave(state.repoPath, msg); await refresh(); } catch (e) { alert(e.message); }
+    runAction('#btn-stash', 'Save Stash', () => window.git.stashSave(state.repoPath, msg));
   });
   $('#btn-stash-apply').addEventListener('click', async () => {
     try {
       const stashes = await window.git.stashes(state.repoPath);
-      if (stashes.length === 0) { alert('No stashes to apply.'); return; }
+      if (stashes.length === 0) { toast('No stashes to apply', { type: 'info' }); return; }
       // Build a simple picker using the modal with a select
       const overlay = $('#modal-overlay');
       const modal = overlay.querySelector('.modal');
@@ -163,8 +184,7 @@ function setupToolbar() {
         async function onOk() {
           const idx = parseInt(select.value);
           cleanup();
-          try { await window.git.stashApply(state.repoPath, idx); await refresh(); }
-          catch (err) { alert(err.message); }
+          await runAction('#btn-stash-apply', 'Apply Stash', () => window.git.stashApply(state.repoPath, idx));
           resolve();
         }
         function onCancel() { cleanup(); resolve(); }
@@ -173,17 +193,17 @@ function setupToolbar() {
         $('#modal-cancel').addEventListener('click', onCancel);
         select.addEventListener('keydown', onKey);
       });
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast(e.message, { type: 'error' }); }
   });
   $('#btn-merge').addEventListener('click', async () => {
     const name = await showModal('Merge', 'Branch name to merge into current');
     if (!name) return;
-    try { await window.git.merge(state.repoPath, name); await refresh(); } catch (e) { alert(e.message); }
+    runAction('#btn-merge', 'Merge', () => window.git.merge(state.repoPath, name));
   });
   $('#btn-rebase').addEventListener('click', async () => {
     const name = await showModal('Rebase', 'Branch name to rebase onto');
     if (!name) return;
-    try { await window.git.rebase(state.repoPath, name); await refresh(); } catch (e) { alert(e.message); }
+    runAction('#btn-rebase', 'Rebase', () => window.git.rebase(state.repoPath, name));
   });
 }
 

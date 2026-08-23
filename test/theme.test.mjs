@@ -137,3 +137,50 @@ test('styles.css defines a default for every token a theme sets', async () => {
     assert.ok(rootBlock.includes(`--${token}:`), `styles.css has no fallback for --${token}`);
   }
 });
+
+// ── git output, as shown to the user ──
+
+const { summarizeGitOutput, describeResult } = await loadEsm('renderer/git-output.js');
+
+test('git output: drops the progress chatter and keeps the result', () => {
+  const raw = [
+    'Fetching origin',
+    'remote: Enumerating objects: 12, done.',
+    'remote: Counting objects:  50% (6/12)\rremote: Counting objects: 100% (12/12), done.',
+    'remote: Total 12 (delta 4), reused 0',
+    'From github.com:yarism/keep',
+    '   07b2e9a..214ab7e  main -> origin/main',
+  ].join('\n');
+  assert.strictEqual(
+    summarizeGitOutput(raw),
+    'Fetching origin\nFrom github.com:yarism/keep\n07b2e9a..214ab7e  main -> origin/main',
+  );
+});
+
+test('git output: a carriage-returned progress line keeps only its final state', () => {
+  assert.strictEqual(summarizeGitOutput('Receiving: 1%\rDone thing'), 'Done thing');
+});
+
+test('git output: caps the number of lines and says how many were dropped', () => {
+  const raw = ['a', 'b', 'c', 'd', 'e'].join('\n');
+  assert.strictEqual(summarizeGitOutput(raw, { max: 2 }), 'a\nb\n…and 3 more lines');
+});
+
+test('git output: empty and whitespace-only output summarise to nothing', () => {
+  assert.strictEqual(summarizeGitOutput(''), '');
+  assert.strictEqual(summarizeGitOutput('\n  \n'), '');
+  assert.strictEqual(summarizeGitOutput(undefined), '');
+});
+
+test('git output: a silent success still gets described', () => {
+  // This is the case that made the buttons feel dead: git succeeds and prints
+  // nothing, so there has to be something to say anyway.
+  assert.strictEqual(describeResult('Push', ''), 'Everything up-to-date');
+  assert.strictEqual(describeResult('Fetch', '   \n'), 'Already up to date');
+  assert.strictEqual(describeResult('Merge', ''), 'Merge finished');
+});
+
+test('git output: real output wins over the canned line', () => {
+  assert.strictEqual(describeResult('Pull', 'Already up to date.'), 'Already up to date.');
+  assert.strictEqual(describeResult('Push', 'To github.com:yarism/keep.git'), 'To github.com:yarism/keep.git');
+});
