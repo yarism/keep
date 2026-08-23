@@ -29,6 +29,11 @@
   "build": {
     "appId": "com.keep.app",
     "productName": "Keep",
+    "publish": {
+      "provider": "github",
+      "owner": "yarism",
+      "repo": "keep"
+    },
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools",
