@@ -193,6 +193,19 @@
 
       <!-- Working Copy -->
       <div id="working-copy-view" class="view">
+        <!-- Only visible mid-merge/rebase: what is in progress, and the two
+             ways out of it. -->
+        <div id="op-banner" class="op-banner" hidden>
+          <span class="icon op-banner-icon" data-icon="alert" data-size="17"></span>
+          <div class="op-banner-text">
+            <strong id="op-banner-title"></strong>
+            <span id="op-banner-detail"></span>
+          </div>
+          <div class="op-banner-actions">
+            <button id="op-abort" class="op-abort">Abort</button>
+            <button id="op-continue" class="op-continue"></button>
+          </div>
+        </div>
         <div id="wc-container">
           <div id="wc-files-panel">
             <div id="commit-box">
@@ -206,7 +219,14 @@
             <div id="wc-file-list" class="file-list"></div>
           </div>
           <div id="wc-diff-panel">
-            <div class="panel-header"><span id="diff-filename">No file selected</span></div>
+            <div class="panel-header">
+              <span id="diff-filename">No file selected</span>
+              <div id="conflict-actions" class="conflict-actions" hidden>
+                <button data-resolve="ours">Take Ours</button>
+                <button data-resolve="theirs">Take Theirs</button>
+                <button data-resolve="resolved" class="primary">Mark Resolved</button>
+              </div>
+            </div>
             <div id="diff-content" class="diff-view"></div>
           </div>
         </div>

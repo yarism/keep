@@ -1,6 +1,11 @@
 import { $, escapeHtml, state } from './state.js';
-import { renderDiff } from './diff.js';
+import { renderDiff, renderConflict } from './diff.js';
 import { showContextMenu } from './context-menu.js';
+import { toast } from './toast.js';
+
+// Set by setupCommitBox so the banner's Abort/Continue can rebuild everything —
+// they move HEAD, which nothing short of a full refresh survives.
+let _refresh = null;
 
 let _selectedIndices = new Set();
 let _lastClickedIndex = null;
@@ -8,10 +13,77 @@ let _lastClickedIndex = null;
 export async function refreshStatus() {
   try { state.statusFiles = await window.git.status(state.repoPath); }
   catch { state.statusFiles = []; }
+  try { state.repoState = await window.git.repoState(state.repoPath); }
+  catch { state.repoState = { kind: null, conflicts: [], branch: null, step: 0, total: 0 }; }
   const badge = $('#wc-badge');
   if (state.statusFiles.length > 0) { badge.textContent = state.statusFiles.length; badge.hidden = false; }
   else { badge.hidden = true; }
+  // An unresolved conflict is not just another changed file, so the count stops
+  // looking like an ordinary one.
+  badge.classList.toggle('conflict', conflictCount() > 0);
+  renderOpBanner();
   renderFileList();
+}
+
+function conflictCount() {
+  return state.statusFiles.filter(f => f.conflicted).length;
+}
+
+// What is in progress, how far through it you are, and the two ways out.
+const OP_LABELS = {
+  merge: 'Merging',
+  rebase: 'Rebasing',
+  'cherry-pick': 'Cherry-picking',
+  revert: 'Reverting',
+};
+
+function renderOpBanner() {
+  const banner = $('#op-banner');
+  if (!banner) return;
+  const { kind, branch, step, total } = state.repoState;
+  const conflicts = conflictCount();
+  // A stash pop can leave conflicts with no operation in flight; there is
+  // nothing to abort or continue there, but they still have to be announced.
+  if (!kind && !conflicts) { banner.hidden = true; return; }
+  banner.hidden = false;
+  banner.classList.toggle('resolved', conflicts === 0);
+
+  const what = kind ? OP_LABELS[kind] : 'Conflicts';
+  $('#op-banner-title').textContent = branch ? `${what} ${branch}` : what;
+
+  const bits = [];
+  if (kind === 'rebase' && total) bits.push(`commit ${step} of ${total}`);
+  bits.push(conflicts
+    ? `${conflicts} conflicted file${conflicts !== 1 ? 's' : ''} to resolve`
+    : 'all conflicts resolved');
+  $('#op-banner-detail').textContent = bits.join(' \u00b7 ');
+
+  const cont = $('#op-continue');
+  cont.textContent = kind === 'merge' ? 'Commit Merge' : 'Continue';
+  cont.hidden = !kind;
+  // Continuing with a file still unmerged just fails, so the button says so by
+  // being unavailable rather than by erroring after the click.
+  cont.disabled = conflicts > 0;
+  $('#op-abort').hidden = !kind;
+}
+
+export function setupOpBanner(refresh) {
+  _refresh = refresh;
+  $('#op-abort').addEventListener('click', () => runOp('Abort', 'abortOperation'));
+  $('#op-continue').addEventListener('click', () => runOp(
+    state.repoState.kind === 'merge' ? 'Commit merge' : 'Continue', 'continueOperation'));
+}
+
+async function runOp(label, method) {
+  const kind = state.repoState.kind;
+  if (!kind) return;
+  try {
+    const out = await window.git[method](state.repoPath, kind);
+    toast(out && out.trim() ? out.trim().split('\n')[0] : `${label} done`, { type: 'success' });
+  } catch (e) {
+    toast(e.message.trim() || `${label} failed`, { type: 'error' });
+  }
+  if (_refresh) await _refresh();
 }
 
 function fileKey(f) {
@@ -33,14 +105,20 @@ function renderFileList() {
     const item = document.createElement('div');
     const key = fileKey(f);
     const isSelected = _selectedIndices.has(idx);
-    item.className = 'file-item' + (isSelected ? ' selected' : '');
+    item.className = 'file-item' + (isSelected ? ' selected' : '') + (f.conflicted ? ' conflicted' : '');
     item.tabIndex = 0;
     item.dataset.index = idx;
+    // A conflicted file has no checkbox: ticking one would mean `git add`, which
+    // marks a conflict resolved — too big a thing to hang off a checkbox that
+    // means "stage" on every other row.
     item.innerHTML = `
-      <input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1">
-      <span class="file-status ${f.status}">${f.status[0].toUpperCase()}</span>
+      ${f.conflicted
+        ? '<span class="file-checkbox-slot"></span>'
+        : `<input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1">`}
+      <span class="file-status ${f.status}">${f.conflicted ? '!' : f.status[0].toUpperCase()}</span>
       <span class="file-name" title="${f.filePath}">${f.filePath.split('/').pop()}</span>
       <span class="file-path">${f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : ''}</span>
+      ${f.conflicted ? `<span class="conflict-kind">${f.conflictKind}</span>` : ''}
     `;
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('file-checkbox')) return;
@@ -61,10 +139,11 @@ function renderFileList() {
         if (prev) { prev.focus(); prev.click(); }
       } else if (e.key === ' ') {
         e.preventDefault();
-        item.querySelector('.file-checkbox').click();
+        const box = item.querySelector('.file-checkbox');
+        if (box) box.click();
       }
     });
-    item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
+    if (!f.conflicted) item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
       e.stopPropagation();
       try {
         if (f.staged) await window.git.unstage(state.repoPath, f.filePath, f.oldPath);
@@ -115,6 +194,18 @@ function handleFileClick(idx, e) {
 
 async function selectFile(f) {
   $('#diff-filename').textContent = f.filePath;
+  renderConflictActions(f);
+  if (f.conflicted) {
+    // `git diff` on an unmerged path prints a combined diff that reads as noise.
+    // What you actually need to look at is the file with its markers in place.
+    try {
+      const text = await window.git.fileContents(state.repoPath, f.filePath);
+      renderConflict(text, $('#diff-content'), f);
+    } catch (e) {
+      $('#diff-content').innerHTML = `<div style="padding:20px;color:var(--red)">${escapeHtml(e.message)}</div>`;
+    }
+    return;
+  }
   try {
     const diff = await window.git.diff(state.repoPath, f.filePath, f.staged);
     if (!diff || !diff.trim()) {
@@ -128,7 +219,49 @@ async function selectFile(f) {
   }
 }
 
+// Take Ours / Take Theirs / Mark Resolved, above the file they apply to. Ours
+// and theirs need both sides to still have a file, so a delete conflict gets
+// keep/remove instead.
+function renderConflictActions(f) {
+  const bar = $('#conflict-actions');
+  if (!bar) return;
+  bar.hidden = !f || !f.conflicted;
+  if (bar.hidden) return;
+  const deletion = f.conflictKind.includes('deleted');
+  const [ours, theirs, resolved] = bar.querySelectorAll('button');
+  ours.textContent = deletion ? 'Keep File' : 'Take Ours';
+  theirs.textContent = deletion ? 'Remove File' : 'Take Theirs';
+  ours.dataset.resolve = deletion ? 'keep' : 'ours';
+  theirs.dataset.resolve = deletion ? 'remove' : 'theirs';
+  resolved.disabled = deletion;
+  bar.dataset.file = f.filePath;
+}
+
+const RESOLVERS = {
+  ours: 'useOurs', theirs: 'useTheirs',
+  keep: 'keepFile', remove: 'removeFile',
+  resolved: 'markResolved',
+};
+
+function setupConflictActions() {
+  const bar = $('#conflict-actions');
+  if (!bar) return;
+  bar.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-resolve]');
+    if (!btn) return;
+    try {
+      await window.git[RESOLVERS[btn.dataset.resolve]](state.repoPath, bar.dataset.file);
+      $('#diff-content').innerHTML = '';
+      $('#diff-filename').textContent = 'No file selected';
+      bar.hidden = true;
+      await refreshStatus();
+    } catch (err) { toast(err.message, { type: 'error' }); }
+  });
+}
+
 export function setupCommitBox(refresh) {
+  _refresh = refresh;
+  setupConflictActions();
   document.addEventListener('refresh-status', () => refreshStatus());
 
   const input = $('#commit-subject');
@@ -152,6 +285,25 @@ export function setupCommitBox(refresh) {
 
 function getSelectedFiles() {
   return [..._selectedIndices].sort((a, b) => a - b).map(i => state.statusFiles[i]).filter(Boolean);
+}
+
+// Nothing on the ordinary file menu applies mid-conflict — staging is what
+// resolving *is*, and discarding one side of a merge is not a thing git offers.
+function showConflictContextMenu(e, f, name) {
+  const deletion = f.conflictKind.includes('deleted');
+  const act = (method) => async () => {
+    try { await window.git[method](state.repoPath, f.filePath); await refreshStatus(); }
+    catch (err) { toast(err.message, { type: 'error' }); }
+  };
+  showContextMenu(e, [
+    { label: `Conflict: ${f.conflictKind}`, disabled: true },
+    { separator: true },
+    { label: deletion ? 'Keep the File' : 'Take Ours (this branch)', action: act(deletion ? 'keepFile' : 'useOurs') },
+    { label: deletion ? 'Remove the File' : 'Take Theirs (incoming)', action: act(deletion ? 'removeFile' : 'useTheirs') },
+    { label: `Mark "${name}" Resolved`, disabled: deletion, action: act('markResolved') },
+    { separator: true },
+    { label: 'Reveal in Finder', action: () => window.git.showInFinder(state.repoPath, f.filePath) },
+  ]);
 }
 
 function showMultiFileContextMenu(e) {
@@ -199,6 +351,7 @@ function showMultiFileContextMenu(e) {
 function showFileContextMenu(e, f) {
   const name = f.filePath.split('/').pop();
   const isUntracked = f.status === 'untracked';
+  if (f.conflicted) { showConflictContextMenu(e, f, name); return; }
   showContextMenu(e, [
     { label: 'Reveal in Finder', action: () => window.git.showInFinder(state.repoPath, f.filePath) },
     { separator: true },
