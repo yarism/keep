@@ -329,7 +329,17 @@ button .icon-svg { pointer-events: none; }
 }
 #sidebar-resize:hover, #sidebar-resize.dragging { background: var(--tint-accent-strong); }
 
+/* Every section header is the same height whether or not it carries a button.
+ * The height is fixed rather than left to the content because the "+" on
+ * Repositories is taller than the label, and a header that grows around it puts
+ * the word "Repositories" a few pixels below where "Workspace" sits — which
+ * reads as the sidebar jumping when you move between the two. The button is
+ * free to overhang the 13px line box; the padding absorbs it. */
 .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
   padding: 12px 14px 5px;
   font-size: var(--fs-xs);
   text-transform: uppercase;
@@ -371,11 +381,6 @@ button .icon-svg { pointer-events: none; }
 }
 .sidebar-section.collapsed > .section-list { display: none; }
 
-.sidebar-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 .sidebar-add-btn {
   background: none;
   border: none;
