@@ -19,9 +19,26 @@ whatever the latest published release is:
 | [**macOS — Intel**](https://github.com/yarism/keep/releases/latest/download/Keep-mac-x64.dmg) | |
 | [**Windows**](https://github.com/yarism/keep/releases/latest/download/Keep-win-x64.exe) | 64-bit installer |
 
-Or browse [all releases](https://github.com/yarism/keep/releases). Nothing is
-code-signed yet, so see [Installing Without Terminal](#installing-without-terminal)
-for the one extra click each platform asks for.
+Or browse [all releases](https://github.com/yarism/keep/releases). There is no
+Linux download — build that one yourself, as below.
+
+### Or build it yourself
+
+The downloads above are **not currently signed** by Apple or Microsoft, so both
+systems warn you before the first launch — [what to click](#installing-without-terminal).
+If you would rather not run an unsigned binary that reads every repository you
+own, which is a fair position, building your own takes about a minute:
+
+```bash
+git clone https://github.com/yarism/keep.git
+cd keep
+npm install
+npm run dist          # macOS .dmg — or dist:win, or dist:linux
+```
+
+The installer lands in `dist/`. Nothing you built locally was ever downloaded, so
+it carries no quarantine flag and neither Gatekeeper nor SmartScreen has anything
+to say about it.
 
 ## Features
 
