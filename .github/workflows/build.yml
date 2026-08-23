@@ -40,11 +40,28 @@ jobs:
           cache: npm
       - run: npm ci
 
+      # A release that scares Gatekeeper is worse than no release, so a missing
+      # certificate stops the tag here rather than surfacing on someone's Mac.
+      - name: Refuse to release an unsigned macOS build
+        if: matrix.label == 'macos' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          CERT: ${{ secrets.MAC_CERT_P12 }}
+        run: |
+          if [ -z "$CERT" ]; then
+            echo "::error::MAC_CERT_P12 is unset, so this build cannot be signed or notarized. See README > Releasing > Signing for the five secrets it needs."
+            exit 1
+          fi
+
       - name: Build installers
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
-          # No signing certificates in CI — keep electron-builder from hunting for one.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Without a certificate, stop electron-builder hunting the keychain for one.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload installers
         uses: actions/upload-artifact@v7

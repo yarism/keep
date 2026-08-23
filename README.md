@@ -147,6 +147,21 @@ Nothing to approve — the links above point at it a few minutes later.
 Pushes to `main` build the same installers as workflow
 [artifacts](https://github.com/yarism/keep/actions) without releasing them.
 
+### Signing
+
+macOS builds are signed and notarized in CI from five repository secrets:
+
+| Secret | Where it comes from |
+|---|---|
+| `MAC_CERT_P12` | Developer ID Application certificate, `base64 -i cert.p12` |
+| `MAC_CERT_PASSWORD` | the password used to export it |
+| `APPLE_ID` | your Apple ID email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | appleid.apple.com → Sign-In and Security |
+| `APPLE_TEAM_ID` | developer.apple.com → Membership |
+
+Without `MAC_CERT_P12` a tagged build fails instead of shipping a DMG macOS
+refuses to open. Windows installers are still unsigned.
+
 ## Installing Without Terminal
 
 ### macOS
