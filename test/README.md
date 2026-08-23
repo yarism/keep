@@ -15,6 +15,7 @@ needed. `npm run test:watch` reruns on change.
 | `git-read.test.js` | `git.js` read paths: status/log/branch/tag/remote/stash/diff parsing, commit detail and file lists, log search, the repo fingerprint |
 | `git-write.test.js` | `git.js` write paths: stage/unstage/commit, branch create-delete-rename, merge/rebase, stash, revert, tag, discard, hunk staging |
 | `state.test.mjs` | `renderer/modules/state.js`: HTML escaping, the titlebar string, and the branch/tag pin reconciliation rules |
+| `network-errors.test.mjs` | `git.js` network failures: the sentence a refused credential, locked key, unverified host, timeout or outage turns into |
 
 ## How the git tests work
 
@@ -27,8 +28,10 @@ Repos are created with `GIT_CONFIG_GLOBAL=/dev/null`, a fixed identity and a
 fixed default branch, so results don't depend on the developer's `~/.gitconfig`.
 They're removed in an `after` hook.
 
-Not covered: `pull`, `push` and `fetch` (network), and `trashFile` /
-`showInFinder` (require an Electron runtime).
+Not covered: `pull`, `push` and `fetch` themselves (they need a remote) and
+`trashFile` / `showInFinder` (they need an Electron runtime). What *is* covered
+for the network commands is how they fail: they run with prompting disabled, so
+`explainNetworkError` is what a person actually ends up reading, and it is pure.
 
 ## Renderer modules
 
