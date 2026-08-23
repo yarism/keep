@@ -142,7 +142,7 @@ function renderTracking(branchName) {
   const t = branchName === null ? headTracking() : trackingFor(branchName);
   if (!t) { el.hidden = true; el.innerHTML = ''; return; }
   const upstream = t.upstream ? `<span class="track-upstream">${escapeHtml(t.upstream)}</span>` : '';
-  el.innerHTML = upstream + trackingChips(t, { showSynced: true });
+  el.innerHTML = upstream + trackingChips(t, { showSynced: true, showUnpublished: true });
   el.hidden = !el.innerHTML;
 }
 

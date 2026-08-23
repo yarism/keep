@@ -210,9 +210,17 @@
           <div id="wc-files-panel">
             <div id="commit-box">
               <input type="text" id="commit-subject" placeholder="Commit Subject">
+              <textarea id="commit-body" rows="3" placeholder="Description (optional)"></textarea>
+              <div id="amend-warning" class="amend-warning" hidden></div>
               <div id="commit-actions">
-                <button id="btn-stage-all">Stage All</button>
-                <button id="btn-commit" disabled>Commit</button>
+                <label id="amend-toggle" title="Replace the last commit instead of adding a new one">
+                  <input type="checkbox" id="chk-amend">
+                  <span>Amend</span>
+                </label>
+                <div class="commit-buttons">
+                  <button id="btn-stage-all">Stage All</button>
+                  <button id="btn-commit" disabled>Commit</button>
+                </div>
               </div>
             </div>
             <div class="panel-header"><span>Changed Files</span></div>

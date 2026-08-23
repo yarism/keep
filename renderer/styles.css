@@ -471,6 +471,9 @@ button .icon-svg { pointer-events: none; }
 }
 
 .branch-item .head-badge {
+  /* The row's spans all truncate, which is right for the branch name and wrong
+     for a four-letter badge — without this it renders as "HE…". */
+  flex-shrink: 0;
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-2xs);
@@ -759,7 +762,78 @@ button .icon-svg { pointer-events: none; }
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--tint-accent);
 }
-#commit-actions { display: flex; justify-content: space-between; align-items: center; }
+#commit-body {
+  width: 100%;
+  min-height: 54px;
+  max-height: 180px;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-size: var(--fs-base);
+  font-family: inherit;
+  line-height: 1.45;
+  outline: none;
+}
+#commit-body::placeholder { color: var(--text-mute); }
+#commit-body:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--tint-accent);
+}
+
+/* Amending rewrites history, so the toggle stays quiet until it is on. */
+#amend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-base);
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+#amend-toggle.disabled { opacity: 0.4; cursor: default; }
+#chk-amend {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  cursor: pointer;
+  position: relative;
+  margin: 0;
+}
+#chk-amend:checked { background: var(--accent); border-color: var(--accent); }
+#chk-amend:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--on-accent);
+  clip-path: polygon(20% 49%, 39% 68%, 79% 27%, 87% 36%, 39% 84%, 12% 57%);
+}
+#chk-amend:disabled { cursor: default; }
+#chk-amend:checked + span { color: var(--text); font-weight: 600; }
+
+.amend-warning {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 14%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
+.track-chip.unpublished {
+  color: var(--text-dim);
+  border: 1px solid color-mix(in srgb, var(--text-mute) 45%, transparent);
+  font-weight: 600;
+  padding: 0 5px;
+}
+
+#commit-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.commit-buttons { display: flex; gap: 8px; margin-left: auto; }
 #commit-actions button {
   background: var(--bg-hover);
   border: 1px solid var(--border-strong);

@@ -22,7 +22,45 @@ export async function refreshStatus() {
   // looking like an ordinary one.
   badge.classList.toggle('conflict', conflictCount() > 0);
   renderOpBanner();
+  syncAmendAvailability();
   renderFileList();
+}
+
+// Amending is a rewrite. That is fine on work that has never left the machine
+// and a nuisance for everyone else once it has, so the box says which case this
+// is rather than refusing or staying quiet.
+async function renderAmendWarning() {
+  const warn = $('#amend-warning');
+  if (!warn) return;
+  if (!$('#chk-amend').checked) { warn.hidden = true; return; }
+  let pushed = false;
+  try { pushed = (await window.git.unpushed(state.repoPath, 'HEAD')).length === 0; }
+  catch { pushed = false; }
+  warn.hidden = !pushed;
+  warn.textContent = pushed
+    ? 'This commit is already on a remote — amending rewrites it, and the next push will be rejected unless forced.'
+    : '';
+}
+
+// Mid-merge or mid-rebase, HEAD is not yours to rewrite: amending would fold
+// the operation's own commit into something else.
+function syncAmendAvailability() {
+  const amend = $('#chk-amend');
+  const label = $('#amend-toggle');
+  if (!amend || !label) return;
+  const busy = !!state.repoState.kind;
+  // An initialised repo with no commits has no refs at all — and nothing to
+  // amend. (state.commits is the History list, which lags a tick behind.)
+  const empty = state.branchList.length === 0;
+  amend.disabled = busy || empty;
+  label.classList.toggle('disabled', amend.disabled);
+  label.title = busy
+    ? `Not while a ${state.repoState.kind} is in progress`
+    : (empty ? 'Nothing to amend yet' : 'Replace the last commit instead of adding a new one');
+  if (amend.disabled && amend.checked) {
+    amend.checked = false;
+    amend.dispatchEvent(new Event('change'));
+  }
 }
 
 function conflictCount() {
@@ -259,20 +297,68 @@ function setupConflictActions() {
   });
 }
 
+// The draft the user had typed before ticking Amend, so unticking gives it back
+// rather than leaving them staring at the previous commit's message.
+let _draft = null;
+
 export function setupCommitBox(refresh) {
   _refresh = refresh;
   setupConflictActions();
   document.addEventListener('refresh-status', () => refreshStatus());
 
-  const input = $('#commit-subject');
+  const subject = $('#commit-subject');
+  const body = $('#commit-body');
+  const amend = $('#chk-amend');
   const btn = $('#btn-commit');
-  input.addEventListener('input', () => { btn.disabled = !input.value.trim(); });
-  btn.addEventListener('click', async () => {
-    const msg = input.value.trim();
-    if (!msg) return;
-    try { await window.git.commit(state.repoPath, msg); input.value = ''; btn.disabled = true; await refresh(); }
-    catch (e) { alert(e.message); }
+
+  const sync = () => { btn.disabled = !subject.value.trim(); };
+  subject.addEventListener('input', sync);
+
+  // ⌘⏎ from either field: the message is two fields now, and reaching for the
+  // mouse between typing and committing is the kind of thing you notice fifty
+  // times a day.
+  const onKey = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); commit(); }
+  };
+  subject.addEventListener('keydown', onKey);
+  body.addEventListener('keydown', onKey);
+
+  amend.addEventListener('change', async () => {
+    if (amend.checked) {
+      _draft = { subject: subject.value, body: body.value };
+      try {
+        const last = await window.git.headMessage(state.repoPath);
+        subject.value = last.subject;
+        body.value = last.body;
+      } catch { /* no commits yet — leave the box alone */ }
+    } else if (_draft) {
+      subject.value = _draft.subject;
+      body.value = _draft.body;
+      _draft = null;
+    }
+    sync();
+    renderAmendWarning();
   });
+
+  btn.addEventListener('click', commit);
+
+  async function commit() {
+    const head = subject.value.trim();
+    if (!head) return;
+    // Subject, blank line, body — the shape every git tool expects, built here
+    // so the user does not have to remember to leave the line blank.
+    const message = body.value.trim() ? `${head}\n\n${body.value.trim()}` : head;
+    try {
+      await window.git.commit(state.repoPath, message, { amend: amend.checked });
+      subject.value = '';
+      body.value = '';
+      amend.checked = false;
+      _draft = null;
+      btn.disabled = true;
+      renderAmendWarning();
+      await refresh();
+    } catch (e) { toast(e.message.trim() || 'Commit failed', { type: 'error' }); }
+  }
   $('#btn-stage-all').addEventListener('click', async () => {
     const allStaged = state.statusFiles.length > 0 && state.statusFiles.every(f => f.staged);
     try {

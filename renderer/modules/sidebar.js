@@ -52,7 +52,7 @@ export async function refreshBranches(refresh) {
     const label = b.detached ? `(HEAD detached at ${b.name})` : b.name;
     // The ahead/behind chips are what make a stale branch visible without
     // checking it out — the sidebar is where you look before deciding to.
-    const chips = trackingChips(trackingFor(b.name));
+    const chips = trackingChips(trackingFor(b.name), { showUnpublished: b.current });
     item.innerHTML = `
       ${glyph}
       <span class="branch-name">${escapeHtml(label)}</span>

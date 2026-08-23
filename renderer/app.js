@@ -1,12 +1,13 @@
 import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
-import { showModal } from './modules/modal.js';
+import { showModal, showConfirm } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
+import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
 import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
@@ -149,8 +150,19 @@ function setupToolbar() {
     runAction('#btn-fetch', 'Fetch', () => window.git.fetch(state.repoPath)));
   $('#btn-pull').addEventListener('click', () =>
     runAction('#btn-pull', 'Pull', () => window.git.pull(state.repoPath)));
-  $('#btn-push').addEventListener('click', () =>
-    runAction('#btn-push', 'Push', () => window.git.push(state.repoPath)));
+  $('#btn-push').addEventListener('click', async () => {
+    // A branch with no upstream cannot simply be pushed: git refuses and prints
+    // the --set-upstream incantation. Offer to do that instead of relaying the
+    // refusal, since publishing the branch is plainly what was meant.
+    const t = headTracking();
+    if (t && !t.upstream) {
+      const ok = await showConfirm('Publish Branch',
+        `"${t.name}" is not on any remote yet.\n\nPush it and set it to track the remote branch?`);
+      if (!ok) return;
+      return runAction('#btn-push', 'Publish', () => window.git.push(state.repoPath, { setUpstream: true }));
+    }
+    runAction('#btn-push', 'Push', () => window.git.push(state.repoPath));
+  });
   $('#btn-stash').addEventListener('click', async () => {
     const msg = await showModal('Save Stash', 'Stash message (optional)', '', { allowEmpty: true });
     if (msg === null) return;
