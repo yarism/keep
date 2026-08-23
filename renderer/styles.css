@@ -1267,7 +1267,7 @@ button .icon-svg { pointer-events: none; }
   box-shadow: var(--shadow-modal);
 }
 .modal-title { font-size: var(--fs-xl); font-weight: 600; margin-bottom: 12px; color: var(--text); }
-.modal-input, #stash-select {
+.modal-input, .modal-select {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border-strong);
@@ -1280,12 +1280,12 @@ button .icon-svg { pointer-events: none; }
   margin-bottom: 14px;
 }
 .modal-input::placeholder { color: var(--text-mute); }
-.modal-input:focus, #stash-select:focus {
+.modal-input:focus, .modal-select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--tint-accent);
 }
-#stash-select { max-height: 200px; }
-#stash-select option { background: var(--bg-elevated); color: var(--text); padding: 4px; }
+.modal-select { max-height: 200px; }
+.modal-select option, .modal-select optgroup { background: var(--bg-elevated); color: var(--text); padding: 4px; }
 .modal-message {
   font-size: var(--fs-lg);
   color: var(--text-dim);

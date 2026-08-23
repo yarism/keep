@@ -1,7 +1,7 @@
 import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
-import { showModal, showConfirm } from './modules/modal.js';
+import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
@@ -206,6 +206,25 @@ async function runAction(selector, label, work) {
   }
 }
 
+// Every branch the repo has is already known here, so "which branch?" is a
+// choice to be picked rather than a name to be spelled correctly from memory.
+// The branch you are on is left out: neither merge nor rebase can take it.
+function otherBranches() {
+  const current = state.branchList.find(b => b.current);
+  return state.branchList
+    .filter(b => !b.detached && b.name !== (current && current.name))
+    .map(b => ({ value: b.name, label: b.name, group: b.isRemote ? 'Remote' : 'Local' }));
+}
+
+// The branch you are on is the other half of both operations, and each puts it
+// on a different side: a merge brings the chosen branch *into* it, a rebase
+// moves it *onto* the chosen one. Naming it in the title is what keeps those
+// two apart. A detached HEAD has no name worth quoting, so it gets none.
+function headName() {
+  const current = state.branchList.find(b => b.current);
+  return current && !current.detached ? current.name : null;
+}
+
 function setupToolbar() {
   $('#btn-fetch').addEventListener('click', () =>
     runAction('#btn-fetch', 'Fetch', async () => {
@@ -238,57 +257,26 @@ function setupToolbar() {
     try {
       const stashes = await window.git.stashes(state.repoPath);
       if (stashes.length === 0) { toast('No stashes to apply', { type: 'info' }); return; }
-      // Build a simple picker using the modal with a select
-      const overlay = $('#modal-overlay');
-      const modal = overlay.querySelector('.modal');
-      $('#modal-title').textContent = 'Apply Stash';
-      // Replace input with a select temporarily
-      const input = $('#modal-input');
-      const select = document.createElement('select');
-      select.id = 'stash-select';
-      select.className = input.className;
-      select.style.cssText = input.style.cssText;
-      stashes.forEach((s, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = s.message;
-        select.appendChild(opt);
-      });
-      input.style.display = 'none';
-      input.parentNode.insertBefore(select, input);
-      overlay.hidden = false;
-      select.focus();
-
-      await new Promise(resolve => {
-        function cleanup() {
-          overlay.hidden = true;
-          select.remove();
-          input.style.display = '';
-          $('#modal-ok').removeEventListener('click', onOk);
-          $('#modal-cancel').removeEventListener('click', onCancel);
-          select.removeEventListener('keydown', onKey);
-        }
-        async function onOk() {
-          const idx = parseInt(select.value);
-          cleanup();
-          await runAction('#btn-stash-apply', 'Apply Stash', () => window.git.stashApply(state.repoPath, idx));
-          resolve();
-        }
-        function onCancel() { cleanup(); resolve(); }
-        function onKey(e) { if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); }
-        $('#modal-ok').addEventListener('click', onOk);
-        $('#modal-cancel').addEventListener('click', onCancel);
-        select.addEventListener('keydown', onKey);
-      });
+      const choice = await showSelect('Apply Stash',
+        stashes.map((s, i) => ({ value: String(i), label: s.message })));
+      if (choice === null) return;
+      await runAction('#btn-stash-apply', 'Apply Stash',
+        () => window.git.stashApply(state.repoPath, parseInt(choice, 10)));
     } catch (e) { toast(e.message, { type: 'error' }); }
   });
   $('#btn-merge').addEventListener('click', async () => {
-    const name = await showModal('Merge', 'Branch name to merge into current');
+    const options = otherBranches();
+    if (options.length === 0) { toast('No other branch to merge', { type: 'info' }); return; }
+    const head = headName();
+    const name = await showSelect(head ? `Merge into "${head}"` : 'Merge', options);
     if (!name) return;
     runAction('#btn-merge', 'Merge', () => window.git.merge(state.repoPath, name));
   });
   $('#btn-rebase').addEventListener('click', async () => {
-    const name = await showModal('Rebase', 'Branch name to rebase onto');
+    const options = otherBranches();
+    if (options.length === 0) { toast('No other branch to rebase onto', { type: 'info' }); return; }
+    const head = headName();
+    const name = await showSelect(head ? `Rebase "${head}" onto` : 'Rebase', options);
     if (!name) return;
     runAction('#btn-rebase', 'Rebase', () => window.git.rebase(state.repoPath, name));
   });
