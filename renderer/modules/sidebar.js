@@ -66,6 +66,8 @@ export async function refreshBranches(refresh) {
     });
     list.appendChild(item);
   });
+  // Rebuilding the list drops the class, so restore it from state
+  if (state.selectedBranch) highlightBranch(state.selectedBranch);
 }
 
 export async function refreshTags() {
@@ -136,6 +138,7 @@ export async function refreshRemotes(refresh) {
       remoteEl.appendChild(branchContainer);
       list.appendChild(remoteEl);
     });
+    if (state.selectedBranch) highlightBranch(state.selectedBranch);
   } catch {}
 }
 

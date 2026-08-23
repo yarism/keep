@@ -95,6 +95,7 @@ ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit) => git.log(repoPath, branch, limit));
 ipcMain.handle('git-branches', (_, repoPath) => git.branches(repoPath));
+ipcMain.handle('git-repo-fingerprint', (_, repoPath) => git.repoFingerprint(repoPath));
 ipcMain.handle('git-tags', (_, repoPath) => git.tags(repoPath));
 ipcMain.handle('git-remotes', (_, repoPath) => git.remotes(repoPath));
 ipcMain.handle('git-stashes', (_, repoPath) => git.stashes(repoPath));
