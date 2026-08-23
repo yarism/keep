@@ -21,8 +21,6 @@ jobs:
 
   build:
     needs: test
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -43,9 +41,8 @@ jobs:
       - run: npm ci
 
       - name: Build installers
-        run: npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: npx electron-builder ${{ matrix.args }} --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No signing certificates in CI — keep electron-builder from hunting for one.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
@@ -58,3 +55,30 @@ jobs:
             dist/*.exe
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    # Only tags become releases. Both platforms must be built before it is cut,
+    # so the download links are never live against a half-populated release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the installers
+        uses: actions/download-artifact@v8
+        with:
+          path: installers
+          merge-multiple: true
+
+      - name: Publish the release
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          --title "$GITHUB_REF_NAME"
+          --generate-notes
+          --latest
+          installers/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

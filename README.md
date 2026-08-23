@@ -129,11 +129,12 @@ npm version major   # 1.0.0 -> 2.0.0  a breaking change
 Each one runs the test suite first and stops if anything fails, then bumps
 `package.json`, commits, tags, and pushes the tag. GitHub Actions picks the tag
 up, builds the DMGs and the Windows installer on real macOS and Windows runners,
-and attaches them to a **draft** release.
+and publishes the release once both platforms are built, with notes generated
+from the commits since the last tag.
 
-The draft is the last manual step: open
-[Releases](https://github.com/yarism/keep/releases), write the notes, and hit
-publish. Only then do the download links at the top of this README point at it.
+There is nothing to approve. The download links at the top of this README point
+at the new version the moment the build goes green — usually two or three
+minutes after the push.
 
 Every push to `main` builds the same installers too, but leaves them as workflow
 artifacts on the [run](https://github.com/yarism/keep/actions) rather than
