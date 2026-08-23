@@ -844,15 +844,18 @@ button .icon-svg { pointer-events: none; }
 .commit-graph .graph-node.unpushed { fill: var(--bg); }
 
 /* "local" on the row, hollow node in the graph: the same fact twice, because
- * the graph column is easy to miss while scanning the text. */
+ * the graph column is easy to miss while scanning the text — and because a
+ * search result set has no graph at all. Outlined rather than filled: on a
+ * branch with a dozen unpushed commits a column of solid chips drowns out the
+ * branch names, which are the rarer and more interesting mark. */
 .commit-local {
   font-size: var(--fs-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.2px;
-  padding: 1px 5px;
+  padding: 0 5px;
   border-radius: 3px;
-  color: var(--accent);
-  background: var(--tint-accent-strong);
+  color: var(--text-mute);
+  border: 1px solid color-mix(in srgb, var(--text-mute) 45%, transparent);
 }
 .commit-item + .commit-item { box-shadow: 0 -1px 0 var(--border); }
 .commit-item:hover { background: var(--bg-hover); box-shadow: none; }
@@ -920,7 +923,34 @@ button .icon-svg { pointer-events: none; }
 
 .branch-item .branch-name { margin-right: auto; }
 
+.panel-header-right { display: flex; align-items: center; gap: 10px; }
 #history-tracking { display: flex; align-items: center; }
+
+/* Scope switch — "This branch" / "All branches". One control, two states, so
+ * which one you are looking at is readable without clicking anything. */
+.segmented {
+  display: flex;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.panel-header .segmented button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 2px 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--text-dim);
+  line-height: 16px;
+}
+.panel-header .segmented button + button { border-left: 1px solid var(--border-strong); }
+.panel-header .segmented button:hover { background: var(--bg-active); color: var(--text); }
+.panel-header .segmented button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 .track-upstream {
   font-family: var(--font-mono);
   font-size: var(--fs-code-sm);

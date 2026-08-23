@@ -10,6 +10,9 @@ export const state = {
   // Hashes of commits no remote has yet — history draws these as hollow nodes,
   // so "what would a push send?" is answerable by looking rather than counting.
   unpushed: new Set(),
+  // 'branch' lists the selected branch's ancestry; 'all' lists every ref in the
+  // repo, which is the only way an unmerged branch appears at all.
+  historyScope: 'branch',
   // A search result set is not a contiguous slice of history, so the commit
   // graph has to be suppressed while one is on screen.
   searching: false,

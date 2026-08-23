@@ -293,6 +293,26 @@ test('log: a subject containing the field separator characters still parses', as
   assert.strictEqual(head.author, 'Test Author');
 });
 
+test('log: all-branches mode includes commits no branch has merged', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'spike');
+  h.write(repo, 'spike.txt', 'x\n');
+  h.commitAll(repo, 'spike work');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'main.txt', 'x\n');
+  h.commitAll(repo, 'main work');
+
+  const scoped = await git.log(repo, 'main');
+  const all = await git.log(repo, 'main', 100, { all: true });
+
+  assert.ok(!scoped.some(c => c.subject === 'spike work'),
+    "main's ancestry cannot see an unmerged branch");
+  assert.deepStrictEqual(
+    all.map(c => c.subject).sort(),
+    ['initial', 'main work', 'spike work'],
+    'every ref shows up regardless of the branch argument');
+});
+
 // ── unpushed ──
 
 test('unpushed: lists the commits no remote-tracking branch contains', async () => {
@@ -308,6 +328,26 @@ test('unpushed: lists the commits no remote-tracking branch contains', async () 
 
   assert.deepStrictEqual(hashes, [local],
     'only the commit made after the fetch counts as unpushed');
+});
+
+test('unpushed: all-branches mode covers every local branch, not just one', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'checkout', '-q', '-b', 'spike');
+  h.write(repo, 'spike.txt', 'x\n');
+  const spike = h.commitAll(repo, 'spike work');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'main.txt', 'x\n');
+  const main = h.commitAll(repo, 'main work');
+
+  const scoped = await git.unpushed(repo, 'main');
+  const all = await git.unpushed(repo, null, 500, { all: true });
+
+  assert.deepStrictEqual(scoped, [main]);
+  assert.deepStrictEqual(all.slice().sort(), [main, spike].sort(),
+    'the work sitting on the other branch is unpushed too');
 });
 
 test('unpushed: a repo with no remote at all reports nothing', async () => {

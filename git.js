@@ -81,9 +81,12 @@ function parseDecoration(decoration, remoteNames) {
     if (ref.startsWith('tag: ')) return { name: ref.slice(5), type: 'tag' };
     if (ref.startsWith('HEAD -> ')) return { name: ref.slice(8), type: 'head' };
     if (ref === 'HEAD') return { name: 'HEAD', type: 'head' };
+    // origin/HEAD is a pointer at the remote's default branch, not a branch
+    // anyone works on — it would just double every origin/main chip.
+    if (remoteNames.some(r => ref === r + '/HEAD')) return null;
     if (remoteNames.some(r => ref.startsWith(r + '/'))) return { name: ref, type: 'remote' };
     return { name: ref, type: 'branch' };
-  });
+  }).filter(Boolean);
 }
 
 function parseLog(out, remoteNames) {
@@ -113,9 +116,14 @@ async function remoteNames(repoPath) {
   } catch { return []; }
 }
 
-exports.log = async (repoPath, branch, limit = 100) => {
+// `all` widens the view from one branch's ancestry to every ref in the repo —
+// local branches, remote-tracking branches and tags — which is the only way
+// unmerged work shows up at all. --date-order interleaves them by date while
+// keeping every parent below its children, so the lanes stay drawable.
+exports.log = async (repoPath, branch, limit = 100, opts = {}) => {
   const args = ['log', '--format=' + LOG_FORMAT, '-n', String(limit)];
-  if (branch) args.push(branch);
+  if (opts.all) args.push('--all', '--date-order');
+  else if (branch) args.push(branch);
   const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
   return parseLog(out, remotes);
 };
@@ -124,11 +132,14 @@ exports.log = async (repoPath, branch, limit = 100) => {
 // push would send. Reported per commit rather than as a count so history can
 // mark each unpushed row, and empty in a repo with no remotes at all, where
 // every commit would otherwise qualify and the whole list would light up.
-exports.unpushed = async (repoPath, ref, limit = 500) => {
+exports.unpushed = async (repoPath, ref, limit = 500, opts = {}) => {
   const hasRemote = await run(repoPath, ['for-each-ref', '--count=1', 'refs/remotes']).catch(() => '');
   if (!hasRemote.trim()) return [];
+  // Matching the log above: one branch, or every local branch at once. Only
+  // local ones — a remote-tracking branch is by definition already pushed.
+  const scope = opts.all ? '--branches' : (ref || 'HEAD');
   const out = await run(repoPath, [
-    'rev-list', '--max-count=' + String(limit), ref || 'HEAD', '--not', '--remotes',
+    'rev-list', '--max-count=' + String(limit), scope, '--not', '--remotes',
   ]).catch(() => '');
   return out.trim().split('\n').filter(Boolean);
 };
