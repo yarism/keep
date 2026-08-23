@@ -23,8 +23,8 @@ download — build that one.
 
 ### Or build it yourself
 
-The downloads are unsigned, so macOS and Windows both warn on first launch
-([what to click](#installing-without-terminal)). To skip that, build your own:
+The macOS builds are signed and notarized. The Windows installer is not, so
+SmartScreen warns on first run. To skip that, or to run Keep on Linux, build it:
 
 ```bash
 git clone https://github.com/yarism/keep.git
@@ -168,21 +168,13 @@ refuses to open. Windows installers are still unsigned.
 
 1. Double-click the `.dmg` to mount it
 2. Drag **Keep** into your **Applications** folder
-3. The first launch is refused — Keep is unsigned. Click **Done** (not **Move to
-   Bin**), then **System Settings → Privacy & Security → Open Anyway**. Or in one
-   step:
-
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Keep.app
-   ```
-
-   The old right-click → **Open** shortcut was removed in macOS 15.
+3. Open it — the builds are signed and notarized, so Gatekeeper stays quiet
 
 ### Windows
 
-1. Run the `.exe` installer from the `dist/` folder
-2. Follow the setup wizard
-3. Launch Keep from the Start Menu or Desktop shortcut
+1. Run the `.exe` installer
+2. The installer is unsigned, so SmartScreen warns — **More info** → **Run anyway**
+3. Follow the setup wizard, then launch Keep from the Start Menu
 
 ### Linux
 
