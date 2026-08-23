@@ -1,5 +1,68 @@
 const { execFile } = require('child_process');
 
+// Nothing here has a terminal. `execFile` gives git no TTY, so a command that
+// decides to ask for a password, a passphrase, or approval of an unknown host
+// key has nobody to ask and simply waits — forever, with the window frozen and
+// not a word on screen. Every command that can reach the network therefore runs
+// with the asking switched off, so git fails in a second instead of hanging;
+// explainNetworkError() below turns that failure into something actionable.
+//
+// Setups that already work keep working: this only suppresses *prompts*, so a
+// configured credential helper and a key held by ssh-agent are still consulted
+// as usual.
+function nonInteractiveEnv() {
+  return {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',   // no username/password prompt on https
+    GIT_ASKPASS: 'echo',        // ...nor through a helper
+    SSH_ASKPASS: 'echo',
+    GIT_SSH_COMMAND: 'ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new',
+  };
+}
+
+// Long enough for a real transfer over a poor connection, short enough that a
+// wedged command gives the window back rather than owning it for good.
+const NETWORK_TIMEOUT_MS = 120000;
+
+// A prompt refused and a prompt answered wrongly produce the same class of
+// unhelpful output — "could not read Username", "Authentication failed",
+// "Permission denied (publickey)" — none of which says what to do next. Since
+// Keep has no credential UI, saying so plainly, and naming the fix that lives
+// outside Keep, is the whole of the help it can offer.
+//
+// Pure, so it can be tested without a repo or a network.
+function explainNetworkError(action, message, { timedOut = false } = {}) {
+  const text = String(message || '');
+  const lead = `${action} failed`;
+
+  if (timedOut) {
+    return `${lead}: no response after ${Math.round(NETWORK_TIMEOUT_MS / 1000)} seconds, so it was stopped.\n` +
+      'The remote may be unreachable, or it may be waiting for a credential Keep cannot supply.';
+  }
+  if (/could not read (Username|Password)|Authentication failed|Invalid username or password|terminal prompts disabled/i.test(text)) {
+    return `${lead}: the remote asked for a username and password.\n` +
+      'Keep cannot prompt for them. Store them once with a credential helper — ' +
+      '`git config --global credential.helper osxkeychain`, then run the command once in a terminal — ' +
+      'or switch the remote to SSH.';
+  }
+  if (/Permission denied \(publickey|Could not open a connection to your authentication agent|no such identity/i.test(text)) {
+    return `${lead}: the remote rejected your SSH key.\n` +
+      'Add the key to the agent with `ssh-add` (or `ssh-add --apple-use-keychain` on macOS) and try again.';
+  }
+  if (/Enter passphrase|passphrase for key/i.test(text)) {
+    return `${lead}: your SSH key is passphrase-protected and Keep cannot ask for the passphrase.\n` +
+      'Unlock the key once with `ssh-add --apple-use-keychain` and it will stay unlocked.';
+  }
+  if (/Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(text)) {
+    return `${lead}: the host key was not accepted.\n` +
+      'Connect once from a terminal to review and accept it.';
+  }
+  if (/Could not resolve host|unable to access|Network is unreachable|Connection refused|Operation timed out/i.test(text)) {
+    return `${lead}: the remote could not be reached. Check your connection and the remote's URL.`;
+  }
+  return text.trim() || `${lead}.`;
+}
+
 function run(repoPath, args) {
   return new Promise((resolve, reject) => {
     execFile('git', args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -19,6 +82,26 @@ function runReporting(repoPath, args) {
       if (err) reject(new Error(stderr || err.message));
       else resolve([stdout, stderr].filter(s => s && s.trim()).join('\n'));
     });
+  });
+}
+
+// runReporting for the commands that touch a remote: same output handling, but
+// unable to hang and able to explain itself when it fails. `action` is the word
+// the UI put on the button, so the message reads as an answer to what was asked.
+function runNetwork(repoPath, args, action) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args,
+      { cwd: repoPath, env: nonInteractiveEnv(), timeout: NETWORK_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) {
+          // execFile kills a timed-out child with a signal; that, not the
+          // message, is what distinguishes "too slow" from "refused".
+          const timedOut = Boolean(err.killed || err.signal);
+          reject(new Error(explainNetworkError(action, stderr || err.message, { timedOut })));
+        } else {
+          resolve([stdout, stderr].filter(s => s && s.trim()).join('\n'));
+        }
+      });
   });
 }
 
@@ -441,33 +524,28 @@ exports.deleteBranch = (repoPath, name) => run(repoPath, ['branch', '-d', name])
 exports.renameBranch = (repoPath, oldName, newName) => run(repoPath, ['branch', '-m', oldName, newName]);
 exports.merge = (repoPath, branch) => runReporting(repoPath, ['merge', branch]);
 exports.rebase = (repoPath, branch) => runReporting(repoPath, ['rebase', branch]);
-exports.pull = (repoPath) => runReporting(repoPath, ['pull']);
+exports.pull = (repoPath) => runNetwork(repoPath, ['pull'], 'Pull');
 // A branch with no upstream cannot just be pushed — git refuses and explains
 // how, which is a poor first experience for "I made a branch and want it on the
 // server". `publish` is that explanation carried out.
 exports.push = async (repoPath, opts = {}) => {
-  if (!opts.setUpstream) return runReporting(repoPath, ['push']);
+  if (!opts.setUpstream) return runNetwork(repoPath, ['push'], 'Push');
   const remote = (await remoteNames(repoPath))[0] || 'origin';
   const branch = (await run(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
-  return runReporting(repoPath, ['push', '--set-upstream', remote, branch]);
+  return runNetwork(repoPath, ['push', '--set-upstream', remote, branch], 'Publish');
 };
-exports.fetch = (repoPath) => runReporting(repoPath, ['fetch', '--all']);
+exports.fetch = (repoPath) => runNetwork(repoPath, ['fetch', '--all'], 'Fetch');
 
-// The same fetch, but safe to run on a timer with nobody watching: any prompt
-// for a password or a host key would otherwise hang the process forever, and a
-// background job must never be able to do that. Failure is expected and
-// ordinary here — being offline is not an error worth interrupting anyone for —
-// so this resolves either way and reports which it was.
+// The same fetch, but for a timer with nobody watching. It shares the
+// non-interactive environment with every other network command, and differs in
+// the two things that follow from having no audience: a shorter leash, and no
+// way to raise an alarm. Failure is expected and ordinary here — being offline
+// is not an error worth interrupting anyone for — so this resolves either way
+// and reports which it was, leaving the explaining to the buttons a person
+// actually pressed.
 exports.fetchQuiet = (repoPath) => new Promise((resolve) => {
-  const env = {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: '0',   // no username/password prompt on https
-    GIT_ASKPASS: 'echo',        // ...nor through a helper
-    SSH_ASKPASS: 'echo',
-    GIT_SSH_COMMAND: 'ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new',
-  };
   execFile('git', ['fetch', '--all', '--quiet'],
-    { cwd: repoPath, env, timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
+    { cwd: repoPath, env: nonInteractiveEnv(), timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
     (err) => resolve({ ok: !err, error: err ? (err.message || '').trim() : null }));
 });
 exports.stashSave = (repoPath, message) => {
@@ -609,3 +687,6 @@ exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {
   const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
   return parseLog(out, remotes);
 };
+
+exports.explainNetworkError = explainNetworkError;
+exports.NETWORK_TIMEOUT_MS = NETWORK_TIMEOUT_MS;
