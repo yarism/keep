@@ -8,7 +8,6 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 
 ## Features
 
-
 - Visual working copy with staged/unstaged changes
 - Inline diffs with hunk-level staging and discarding
 - Commit history browser with full commit details and changesets
