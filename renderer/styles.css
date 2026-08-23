@@ -77,8 +77,8 @@
   --fs-lg: 14px;    /* body default, text inputs */
   --fs-xl: 15px;    /* pane and modal titles */
   --fs-display: 30px;   /* the empty-state headline */
-  --fs-code: 12.5px;    /* diff body */
-  --fs-code-sm: 11.5px; /* hashes, toast detail */
+  --fs-code: 12px;      /* diff body — Tower-sized, and it stays put */
+  --fs-code-sm: 11px;   /* line numbers, hunk headers, hashes */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -871,7 +871,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--diff-hunk-text);
   padding: 4px 12px;
   font-weight: 600;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code-sm);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -903,7 +903,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--text-mute);
   padding-right: 8px;
   user-select: none;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-code-sm);
 }
 .diff-line-content { flex: 1; padding-left: 6px; }
 .diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-text); }
@@ -1079,7 +1079,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--text-mute);
 }
 .commit-subject-text {
-  font-size: var(--fs-code);
+  font-size: var(--fs-md);
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
