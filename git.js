@@ -9,6 +9,19 @@ function run(repoPath, args) {
   });
 }
 
+// The network commands write everything a user would want to read — "Everything
+// up-to-date", the ref updates, the transfer summary — to stderr, so resolving
+// stdout alone hands the UI an empty string for exactly the commands whose
+// result it needs to report.
+function runReporting(repoPath, args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve([stdout, stderr].filter(s => s && s.trim()).join('\n'));
+    });
+  });
+}
+
 exports.status = async (repoPath) => {
   // -z gives NUL-terminated records and turns off C-style quoting, so paths with
   // spaces or non-ASCII characters arrive verbatim instead of as `"sp ace.txt"`
@@ -192,11 +205,11 @@ exports.createBranch = (repoPath, name, from) => {
 };
 exports.deleteBranch = (repoPath, name) => run(repoPath, ['branch', '-d', name]);
 exports.renameBranch = (repoPath, oldName, newName) => run(repoPath, ['branch', '-m', oldName, newName]);
-exports.merge = (repoPath, branch) => run(repoPath, ['merge', branch]);
-exports.rebase = (repoPath, branch) => run(repoPath, ['rebase', branch]);
-exports.pull = (repoPath) => run(repoPath, ['pull']);
-exports.push = (repoPath) => run(repoPath, ['push']);
-exports.fetch = (repoPath) => run(repoPath, ['fetch', '--all']);
+exports.merge = (repoPath, branch) => runReporting(repoPath, ['merge', branch]);
+exports.rebase = (repoPath, branch) => runReporting(repoPath, ['rebase', branch]);
+exports.pull = (repoPath) => runReporting(repoPath, ['pull']);
+exports.push = (repoPath) => runReporting(repoPath, ['push']);
+exports.fetch = (repoPath) => runReporting(repoPath, ['fetch', '--all']);
 exports.stashSave = (repoPath, message) => {
   const args = ['stash', 'push'];
   if (message) args.push('-m', message);

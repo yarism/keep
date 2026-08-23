@@ -11,14 +11,25 @@ import { icon } from '../icons.js';
 
 const STORAGE_KEY = 'keep.theme';
 
+// What is on screen, and what the user actually chose. Hovering the picker
+// moves the first without touching the second — otherwise the tick would follow
+// the pointer and every preview would look like a decision already made.
 let currentId = DEFAULT_THEME_ID;
+let savedId = DEFAULT_THEME_ID;
 
 export function currentThemeId() {
   return currentId;
 }
 
-export function applyTheme(id, { persist = false } = {}) {
+export function savedThemeId() {
+  return savedId;
+}
+
+// Paints a theme. Nothing else — no persistence, no menu redraw — so it is
+// cheap enough to call on every hover.
+export function applyTheme(id) {
   const theme = resolveTheme(id);
+  if (theme.id === currentId && document.documentElement.dataset.theme === theme.id) return;
   const root = document.documentElement;
   for (const [token, value] of Object.entries(theme.tokens)) {
     root.style.setProperty(`--${token}`, value);
@@ -28,10 +39,15 @@ export function applyTheme(id, { persist = false } = {}) {
   root.style.colorScheme = theme.dark ? 'dark' : 'light';
   root.dataset.theme = theme.id;
   currentId = theme.id;
+}
 
+// Paints a theme and records it as the choice.
+function selectTheme(id, { persist = true } = {}) {
+  applyTheme(id);
+  savedId = currentId;
   if (persist) {
-    try { localStorage.setItem(STORAGE_KEY, theme.id); } catch {}
-    window.git.saveSettings({ theme: theme.id });
+    try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
+    window.git.saveSettings({ theme: savedId });
   }
   renderThemeMenu();
 }
@@ -40,50 +56,47 @@ export function applyTheme(id, { persist = false } = {}) {
 export function initTheme() {
   let stored = null;
   try { stored = localStorage.getItem(STORAGE_KEY); } catch {}
-  applyTheme(stored || DEFAULT_THEME_ID);
+  selectTheme(stored || DEFAULT_THEME_ID, { persist: false });
 }
 
 // Called once settings.json has been read; only does work if the two disagree.
 export function syncThemeFromSettings(settings) {
   const id = settings && settings.theme;
-  if (!id || id === currentId) return;
+  if (!id || id === savedId) return;
   applyTheme(id);
-  try { localStorage.setItem(STORAGE_KEY, currentId); } catch {}
+  savedId = currentId;
+  try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
+  renderThemeMenu();
 }
 
 // ── Picker ──
-
-// Hovering a row previews it; leaving the menu without picking puts the old
-// theme back, so browsing the list costs nothing.
-let previewFrom = null;
 
 function renderThemeMenu() {
   const list = $('#theme-menu-items');
   if (!list) return;
   list.innerHTML = THEMES.map(t => `
-    <div class="theme-item${t.id === currentId ? ' active' : ''}" data-theme-id="${t.id}" role="menuitemradio" aria-checked="${t.id === currentId}" tabindex="0">
+    <div class="theme-item${t.id === savedId ? ' active' : ''}" data-theme-id="${t.id}" role="menuitemradio" aria-checked="${t.id === savedId}" tabindex="0">
       <span class="theme-swatch" aria-hidden="true">
         ${swatch(t).map(c => `<i style="background:${c}"></i>`).join('')}
       </span>
       <span class="theme-name">${escapeHtml(t.name)}</span>
-      <span class="theme-check">${t.id === currentId ? icon('check', 14) : ''}</span>
+      <span class="theme-check">${t.id === savedId ? icon('check', 14) : ''}</span>
     </div>
   `).join('');
 }
 
 function openThemeMenu() {
-  const menu = $('#theme-menu');
-  previewFrom = currentId;
   renderThemeMenu();
-  menu.hidden = false;
+  $('#theme-menu').hidden = false;
   $('#btn-theme').classList.add('active');
 }
 
-function closeThemeMenu({ restore = false } = {}) {
+// Anything that closes the menu without a click on a row is a cancelled
+// preview, so the saved theme goes back up.
+function closeThemeMenu() {
   const menu = $('#theme-menu');
   if (!menu || menu.hidden) return;
-  if (restore && previewFrom && previewFrom !== currentId) applyTheme(previewFrom);
-  previewFrom = null;
+  applyTheme(savedId);
   menu.hidden = true;
   $('#btn-theme').classList.remove('active');
 }
@@ -95,41 +108,41 @@ export function setupThemePicker() {
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (menu.hidden) openThemeMenu(); else closeThemeMenu({ restore: true });
+    if (menu.hidden) openThemeMenu(); else closeThemeMenu();
   });
 
   menu.addEventListener('click', (e) => {
     e.stopPropagation();
     const item = e.target.closest('.theme-item');
     if (!item) return;
-    previewFrom = null;
-    applyTheme(item.dataset.themeId, { persist: true });
-    closeThemeMenu();
+    selectTheme(item.dataset.themeId);
+    menu.hidden = true;
+    btn.classList.remove('active');
   });
 
   menu.addEventListener('mouseover', (e) => {
     const item = e.target.closest('.theme-item');
-    if (item && item.dataset.themeId !== currentId) applyTheme(item.dataset.themeId);
+    if (item) applyTheme(item.dataset.themeId);
   });
+
+  // Leaving the list is not a choice, so the saved theme comes back.
+  menu.addEventListener('mouseleave', () => applyTheme(savedId));
 
   menu.addEventListener('keydown', (e) => {
     const item = e.target.closest('.theme-item');
     if (!item) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      previewFrom = null;
-      applyTheme(item.dataset.themeId, { persist: true });
-      closeThemeMenu();
+      selectTheme(item.dataset.themeId);
+      menu.hidden = true;
+      btn.classList.remove('active');
     }
   });
-
-  // Leaving the list restores what was showing before the preview started.
-  menu.addEventListener('mouseleave', () => {
-    if (previewFrom && previewFrom !== currentId) applyTheme(previewFrom);
+  menu.addEventListener('focusin', (e) => {
+    const item = e.target.closest('.theme-item');
+    if (item) applyTheme(item.dataset.themeId);
   });
 
-  document.addEventListener('click', () => closeThemeMenu({ restore: true }));
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeThemeMenu({ restore: true });
-  });
+  document.addEventListener('click', closeThemeMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeThemeMenu(); });
 }

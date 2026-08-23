@@ -111,7 +111,7 @@ export async function refreshRemotes(refresh) {
       header.className = 'remote-item';
       header.innerHTML = `
         <span class="expand-arrow open">${icon('chevron', 12)}</span>
-        ${icon('globe', 14)}
+        ${icon('cloud', 14)}
         <span>${escapeHtml(r.name)}</span>
       `;
 

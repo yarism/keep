@@ -14,7 +14,11 @@ export const STROKE_WIDTH = 1.75;
 const PATHS = {
   // ── Files & repositories ──
   folder: '<path d="M3 7.5A2 2 0 0 1 5 5.5h3.6a2 2 0 0 1 1.6.8l1 1.35h7.8a2 2 0 0 1 2 2v8.85a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
-  file: '<path d="M13.5 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8.75Z"/><path d="M13.5 3.5v5.25h5"/><path d="M8.75 13.25h6.5"/><path d="M8.75 16.5h4.5"/>',
+
+  // The repository list. A drive rather than a globe: a globe is what a remote
+  // is, and one glyph cannot mean two things in the same window.
+  drive: '<path d="M5.6 5.35 2.75 11.5v5.75a2 2 0 0 0 2 2h14.5a2 2 0 0 0 2-2V11.5l-2.85-6.15a2 2 0 0 0-1.8-1.1H7.4a2 2 0 0 0-1.8 1.1Z"/><path d="M2.75 11.5h18.5"/><path d="M6.4 15.6h.01"/><path d="M9.9 15.6h.01"/>',
+  cloud: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10Z"/>',
 
   // ── Views ──
   clock: '<circle cx="12" cy="12" r="8.25"/><path d="M12 7.25V12l3.1 1.85"/>',
@@ -26,17 +30,15 @@ const PATHS = {
   push: '<path d="M12 20.25v-11"/><path d="m7.5 13.75 4.5-4.5 4.5 4.5"/><path d="M5 4.5h14"/>',
 
   // ── Stashes ──
-  stash: '<rect x="3.25" y="4.25" width="17.5" height="4.25" rx="1.25"/><path d="M5 8.5v9.75a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5"/><path d="M10 12.25h4"/>',
-  'stash-save': '<rect x="3.25" y="4.25" width="17.5" height="4.25" rx="1.25"/><path d="M5 8.5v9.75a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5"/><path d="M12 11v5"/><path d="m9.75 13.75 2.25 2.25 2.25-2.25"/>',
-  'stash-apply': '<rect x="3.25" y="4.25" width="17.5" height="4.25" rx="1.25"/><path d="M5 8.5v9.75a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5"/><path d="M12 16v-5"/><path d="m9.75 13.25 2.25-2.25 2.25 2.25"/>',
+  stash: '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/>',
+  'stash-save': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 10.25v4.75"/><path d="m9.9 12.9 2.1 2.1 2.1-2.1"/>',
+  'stash-apply': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 15v-4.75"/><path d="m9.9 12.35 2.1-2.1 2.1 2.1"/>',
 
   // ── Branch topology ──
   branch: '<circle cx="7" cy="6" r="2.5"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="6" r="2.5"/><path d="M7 8.5v7"/><path d="M17 8.5v3a6.5 6.5 0 0 1-6.5 6.5H9.5"/>',
   merge: '<circle cx="7" cy="6" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="M7 8.5v11.5"/><path d="M7 11.5a6.5 6.5 0 0 0 6.5 6.5h1"/>',
   rebase: '<circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><path d="M6.5 15.5V4"/><path d="M17.5 8.5v3.5a4 4 0 0 1-4 4h-2.5"/><path d="m13.25 13.75-2.5 2.25 2.5 2.25"/>',
-  commit: '<circle cx="12" cy="12" r="3.25"/><path d="M12 3.5v5.25"/><path d="M12 15.25v5.25"/>',
   tag: '<path d="M11.6 3.75H5.25a1.5 1.5 0 0 0-1.5 1.5v6.35c0 .4.16.78.44 1.06l7.6 7.6a1.5 1.5 0 0 0 2.12 0l6.35-6.35a1.5 1.5 0 0 0 0-2.12l-7.6-7.6a1.5 1.5 0 0 0-1.06-.44Z"/><circle cx="8" cy="8" r="1.15"/>',
-  globe: '<circle cx="12" cy="12" r="8.25"/><path d="M3.75 12h16.5"/><path d="M12 3.75a13 13 0 0 1 0 16.5 13 13 0 0 1 0-16.5Z"/>',
 
   // ── Chrome ──
   search: '<circle cx="10.75" cy="10.75" r="6.25"/><path d="m19.5 19.5-4.3-4.3"/>',
@@ -45,7 +47,6 @@ const PATHS = {
   chevron: '<path d="m9.75 5.75 6.25 6.25-6.25 6.25"/>',
   plus: '<path d="M12 5.25v13.5"/><path d="M5.25 12h13.5"/>',
   close: '<path d="m6.75 6.75 10.5 10.5"/><path d="m17.25 6.75-10.5 10.5"/>',
-  trash: '<path d="M4.5 6.75h15"/><path d="M9.5 6.75V5.25A1.75 1.75 0 0 1 11.25 3.5h1.5a1.75 1.75 0 0 1 1.75 1.75v1.5"/><path d="m6.75 6.75.85 12.1a1.9 1.9 0 0 0 1.9 1.65h5a1.9 1.9 0 0 0 1.9-1.65l.85-12.1"/>',
   alert: '<circle cx="12" cy="12" r="8.25"/><path d="M12 7.75v4.75"/><path d="M12 15.85h.01"/>',
 };
 
