@@ -595,3 +595,101 @@ test('status: a delete/modify conflict is named as such', async () => {
   assert.strictEqual(file.status, 'conflicted');
   assert.strictEqual(file.conflictKind, 'deleted by them');
 });
+
+// ── amend ──
+
+test('commit: a subject and body are stored as git expects them', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.git(repo, 'add', '-A');
+
+  await git.commit(repo, 'Short subject\n\nA longer explanation\nover two lines.');
+
+  const full = h.git(repo, 'log', '-1', '--format=%B').trim();
+  assert.strictEqual(full, 'Short subject\n\nA longer explanation\nover two lines.');
+  const [head] = await git.log(repo);
+  assert.strictEqual(head.subject, 'Short subject', 'the subject alone heads the list');
+});
+
+test('commit --amend: replaces the last commit rather than adding one', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.commitAll(repo, 'typo in teh subject');
+  const before = (await git.log(repo)).length;
+
+  await git.commit(repo, 'Typo in the subject', { amend: true });
+
+  const commits = await git.log(repo);
+  assert.strictEqual(commits.length, before, 'no new commit was added');
+  assert.strictEqual(commits[0].subject, 'Typo in the subject');
+});
+
+test('commit --amend: picks up whatever is staged as well', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.commitAll(repo, 'first pass');
+  h.write(repo, 'forgotten.txt', 'oops\n');
+  h.git(repo, 'add', '-A');
+
+  await git.commit(repo, 'first pass', { amend: true });
+
+  const files = await git.commitFiles(repo, 'HEAD');
+  assert.deepStrictEqual(files.map(f => f.filePath).sort(), ['a.txt', 'forgotten.txt']);
+});
+
+test('headMessage: splits the last message into subject and body', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.git(repo, 'add', '-A');
+  await git.commit(repo, 'The subject\n\nThe body,\nwrapped.');
+
+  assert.deepStrictEqual(await git.headMessage(repo), {
+    subject: 'The subject',
+    body: 'The body,\nwrapped.',
+  });
+});
+
+test('headMessage: a subject-only commit has an empty body', async () => {
+  const repo = h.makeRepo();
+
+  assert.deepStrictEqual(await git.headMessage(repo), { subject: 'initial', body: '' });
+});
+
+// ── publishing a branch ──
+//
+// Pushing to a local path is not a network operation, so unlike pull/fetch this
+// one can be tested for real. The remote is an ordinary repo with `main`
+// checked out, which is why the branch pushed here is never `main` — git
+// refuses to push into a branch someone has checked out.
+
+test('push: publishing a branch sets it to track the remote', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+
+  const before = (await git.branches(repo)).find(b => b.name === 'feature');
+  assert.strictEqual(before.upstream, null, 'nothing to push to yet');
+
+  await git.push(repo, { setUpstream: true });
+
+  const after = (await git.branches(repo)).find(b => b.name === 'feature');
+  assert.strictEqual(after.upstream, 'origin/feature');
+  assert.strictEqual(after.ahead, 0, 'and it is no longer ahead of anything');
+  assert.match(h.git(remote, 'branch', '--list', 'feature'), /feature/,
+    'the branch really is on the remote');
+});
+
+test('push: a plain push of an unpublished branch is refused, as git does', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+
+  // The UI offers to publish precisely because this is what happens otherwise.
+  await assert.rejects(() => git.push(repo), /upstream/i);
+});

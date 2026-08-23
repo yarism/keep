@@ -28,6 +28,14 @@ export function updateSyncBadges() {
   const t = headTracking();
   setBadge('#badge-pull', t ? t.behind : 0, 'commit(s) to pull');
   setBadge('#badge-push', t ? t.ahead : 0, 'commit(s) to push');
+  // An unpublished branch has no ahead count — git has no upstream to count
+  // against — so it gets a mark rather than a number.
+  const push = $('#badge-push');
+  if (push && t && !t.upstream) {
+    push.textContent = '\u2022';
+    push.hidden = false;
+    push.title = `${t.name} is not on any remote yet`;
+  }
 }
 
 function setBadge(selector, count, what) {
@@ -40,10 +48,17 @@ function setBadge(selector, count, what) {
 
 // The same chips in the sidebar and in the History header, so "↑2" means the
 // same thing wherever it turns up.
-export function trackingChips(t, { showSynced = false } = {}) {
+// `showUnpublished` is off by default because most branches in most repos have
+// never been pushed: a chip on every row is the state of the world, not news.
+// It is worth saying about the branch you are on, where Push acts on it.
+export function trackingChips(t, { showSynced = false, showUnpublished = false } = {}) {
   if (!t) return '';
   if (t.gone) return `<span class="track-chip gone" title="Upstream ${t.upstream} is gone">gone</span>`;
-  if (!t.upstream) return showSynced ? '<span class="track-chip none">no upstream</span>' : '';
+  // No upstream is not "in sync" — it is work that exists nowhere else, which
+  // the ahead/behind numbers cannot say because git has nothing to compare to.
+  if (!t.upstream) {
+    return showUnpublished ? '<span class="track-chip unpublished">unpublished</span>' : '';
+  }
   const chips = [];
   if (t.behind) chips.push(`<span class="track-chip behind" title="${t.behind} commit(s) to pull">↓${t.behind}</span>`);
   if (t.ahead) chips.push(`<span class="track-chip ahead" title="${t.ahead} commit(s) to push">↑${t.ahead}</span>`);

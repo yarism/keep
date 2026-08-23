@@ -197,6 +197,10 @@ exports.branches = async (repoPath) => {
     const current = head === '*';
     const upstream = upstreamRaw || null;
     const isRemote = remotes.some(r => name.startsWith(r + '/'));
+    // refs/remotes/origin/HEAD shortens to plain "origin", which is neither a
+    // branch nor named like a remote one — left alone it shows up in the
+    // sidebar as a local branch called "origin" that nobody created.
+    if (remotes.includes(name)) return;
     // Detect detached HEAD — git outputs "(HEAD" as the name
     if (name.startsWith('(HEAD')) {
       detachedHead = true;
@@ -407,7 +411,26 @@ exports.unstage = (repoPath, filePath, oldPath) => {
   return run(repoPath, ['reset', 'HEAD', '--', ...paths]);
 };
 exports.stageAll = (repoPath) => run(repoPath, ['add', '-A']);
-exports.commit = (repoPath, message) => run(repoPath, ['commit', '-m', message]);
+// A message may be a subject and a body; -m takes the whole thing, blank line
+// and all. --amend replaces the last commit rather than adding one, which is a
+// rewrite — the caller is expected to have said so out loud (see the warning in
+// the commit box when the commit is already on a remote).
+exports.commit = (repoPath, message, opts = {}) => {
+  const args = ['commit'];
+  if (opts.amend) args.push('--amend');
+  return runReporting(repoPath, [...args, '-m', message]);
+};
+
+// The message of the commit being amended, so the box can be filled with it
+// instead of asking the user to retype what git already knows.
+exports.headMessage = async (repoPath) => {
+  const out = await run(repoPath, ['log', '-1', '--format=%B']).catch(() => '');
+  const text = out.replace(/\n+$/, '');
+  const split = text.indexOf('\n');
+  return split === -1
+    ? { subject: text, body: '' }
+    : { subject: text.slice(0, split), body: text.slice(split + 1).replace(/^\n/, '') };
+};
 exports.checkout = (repoPath, branch) => run(repoPath, ['checkout', branch]);
 exports.createBranch = (repoPath, name, from) => {
   const args = ['checkout', '-b', name];
@@ -419,7 +442,15 @@ exports.renameBranch = (repoPath, oldName, newName) => run(repoPath, ['branch', 
 exports.merge = (repoPath, branch) => runReporting(repoPath, ['merge', branch]);
 exports.rebase = (repoPath, branch) => runReporting(repoPath, ['rebase', branch]);
 exports.pull = (repoPath) => runReporting(repoPath, ['pull']);
-exports.push = (repoPath) => runReporting(repoPath, ['push']);
+// A branch with no upstream cannot just be pushed — git refuses and explains
+// how, which is a poor first experience for "I made a branch and want it on the
+// server". `publish` is that explanation carried out.
+exports.push = async (repoPath, opts = {}) => {
+  if (!opts.setUpstream) return runReporting(repoPath, ['push']);
+  const remote = (await remoteNames(repoPath))[0] || 'origin';
+  const branch = (await run(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
+  return runReporting(repoPath, ['push', '--set-upstream', remote, branch]);
+};
 exports.fetch = (repoPath) => runReporting(repoPath, ['fetch', '--all']);
 exports.stashSave = (repoPath, message) => {
   const args = ['stash', 'push'];
