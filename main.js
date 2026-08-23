@@ -88,7 +88,14 @@ ipcMain.handle('save-repos', (_, repos) => { saveRepos(repos); return true; });
 
 const settingsFile = path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() { try { return JSON.parse(fs.readFileSync(settingsFile, 'utf-8')); } catch { return {}; } }
-function saveSettings(s) { fs.writeFileSync(settingsFile, JSON.stringify(s, null, 2)); }
+// Callers send a patch, not the whole settings object — the sidebar saves its
+// width and the theme picker saves the theme, and neither knows about the
+// other — so merge instead of overwriting.
+function saveSettings(patch) {
+  const merged = { ...loadSettings(), ...patch };
+  fs.writeFileSync(settingsFile, JSON.stringify(merged, null, 2));
+  return merged;
+}
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
 

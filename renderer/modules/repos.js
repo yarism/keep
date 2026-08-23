@@ -1,4 +1,5 @@
 import { $, $$, escapeHtml, state, switchView } from './state.js';
+import { icon } from '../icons.js';
 
 let _onSelectRepo = null;
 
@@ -16,7 +17,7 @@ export function showRepoList() {
   $('#workspace-nav').hidden = true;
   $('#breadcrumb-sep').hidden = true;
   $('#breadcrumb-repo').hidden = true;
-  $$('#toolbar button:not(#btn-open)').forEach(b => b.disabled = true);
+  $$('#toolbar .toolbar-group button:not(#btn-open)').forEach(b => b.disabled = true);
   switchView('welcome');
   renderRepoList();
 }
@@ -33,9 +34,9 @@ function renderRepoList() {
     item.className = 'repo-item' + (state.repoPath === r.path ? ' active' : '');
     item.tabIndex = 0;
     item.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      ${icon('folder', 14)}
       <span>${escapeHtml(r.name)}</span>
-      <button class="repo-item-remove" title="Remove" tabindex="-1">×</button>
+      <button class="repo-item-remove" title="Remove" tabindex="-1">${icon('close', 12)}</button>
     `;
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('repo-item-remove')) return;

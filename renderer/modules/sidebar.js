@@ -1,5 +1,6 @@
 import { $, escapeHtml, state, switchView } from './state.js';
 import { showBranchContextMenu, showTagContextMenu, confirmCheckout } from './context-menu.js';
+import { icon } from '../icons.js';
 import { refreshHistory } from './history.js';
 
 // Matches on the data-branch attribute rather than a class so this covers local
@@ -46,12 +47,10 @@ export async function refreshBranches(refresh) {
     const item = document.createElement('div');
     item.className = 'branch-item' + (b.current ? ' current' : '') + (b.detached ? ' detached' : '');
     item.dataset.branch = b.name;
-    const icon = b.detached
-      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
-      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>`;
+    const glyph = icon(b.detached ? 'alert' : 'branch', 14);
     const label = b.detached ? `(HEAD detached at ${b.name})` : b.name;
     item.innerHTML = `
-      ${icon}
+      ${glyph}
       <span>${escapeHtml(label)}</span>
       ${b.current ? '<span class="head-badge">HEAD</span>' : ''}
     `;
@@ -82,7 +81,7 @@ export async function refreshTags(refresh) {
       const item = document.createElement('div');
       item.className = 'tag-item';
       item.dataset.branch = t;
-      item.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span>${escapeHtml(t)}</span>`;
+      item.innerHTML = `${icon('tag', 14)}<span>${escapeHtml(t)}</span>`;
       // Same behaviour as a branch row: show that ref's history
       item.addEventListener('click', () => {
         switchView('history');
@@ -111,8 +110,8 @@ export async function refreshRemotes(refresh) {
       const header = document.createElement('div');
       header.className = 'remote-item';
       header.innerHTML = `
-        <span class="expand-arrow open">▶</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        <span class="expand-arrow open">${icon('chevron', 12)}</span>
+        ${icon('globe', 14)}
         <span>${escapeHtml(r.name)}</span>
       `;
 
@@ -128,7 +127,7 @@ export async function refreshRemotes(refresh) {
         branchEl.className = 'branch-item remote-branch-item';
         branchEl.dataset.branch = b.name;
         branchEl.innerHTML = `
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>
+          ${icon('branch', 14)}
           <span>${escapeHtml(shortName)}</span>
         `;
         branchEl.addEventListener('click', () => {
