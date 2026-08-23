@@ -10,8 +10,7 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 
 ## Download
 
-Grab the newest release — these links never go stale, they always resolve to
-whatever the latest published release is:
+Always the latest release:
 
 | Platform | |
 |---|---|
@@ -19,15 +18,13 @@ whatever the latest published release is:
 | [**macOS — Intel**](https://github.com/yarism/keep/releases/latest/download/Keep-mac-x64.dmg) | |
 | [**Windows**](https://github.com/yarism/keep/releases/latest/download/Keep-win-x64.exe) | 64-bit installer |
 
-Or browse [all releases](https://github.com/yarism/keep/releases). There is no
-Linux download — build that one yourself, as below.
+Or browse [all releases](https://github.com/yarism/keep/releases). No Linux
+download — build that one.
 
 ### Or build it yourself
 
-The downloads above are **not currently signed** by Apple or Microsoft, so both
-systems warn you before the first launch — [what to click](#installing-without-terminal).
-If you would rather not run an unsigned binary that reads every repository you
-own, which is a fair position, building your own takes about a minute:
+The downloads are unsigned, so macOS and Windows both warn on first launch
+([what to click](#installing-without-terminal)). To skip that, build your own:
 
 ```bash
 git clone https://github.com/yarism/keep.git
@@ -36,9 +33,8 @@ npm install
 npm run dist          # macOS .dmg — or dist:win, or dist:linux
 ```
 
-The installer lands in `dist/`. Nothing you built locally was ever downloaded, so
-it carries no quarantine flag and neither Gatekeeper nor SmartScreen has anything
-to say about it.
+The installer lands in `dist/`. A local build has no quarantine flag, so neither
+warning appears.
 
 ## Features
 
@@ -135,7 +131,7 @@ Output goes to the `dist/` folder.
 
 ## Releasing
 
-Cutting a release is one command. Pick the part of the version that moved:
+One command:
 
 ```bash
 npm version patch   # 1.0.0 -> 1.0.1  a fix
@@ -143,19 +139,13 @@ npm version minor   # 1.0.0 -> 1.1.0  a new feature
 npm version major   # 1.0.0 -> 2.0.0  a breaking change
 ```
 
-Each one runs the test suite first and stops if anything fails, then bumps
-`package.json`, commits, tags, and pushes the tag. GitHub Actions picks the tag
-up, builds the DMGs and the Windows installer on real macOS and Windows runners,
-and publishes the release once both platforms are built, with notes generated
-from the commits since the last tag.
+Tests run first and abort on failure, then the version is bumped, committed,
+tagged and pushed. GitHub Actions builds on macOS and Windows runners and
+publishes the release itself, with notes from the commits since the last tag.
+Nothing to approve — the links above point at it a few minutes later.
 
-There is nothing to approve. The download links at the top of this README point
-at the new version the moment the build goes green — usually two or three
-minutes after the push.
-
-Every push to `main` builds the same installers too, but leaves them as workflow
-artifacts on the [run](https://github.com/yarism/keep/actions) rather than
-releasing them — useful for testing a build before you tag it.
+Pushes to `main` build the same installers as workflow
+[artifacts](https://github.com/yarism/keep/actions) without releasing them.
 
 ## Installing Without Terminal
 
@@ -163,18 +153,15 @@ releasing them — useful for testing a build before you tag it.
 
 1. Double-click the `.dmg` to mount it
 2. Drag **Keep** into your **Applications** folder
-3. The first launch is refused: *"Apple could not verify 'Keep' is free of
-   malware."* Keep is not signed with an Apple Developer certificate, so there is
-   nothing for macOS to check it against. Click **Done** — never **Move to Bin**
-   — then open **System Settings → Privacy & Security**, scroll down to
-   **Security**, and click **Open Anyway** beside the message about Keep.
-
-   The right-click → **Open** shortcut that used to work was removed in macOS 15.
-   From a terminal, this does the same job in one step:
+3. The first launch is refused — Keep is unsigned. Click **Done** (not **Move to
+   Bin**), then **System Settings → Privacy & Security → Open Anyway**. Or in one
+   step:
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/Keep.app
    ```
+
+   The old right-click → **Open** shortcut was removed in macOS 15.
 
 ### Windows
 
