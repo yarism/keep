@@ -6,6 +6,9 @@ export const state = {
   selectedCommit: null,
   selectedBranch: null,
   statusFiles: [],
+  // What the repository is in the middle of (a merge, a rebase, …) and which
+  // files are still unmerged. Empty when nothing is in flight.
+  repoState: { kind: null, conflicts: [], branch: null, step: 0, total: 0 },
   commits: [],
   // Hashes of commits no remote has yet — history draws these as hollow nodes,
   // so "what would a push send?" is answerable by looking rather than counting.

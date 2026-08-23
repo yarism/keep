@@ -540,7 +540,10 @@ button .icon-svg { pointer-events: none; }
 
 /* Working copy ------------------------------------------------------------ */
 
-#wc-container { display: flex; width: 100%; height: 100%; }
+/* The view is a row of panels, but the operation banner belongs above all of
+ * them — so this one view stacks, and the panels become the row inside it. */
+#working-copy-view.active { flex-direction: column; }
+#wc-container { display: flex; width: 100%; flex: 1; min-height: 0; }
 #wc-files-panel {
   width: 320px;
   min-width: 220px;
@@ -606,6 +609,126 @@ button .icon-svg { pointer-events: none; }
 .file-status.deleted   { background: color-mix(in srgb, var(--red) 20%, transparent);    color: var(--red); }
 .file-status.untracked { background: color-mix(in srgb, var(--text-dim) 18%, transparent); color: var(--text-dim); }
 .file-status.renamed   { background: color-mix(in srgb, var(--blue) 20%, transparent);   color: var(--blue); }
+.file-status.conflicted { background: var(--red); color: var(--on-status); }
+
+/* Conflicts ---------------------------------------------------------------
+ * A conflicted row keeps the shape of every other file row, but it is the one
+ * kind of change that cannot simply be committed, so it says so twice: the
+ * status chip is solid rather than a wash, and the kind of conflict is spelled
+ * out where the other rows show nothing. */
+.file-item.conflicted { background: color-mix(in srgb, var(--red) 8%, transparent); }
+.file-item.conflicted:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
+.file-item.conflicted.selected { background: color-mix(in srgb, var(--red) 20%, transparent); }
+/* Holds the space the checkbox would take, so names stay in one column. */
+.file-checkbox-slot { width: 14px; flex-shrink: 0; }
+.conflict-kind {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--red);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge.conflict { background: var(--red); }
+
+/* The banner: what you are in the middle of, and the way out of it. */
+.op-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--red) 12%, var(--bg-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  flex-shrink: 0;
+}
+.op-banner.resolved {
+  background: color-mix(in srgb, var(--green) 12%, var(--bg-surface));
+  border-bottom-color: color-mix(in srgb, var(--green) 35%, transparent);
+}
+.op-banner-icon { color: var(--red); }
+.op-banner.resolved .op-banner-icon { color: var(--green); }
+.op-banner-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.op-banner-text strong { font-size: var(--fs-md); }
+.op-banner-text span { font-size: var(--fs-sm); color: var(--text-dim); }
+.op-banner-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+.op-banner-actions button {
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.op-banner-actions button:hover:not(:disabled) { background: var(--bg-hover); }
+.op-banner-actions .op-abort { color: var(--red); }
+.op-banner-actions .op-continue {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.op-banner-actions .op-continue:hover:not(:disabled) { background: var(--accent-hover); }
+.op-banner-actions button:disabled { opacity: 0.4; cursor: default; }
+
+/* Resolution actions, above the file they act on. The panel header is a fixed
+ * 32px, so these have to stay on one line whatever the panel's width. */
+.conflict-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.conflict-actions button {
+  font-family: inherit;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.conflict-actions button:hover:not(:disabled) { background: var(--bg-hover); }
+.conflict-actions button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.conflict-actions button:disabled { opacity: 0.4; cursor: default; }
+
+/* The file itself, with each side of every conflict tinted. Deliberately the
+ * same green/red as a diff: "ours" is what is here now, "theirs" is what is
+ * arriving, and the markers stay visible because they are what gets edited. */
+#diff-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.conflict-summary {
+  padding: 7px 12px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.conflict-line {
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.5;
+  white-space: pre;
+}
+.conflict-line.ours { background: var(--diff-add-bg); color: var(--diff-add-text); }
+.conflict-line.theirs { background: var(--diff-del-bg); color: var(--diff-del-text); }
+.conflict-line.base { background: var(--bg-hover); color: var(--text-dim); }
+.conflict-line.marker {
+  font-weight: 700;
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-text);
+}
 
 .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-path { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; }

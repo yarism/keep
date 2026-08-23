@@ -2,7 +2,7 @@ import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, rese
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal } from './modules/modal.js';
-import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
+import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
@@ -134,6 +134,10 @@ async function runAction(selector, label, work) {
     status.done(describeResult(label, output));
   } catch (e) {
     status.fail(e.message.trim() || `${label} failed`);
+    // A merge or rebase that stops on a conflict *fails* — and leaves the repo
+    // in a state the UI has to show. Refreshing only on success left the app
+    // looking like nothing had happened until the next poll tick.
+    await refresh();
   } finally {
     delete btn.dataset.busy;
     btn.classList.remove('busy');
@@ -229,6 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupToolbar();
   setupContextMenu();
   setupCommitBox(refresh);
+  setupOpBanner(refresh);
   setupHistorySearch(refresh);
   setupHistoryScope(refresh, settings);
   await restoreLastRepo(settings);

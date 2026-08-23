@@ -22,6 +22,19 @@ function runReporting(repoPath, args) {
   });
 }
 
+// The seven unmerged states porcelain v1 can report, and what each one means
+// in words a person can act on. Anything else with an x or y of 'U' cannot
+// occur, but see isConflict() below for the belt-and-braces check.
+const CONFLICT_KINDS = {
+  DD: 'both deleted',
+  AU: 'added by us',
+  UD: 'deleted by them',
+  UA: 'added by them',
+  DU: 'deleted by us',
+  AA: 'both added',
+  UU: 'both modified',
+};
+
 exports.status = async (repoPath) => {
   // -z gives NUL-terminated records and turns off C-style quoting, so paths with
   // spaces or non-ASCII characters arrive verbatim instead of as `"sp ace.txt"`
@@ -42,6 +55,19 @@ exports.status = async (repoPath) => {
     // that exists on disk — the one every path-taking git command wants.
     let oldPath = null;
     if (x === 'R' || x === 'C') oldPath = fields[++i] || null;
+
+    // An unmerged path is neither staged nor unstaged: both sides of the
+    // conflict are sitting in the index at once. Reporting it as "staged,
+    // modified" — which is what the plain x/y reading below produces for "UU" —
+    // tells the user a conflict they have not looked at is ready to commit.
+    const conflictKind = CONFLICT_KINDS[x + y];
+    if (conflictKind) {
+      results.push({
+        filePath, oldPath, status: 'conflicted', conflicted: true,
+        conflictKind, staged: false, x, y,
+      });
+      continue;
+    }
 
     // Staged change (index vs HEAD)
     if (x !== ' ' && x !== '?') {
@@ -186,6 +212,105 @@ exports.branches = async (repoPath) => {
     } catch {}
   }
   return branches;
+};
+
+// Is the repository in the middle of something — a merge, a rebase, a
+// cherry-pick, a revert — and what is still in the way? Both halves matter: the
+// files tell you what to fix, the operation tells you how to get out, and
+// neither is discoverable from a file list alone.
+//
+// git has no plumbing command for "what am I in the middle of"; the answer is
+// which files exist in the git directory, which is what git's own prompt script
+// reads too.
+const _gitDirs = new Map();
+
+async function gitDir(repoPath) {
+  if (_gitDirs.has(repoPath)) return _gitDirs.get(repoPath);
+  const dir = (await run(repoPath, ['rev-parse', '--absolute-git-dir'])).trim();
+  _gitDirs.set(repoPath, dir);
+  return dir;
+}
+
+exports.repoState = async (repoPath) => {
+  const fs = require('fs');
+  const path = require('path');
+  let dir;
+  try { dir = await gitDir(repoPath); }
+  catch { return { kind: null, conflicts: [], branch: null, step: 0, total: 0 }; }
+
+  const has = (p) => fs.existsSync(path.join(dir, p));
+  const read = (p) => { try { return fs.readFileSync(path.join(dir, p), 'utf-8').trim(); } catch { return ''; } };
+
+  let kind = null, branch = null, step = 0, total = 0;
+  if (has('rebase-merge') || has('rebase-apply')) {
+    kind = 'rebase';
+    const d = has('rebase-merge') ? 'rebase-merge' : 'rebase-apply';
+    branch = read(d + '/head-name').replace(/^refs\/heads\//, '') || null;
+    step = Number(read(d + '/msgnum')) || 0;
+    total = Number(read(d + '/end')) || 0;
+  } else if (has('MERGE_HEAD')) {
+    kind = 'merge';
+    // The branch being merged is not stored as a ref anywhere — MERGE_MSG's
+    // "Merge branch 'x'" is the only place its name survives.
+    const m = /'([^']+)'/.exec(read('MERGE_MSG'));
+    branch = m ? m[1] : null;
+  } else if (has('CHERRY_PICK_HEAD')) {
+    kind = 'cherry-pick';
+  } else if (has('REVERT_HEAD')) {
+    kind = 'revert';
+  }
+
+  // Listed even with no operation in flight: `git stash pop` can leave conflicts
+  // behind without any of the files above existing.
+  const out = await run(repoPath, ['diff', '--name-only', '--diff-filter=U', '-z']).catch(() => '');
+  return { kind, conflicts: out.split('\0').filter(Boolean), branch, step, total };
+};
+
+// Resolving a conflict is, to git, just staging the file — but "git add" is a
+// poor name for "I have dealt with this", so the intent gets its own verb.
+exports.markResolved = (repoPath, filePath) => run(repoPath, ['add', '--', filePath]);
+
+// Take one side wholesale. --ours is what the branch you are on had, --theirs
+// is what the branch you are merging in has; both only make sense when both
+// sides still have the file, which is why the delete conflicts get keep/remove
+// instead (see the context menu).
+exports.useOurs = async (repoPath, filePath) => {
+  await run(repoPath, ['checkout', '--ours', '--', filePath]);
+  return run(repoPath, ['add', '--', filePath]);
+};
+exports.useTheirs = async (repoPath, filePath) => {
+  await run(repoPath, ['checkout', '--theirs', '--', filePath]);
+  return run(repoPath, ['add', '--', filePath]);
+};
+// The two ways out of a delete/modify conflict.
+exports.keepFile = (repoPath, filePath) => run(repoPath, ['add', '--', filePath]);
+exports.removeFile = (repoPath, filePath) => run(repoPath, ['rm', '-f', '--', filePath]);
+
+// The working-tree file as it stands, conflict markers and all. A conflicted
+// file has no useful `git diff`: what you need to read is the merged text.
+exports.fileContents = async (repoPath, filePath) => {
+  const fs = require('fs');
+  const path = require('path');
+  return fs.promises.readFile(path.join(repoPath, filePath), 'utf-8');
+};
+
+// core.editor=true short-circuits the editor git would otherwise open for the
+// commit message — `true` is a command that exits 0 having done nothing, so the
+// message it already prepared is taken as-is.
+const NO_EDITOR = ['-c', 'core.editor=true'];
+
+exports.continueOperation = (repoPath, kind) => {
+  if (kind === 'rebase') return runReporting(repoPath, [...NO_EDITOR, 'rebase', '--continue']);
+  if (kind === 'cherry-pick') return runReporting(repoPath, [...NO_EDITOR, 'cherry-pick', '--continue']);
+  if (kind === 'revert') return runReporting(repoPath, [...NO_EDITOR, 'revert', '--continue']);
+  // A merge has nothing to "continue": it finishes by committing what the
+  // resolution produced, with the message git already wrote into MERGE_MSG.
+  return runReporting(repoPath, ['commit', '--no-edit']);
+};
+
+exports.abortOperation = (repoPath, kind) => {
+  const verb = kind === 'merge' ? 'merge' : kind;
+  return runReporting(repoPath, [verb, '--abort']);
 };
 
 // A cheap snapshot of everything the UI keys off: where HEAD points and what

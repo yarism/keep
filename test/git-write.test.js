@@ -434,3 +434,164 @@ test('discardHunk: rejects an unknown hunk header', async () => {
     /Hunk not found/,
   );
 });
+
+// ── conflicts ──
+//
+// Every test here builds the same shape: two branches that changed the same
+// line, so merging one into the other stops with an unmerged path.
+
+function conflictingRepo(repoPath) {
+  const repo = repoPath || h.makeRepo();
+  h.write(repo, 'shared.txt', 'original\n');
+  h.commitAll(repo, 'add shared');
+  h.git(repo, 'checkout', '-q', '-b', 'theirs');
+  h.write(repo, 'shared.txt', 'their version\n');
+  h.commitAll(repo, 'their change');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'shared.txt', 'our version\n');
+  h.commitAll(repo, 'our change');
+  return repo;
+}
+
+async function startConflict(repo) {
+  // The merge is expected to fail — that failure is the state under test.
+  await assert.rejects(() => git.merge(repo, 'theirs'));
+}
+
+test('status: an unmerged path is reported as conflicted, not as staged', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+
+  const files = await git.status(repo);
+
+  assert.strictEqual(files.length, 1, 'one entry, not a staged/unstaged pair');
+  const [file] = files;
+  assert.strictEqual(file.filePath, 'shared.txt');
+  assert.strictEqual(file.status, 'conflicted');
+  assert.strictEqual(file.conflicted, true);
+  assert.strictEqual(file.conflictKind, 'both modified');
+  assert.strictEqual(file.staged, false,
+    'a conflict the user has not looked at must never look ready to commit');
+});
+
+test('repoState: reports the merge in progress and what is unresolved', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+
+  const s = await git.repoState(repo);
+
+  assert.strictEqual(s.kind, 'merge');
+  assert.strictEqual(s.branch, 'theirs', 'named after the branch being merged');
+  assert.deepStrictEqual(s.conflicts, ['shared.txt']);
+});
+
+test('repoState: a clean repository is in the middle of nothing', async () => {
+  const repo = h.makeRepo();
+
+  const s = await git.repoState(repo);
+
+  assert.strictEqual(s.kind, null);
+  assert.deepStrictEqual(s.conflicts, []);
+});
+
+test('repoState: reports a rebase, with its position in the sequence', async () => {
+  const repo = conflictingRepo();
+  await assert.rejects(() => git.rebase(repo, 'theirs'));
+
+  const s = await git.repoState(repo);
+
+  assert.strictEqual(s.kind, 'rebase');
+  assert.deepStrictEqual(s.conflicts, ['shared.txt']);
+  assert.ok(s.total >= 1, 'knows how many commits the rebase has to replay');
+});
+
+test('useOurs: keeps this branch\'s version and marks the file resolved', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+
+  await git.useOurs(repo, 'shared.txt');
+
+  assert.strictEqual(h.read(repo, 'shared.txt'), 'our version\n');
+  assert.deepStrictEqual((await git.repoState(repo)).conflicts, [],
+    'nothing is left unmerged');
+});
+
+test('useTheirs: takes the incoming version instead', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+
+  await git.useTheirs(repo, 'shared.txt');
+
+  assert.strictEqual(h.read(repo, 'shared.txt'), 'their version\n');
+  assert.deepStrictEqual((await git.repoState(repo)).conflicts, []);
+});
+
+test('markResolved: accepts a hand-edited file and clears the conflict', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+  h.write(repo, 'shared.txt', 'a bit of both\n');
+
+  await git.markResolved(repo, 'shared.txt');
+
+  const files = await git.status(repo);
+  assert.ok(!files.some(f => f.conflicted), 'no conflict remains');
+  assert.deepStrictEqual((await git.repoState(repo)).conflicts, []);
+});
+
+test('continueOperation: finishes a resolved merge without opening an editor', async () => {
+  const repo = conflictingRepo();
+  await startConflict(repo);
+  await git.useOurs(repo, 'shared.txt');
+
+  await git.continueOperation(repo, 'merge');
+
+  const s = await git.repoState(repo);
+  assert.strictEqual(s.kind, null, 'the merge is over');
+  const [head] = await git.log(repo, 'main');
+  assert.match(head.subject, /Merge branch/);
+  assert.strictEqual(head.parents.length, 2, 'and it really is a merge commit');
+});
+
+test('continueOperation: replays the rest of a resolved rebase', async () => {
+  const repo = conflictingRepo();
+  await assert.rejects(() => git.rebase(repo, 'theirs'));
+  await git.useTheirs(repo, 'shared.txt');
+
+  await git.continueOperation(repo, 'rebase');
+
+  assert.strictEqual((await git.repoState(repo)).kind, null);
+});
+
+test('abortOperation: puts the working copy back the way it was', async () => {
+  const repo = conflictingRepo();
+  const before = await git.log(repo, 'main');
+  await startConflict(repo);
+
+  await git.abortOperation(repo, 'merge');
+
+  const s = await git.repoState(repo);
+  assert.strictEqual(s.kind, null);
+  assert.deepStrictEqual(s.conflicts, []);
+  assert.strictEqual(h.read(repo, 'shared.txt'), 'our version\n');
+  assert.deepStrictEqual((await git.log(repo, 'main')).map(c => c.hash), before.map(c => c.hash),
+    'and history is exactly where it started');
+});
+
+test('status: a delete/modify conflict is named as such', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'doomed.txt', 'original\n');
+  h.commitAll(repo, 'add doomed');
+  h.git(repo, 'checkout', '-q', '-b', 'theirs');
+  h.remove(repo, 'doomed.txt');
+  h.git(repo, 'add', '-A');
+  h.git(repo, 'commit', '-q', '-m', 'delete it');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'doomed.txt', 'edited\n');
+  h.commitAll(repo, 'edit it');
+  await assert.rejects(() => git.merge(repo, 'theirs'));
+
+  const [file] = await git.status(repo);
+
+  assert.strictEqual(file.status, 'conflicted');
+  assert.strictEqual(file.conflictKind, 'deleted by them');
+});

@@ -65,3 +65,41 @@ export function renderDiff(diffText, containerOrId, stageableFile) {
     container.appendChild(div);
   });
 }
+
+// A conflicted file, shown as the file itself rather than as a diff.
+//
+// `git diff` on an unmerged path prints a combined diff against both parents,
+// which is close to unreadable and — worse — hides the conflict markers that
+// are the thing you actually have to edit. So this renders the working-tree
+// text, tinting each side of every conflict and leaving the markers in place,
+// because those markers are what the user will delete when resolving by hand.
+export function renderConflict(text, containerOrId) {
+  const container = typeof containerOrId === 'string' ? $(`#${containerOrId}`) : containerOrId;
+  container.innerHTML = '';
+  const lines = text.split('\n');
+  let side = null;   // which half of a conflict we are inside
+  let regions = 0;
+
+  const frag = document.createDocumentFragment();
+  lines.forEach((line, i) => {
+    const div = document.createElement('div');
+    let cls = 'conflict-line';
+    if (line.startsWith('<<<<<<<')) { side = 'ours'; regions++; cls += ' marker ours'; }
+    else if (line.startsWith('|||||||') && side) { side = 'base'; cls += ' marker base'; }
+    else if (line.startsWith('=======') && side) { side = 'theirs'; cls += ' marker theirs'; }
+    else if (line.startsWith('>>>>>>>') && side) { cls += ' marker theirs'; side = null; }
+    else if (side) cls += ' ' + side;
+    div.className = cls;
+    div.innerHTML = `<span class="diff-line-num">${i + 1}</span>`
+      + `<span class="diff-line-content">${escapeHtml(line)}</span>`;
+    frag.appendChild(div);
+  });
+
+  const summary = document.createElement('div');
+  summary.className = 'conflict-summary';
+  summary.textContent = regions
+    ? `${regions} conflicting region${regions !== 1 ? 's' : ''} — take one side above, or edit the file and mark it resolved`
+    : 'No conflict markers in the file — resolve it by choosing a side, or mark it resolved';
+  container.appendChild(summary);
+  container.appendChild(frag);
+}
