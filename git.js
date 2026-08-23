@@ -452,6 +452,24 @@ exports.push = async (repoPath, opts = {}) => {
   return runReporting(repoPath, ['push', '--set-upstream', remote, branch]);
 };
 exports.fetch = (repoPath) => runReporting(repoPath, ['fetch', '--all']);
+
+// The same fetch, but safe to run on a timer with nobody watching: any prompt
+// for a password or a host key would otherwise hang the process forever, and a
+// background job must never be able to do that. Failure is expected and
+// ordinary here — being offline is not an error worth interrupting anyone for —
+// so this resolves either way and reports which it was.
+exports.fetchQuiet = (repoPath) => new Promise((resolve) => {
+  const env = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',   // no username/password prompt on https
+    GIT_ASKPASS: 'echo',        // ...nor through a helper
+    SSH_ASKPASS: 'echo',
+    GIT_SSH_COMMAND: 'ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new',
+  };
+  execFile('git', ['fetch', '--all', '--quiet'],
+    { cwd: repoPath, env, timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
+    (err) => resolve({ ok: !err, error: err ? (err.message || '').trim() : null }));
+});
 exports.stashSave = (repoPath, message) => {
   const args = ['stash', 'push'];
   if (message) args.push('-m', message);
@@ -469,41 +487,59 @@ exports.createTag = (repoPath, name, ref) => {
 // operation and is deliberately not exposed here.
 exports.deleteTag = (repoPath, name) => run(repoPath, ['tag', '-d', name]);
 
-exports.stageHunk = async (repoPath, filePath, hunkHeader) => {
-  // Use git apply to stage a specific hunk
-  const diff = await run(repoPath, ['diff', '--', filePath]);
-  const hunks = diff.split(/(?=^@@)/m);
-  const header = hunks[0]; // diff --git header
-  const targetHunk = hunks.find(h => h.startsWith(hunkHeader));
-  if (!targetHunk) throw new Error('Hunk not found');
-  const patch = header + targetHunk;
+// Cut a one-hunk patch out of a file's diff.
+//
+// The hunk is identified by *where* it was in the diff, and the header is then
+// checked against it. Position alone would silently act on the wrong hunk once
+// the file changed under the UI; the header alone was the previous approach,
+// and while ranges make it unique within one diff, that is only true of the
+// diff it came from — by the time the click lands, the diff may be a different
+// one. Both together mean a stale click fails loudly instead of editing code
+// the user never looked at.
+//
+// (Splitting on a line-initial "@@" is safe: every line of a diff body carries
+// a one-character prefix, so nothing but a hunk header starts at column zero.)
+function cutHunk(diff, hunkHeader, index) {
+  const parts = diff.split(/(?=^@@)/m);
+  const preamble = parts[0];   // "diff --git", index, ---, +++
+  const hunks = parts.slice(1);
+
+  let hunk = null;
+  if (Number.isInteger(index) && hunks[index] && hunks[index].startsWith(hunkHeader)) {
+    hunk = hunks[index];
+  } else {
+    // No position given (or it no longer holds): fall back to the header, but
+    // only when exactly one hunk answers to it.
+    const matches = hunks.filter(h => h.startsWith(hunkHeader));
+    if (matches.length === 1) hunk = matches[0];
+  }
+  if (!hunk) {
+    throw new Error('Hunk not found — the file has changed since it was shown. '
+      + 'Reselect the file and try again.');
+  }
+  return preamble + hunk;
+}
+
+function applyPatch(repoPath, patch, args) {
   return new Promise((resolve, reject) => {
     const { execFile: ef } = require('child_process');
-    const proc = ef('git', ['apply', '--cached', '-'], { cwd: repoPath }, (err, stdout, stderr) => {
+    const proc = ef('git', ['apply', ...args, '-'], { cwd: repoPath }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
       else resolve(stdout);
     });
     proc.stdin.write(patch);
     proc.stdin.end();
   });
+}
+
+exports.stageHunk = async (repoPath, filePath, hunkHeader, index) => {
+  const diff = await run(repoPath, ['diff', '--', filePath]);
+  return applyPatch(repoPath, cutHunk(diff, hunkHeader, index), ['--cached']);
 };
 
-exports.discardHunk = async (repoPath, filePath, hunkHeader) => {
+exports.discardHunk = async (repoPath, filePath, hunkHeader, index) => {
   const diff = await run(repoPath, ['diff', '--', filePath]);
-  const hunks = diff.split(/(?=^@@)/m);
-  const header = hunks[0];
-  const targetHunk = hunks.find(h => h.startsWith(hunkHeader));
-  if (!targetHunk) throw new Error('Hunk not found');
-  const patch = header + targetHunk;
-  return new Promise((resolve, reject) => {
-    const { execFile: ef } = require('child_process');
-    const proc = ef('git', ['apply', '--reverse', '-'], { cwd: repoPath }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr || err.message));
-      else resolve(stdout);
-    });
-    proc.stdin.write(patch);
-    proc.stdin.end();
-  });
+  return applyPatch(repoPath, cutHunk(diff, hunkHeader, index), ['--reverse']);
 };
 
 exports.discardFile = (repoPath, filePath) => run(repoPath, ['checkout', '--', filePath]);
@@ -544,32 +580,32 @@ exports.commitFileDiff = async (repoPath, hash, filePath) => {
   return run(repoPath, ['diff-tree', '-p', hash, '--', filePath]);
 };
 
-exports.searchLog = async (repoPath, query, field, branch, limit = 200) => {
-  const args = ['log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', String(limit)];
+exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {}) => {
+  const args = ['log', '--format=' + LOG_FORMAT, '-n', String(limit)];
+  // Search whatever the list is showing: the branch it is pinned to, or every
+  // ref when it is showing all branches. Searching HEAD's branch regardless —
+  // which is what this did — quietly answered a different question than the one
+  // on screen.
+  const scope = () => {
+    if (opts.all) args.push('--all');
+    else if (branch) args.push(branch);
+  };
   if (field === 'message') {
-    if (branch) args.push(branch);
+    scope();
     args.push('--grep=' + query, '-i');
   } else if (field === 'author') {
-    if (branch) args.push(branch);
+    scope();
     args.push('--author=' + query, '-i');
   } else if (field === 'hash') {
     // For hash search, just show that single commit
     args.length = 0;
-    args.push('log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', '1', query);
+    args.push('log', '--format=' + LOG_FORMAT, '-n', '1', query);
   } else if (field === 'file') {
-    if (branch) args.push(branch);
+    scope();
     // Wrap in quotes-safe glob: match filename anywhere in the tree
     const safeQuery = query.replace(/[[\]{}()\\]/g, '\\$&');
     args.push('--', ':(glob)**/*' + safeQuery + '*');
   }
-  console.log('[git.searchLog] running: git', args.join(' '));
-  const out = await run(repoPath, args);
-  if (!out.trim()) return [];
-  const lines = out.trim().split('\n');
-  const commits = [];
-  for (let i = 0; i < lines.length; i += 5) {
-    if (!lines[i]) break;
-    commits.push({ hash: lines[i], author: lines[i+1], email: lines[i+2], date: lines[i+3], subject: lines[i+4] });
-  }
-  return commits;
+  const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
+  return parseLog(out, remotes);
 };

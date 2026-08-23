@@ -9,15 +9,20 @@ export function renderDiff(diffText, containerOrId, stageableFile) {
   }
   const lines = diffText.split('\n');
   let oldLine = 0, newLine = 0;
+  // Which hunk of this file we are on. Sent along with the header so applying
+  // one cannot land on a different hunk if the file moved on underneath.
+  let hunkIndex = -1;
 
   lines.forEach(line => {
     if (line.startsWith('@@')) {
+      hunkIndex++;
       const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)/);
       if (match) { oldLine = parseInt(match[1]); newLine = parseInt(match[2]); }
       const hunkDiv = document.createElement('div');
       hunkDiv.className = 'diff-hunk-header';
       hunkDiv.innerHTML = `<span>${escapeHtml(line)}</span>`;
       if (stageableFile) {
+        const at = hunkIndex;
         const btnGroup = document.createElement('span');
         btnGroup.style.cssText = 'display:flex;gap:4px';
 
@@ -28,7 +33,7 @@ export function renderDiff(diffText, containerOrId, stageableFile) {
           if (!confirm('Discard this chunk? This cannot be undone.')) return;
           try {
             const hh = line.split('@@').slice(0, 2).join('@@') + '@@';
-            await window.git.discardHunk(state.repoPath, stageableFile, hh);
+            await window.git.discardHunk(state.repoPath, stageableFile, hh, at);
             document.dispatchEvent(new Event('refresh-status'));
           } catch (e) { alert(e.message); }
         });
@@ -38,7 +43,7 @@ export function renderDiff(diffText, containerOrId, stageableFile) {
         stageBtn.addEventListener('click', async () => {
           try {
             const hh = line.split('@@').slice(0, 2).join('@@') + '@@';
-            await window.git.stageHunk(state.repoPath, stageableFile, hh);
+            await window.git.stageHunk(state.repoPath, stageableFile, hh, at);
             document.dispatchEvent(new Event('refresh-status'));
           } catch (e) { alert(e.message); }
         });

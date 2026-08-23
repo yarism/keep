@@ -693,3 +693,78 @@ test('push: a plain push of an unpublished branch is refused, as git does', asyn
   // The UI offers to publish precisely because this is what happens otherwise.
   await assert.rejects(() => git.push(repo), /upstream/i);
 });
+
+// ── hunk identity ──
+//
+// A hunk is applied by position, verified by header. The pairing is what stops
+// a click that was rendered against one diff from landing on another.
+
+function threeHunkFile(repo) {
+  const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
+  h.write(repo, 'wide.txt', lines.join('\n') + '\n');
+  h.commitAll(repo, 'add wide.txt');
+  lines[2] = 'EDITED TOP';
+  lines[20] = 'EDITED MIDDLE';
+  lines[38] = 'EDITED BOTTOM';
+  h.write(repo, 'wide.txt', lines.join('\n') + '\n');
+}
+
+async function headersOf(repo, file) {
+  const diff = h.git(repo, 'diff', '--', file);
+  return diff.split('\n').filter(l => l.startsWith('@@'))
+    .map(l => l.split('@@').slice(0, 2).join('@@') + '@@');
+}
+
+test('stageHunk: stages the hunk at the given position', async () => {
+  const repo = h.makeRepo();
+  threeHunkFile(repo);
+  const headers = await headersOf(repo, 'wide.txt');
+
+  await git.stageHunk(repo, 'wide.txt', headers[1], 1);
+
+  const staged = h.git(repo, 'diff', '--cached', '--', 'wide.txt');
+  assert.match(staged, /EDITED MIDDLE/);
+  assert.ok(!/EDITED TOP/.test(staged), 'and only that hunk');
+  assert.ok(!/EDITED BOTTOM/.test(staged));
+});
+
+test('stageHunk: a position pointing at a different hunk is refused', async () => {
+  const repo = h.makeRepo();
+  threeHunkFile(repo);
+  const headers = await headersOf(repo, 'wide.txt');
+
+  // What a stale click looks like: the header the user saw, at a position that
+  // now holds something else. Falling back to the header would still be right
+  // here, so this pairs the *first* header with the *last* position, which no
+  // single hunk answers to.
+  await assert.rejects(
+    () => git.stageHunk(repo, 'wide.txt', headers[0].replace(/^@@ -\d+/, '@@ -999'), 2),
+    /Hunk not found/,
+  );
+  assert.strictEqual(h.git(repo, 'diff', '--cached', '--', 'wide.txt'), '',
+    'nothing was staged on the way to failing');
+});
+
+test('stageHunk: still works from the header alone when it is unambiguous', async () => {
+  const repo = h.makeRepo();
+  threeHunkFile(repo);
+  const headers = await headersOf(repo, 'wide.txt');
+
+  // No position at all — the old call shape, which must keep working.
+  await git.stageHunk(repo, 'wide.txt', headers[2]);
+
+  assert.match(h.git(repo, 'diff', '--cached', '--', 'wide.txt'), /EDITED BOTTOM/);
+});
+
+test('discardHunk: discards the hunk at the given position and no other', async () => {
+  const repo = h.makeRepo();
+  threeHunkFile(repo);
+  const headers = await headersOf(repo, 'wide.txt');
+
+  await git.discardHunk(repo, 'wide.txt', headers[0], 0);
+
+  const contents = h.read(repo, 'wide.txt');
+  assert.ok(!/EDITED TOP/.test(contents), 'the discarded edit is gone');
+  assert.match(contents, /EDITED MIDDLE/, 'the others survive');
+  assert.match(contents, /EDITED BOTTOM/);
+});

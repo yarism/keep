@@ -43,11 +43,14 @@ async function doSearch() {
   const query = $('#search-input').value.trim();
   if (!query) { clearSearch(); return; }
   const field = $('#search-field').value;
-  const branchName = (state.branchList.find(b => b.current) || {}).name || null;
+  const { branch, all } = historyRef();
   state.searching = true;
   try {
-    state.commits = await window.git.searchLog(state.repoPath, query, field, branchName, 200);
+    state.commits = await window.git.searchLog(state.repoPath, query, field, branch, 200, { all });
     console.log('[search] found', state.commits.length, 'commits for', field, ':', query);
+    // The rows still mark what has not been pushed, so the set has to cover
+    // whatever the search may have turned up.
+    state.unpushed = new Set(await window.git.unpushed(state.repoPath, all ? null : branch, { all }).catch(() => []));
   } catch (e) {
     console.error('[search] error:', e);
     state.commits = [];
@@ -89,6 +92,17 @@ function syncScopeButtons() {
     b.classList.toggle('active', on);
     b.setAttribute('aria-pressed', String(on));
   });
+}
+
+// What the History list is currently showing. refreshHistory decides it and
+// search has to agree, or searching quietly answers a different question than
+// the one on screen.
+export function historyRef() {
+  const current = state.branchList.find(b => b.current);
+  if (state.historyScope === 'all') return { branch: null, all: true };
+  if (state.selectedBranch) return { branch: state.selectedBranch, all: false };
+  if (current) return { branch: current.detached ? 'HEAD' : current.name, all: false };
+  return { branch: null, all: false };
 }
 
 export async function refreshHistory(refresh, branchOverride) {
