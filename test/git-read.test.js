@@ -233,6 +233,93 @@ test('log: scoped to a branch shows only that branch', async () => {
   assert.deepStrictEqual(onFeature.map(c => c.subject), ['feature work', 'initial']);
 });
 
+test('log: carries the parent hashes the graph is drawn from', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'side');
+  h.write(repo, 'side.txt', 'x\n');
+  h.commitAll(repo, 'side work');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'main.txt', 'x\n');
+  h.commitAll(repo, 'main work');
+  h.git(repo, 'merge', '-q', '--no-ff', '-m', 'merge side', 'side');
+
+  const commits = await git.log(repo);
+  const merge = commits[0];
+
+  assert.strictEqual(merge.subject, 'merge side');
+  assert.strictEqual(merge.parents.length, 2, 'a merge reports both parents');
+  const [first, second] = merge.parents;
+  assert.strictEqual(commits.find(c => c.hash === first).subject, 'main work',
+    'the first parent is the branch the merge was made on');
+  assert.strictEqual(commits.find(c => c.hash === second).subject, 'side work');
+  assert.deepStrictEqual(commits[commits.length - 1].parents, [],
+    'the root commit has no parents');
+});
+
+test('log: labels the refs sitting on a commit', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'tag', 'v1');
+
+  const [head] = await git.log(repo);
+
+  assert.deepStrictEqual(head.refs.slice().sort((a, b) => a.type.localeCompare(b.type)), [
+    { name: 'main', type: 'head' },
+    { name: 'v1', type: 'tag' },
+  ]);
+});
+
+test('log: a branch with a slash in its name is not mistaken for a remote', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'branch', 'feature/thing');
+
+  const [head] = await git.log(repo);
+  const byName = Object.fromEntries(head.refs.map(r => [r.name, r.type]));
+
+  assert.strictEqual(byName['feature/thing'], 'branch');
+  assert.strictEqual(byName['origin/main'], 'remote');
+});
+
+test('log: a subject containing the field separator characters still parses', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.commitAll(repo, 'fix: a, b -> c | tag: not-a-tag');
+
+  const [head] = await git.log(repo);
+
+  assert.strictEqual(head.subject, 'fix: a, b -> c | tag: not-a-tag');
+  assert.strictEqual(head.author, 'Test Author');
+});
+
+// ── unpushed ──
+
+test('unpushed: lists the commits no remote-tracking branch contains', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'branch', '--set-upstream-to=origin/main', 'main');
+  h.write(repo, 'local.txt', 'x\n');
+  const local = h.commitAll(repo, 'not pushed yet');
+
+  const hashes = await git.unpushed(repo, 'main');
+
+  assert.deepStrictEqual(hashes, [local],
+    'only the commit made after the fetch counts as unpushed');
+});
+
+test('unpushed: a repo with no remote at all reports nothing', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  h.commitAll(repo, 'second');
+
+  // Every commit is technically unpushed here, but marking the whole history
+  // as local would be noise, not information.
+  assert.deepStrictEqual(await git.unpushed(repo, 'main'), []);
+});
+
 // ── branches ──
 
 test('branches: marks the checked-out branch as current', async () => {
@@ -267,6 +354,51 @@ test('branches: reports upstream and flags origin/* as remote', async () => {
   assert.ok(tracking, 'the remote-tracking branch is listed too');
   assert.strictEqual(tracking.isRemote, true);
   assert.strictEqual(tracking.upstream, null);
+});
+
+test('branches: counts how far a branch is ahead of and behind its upstream', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.write(remote, 'remote.txt', 'x\n');
+  h.commitAll(remote, 'remote work');
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'branch', '--set-upstream-to=origin/main', 'main');
+  h.write(repo, 'local.txt', 'x\n');
+  h.commitAll(repo, 'local work');
+
+  const main = (await git.branches(repo)).find(b => b.name === 'main');
+
+  assert.strictEqual(main.ahead, 1, 'one commit to push');
+  assert.strictEqual(main.behind, 1, 'one commit to pull');
+  assert.strictEqual(main.gone, false);
+});
+
+test('branches: a branch with no upstream is neither ahead nor behind', async () => {
+  const repo = h.makeRepo();
+
+  const main = (await git.branches(repo)).find(b => b.name === 'main');
+
+  assert.strictEqual(main.upstream, null);
+  assert.strictEqual(main.ahead, 0);
+  assert.strictEqual(main.behind, 0);
+  assert.strictEqual(main.gone, false);
+});
+
+test('branches: an upstream deleted on the remote is reported as gone', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'branch', '--set-upstream-to=origin/main', 'main');
+  // What a pruned or deleted remote branch leaves behind: a tracking config
+  // pointing at a ref that no longer exists.
+  h.git(repo, 'update-ref', '-d', 'refs/remotes/origin/main');
+
+  const main = (await git.branches(repo)).find(b => b.name === 'main');
+
+  assert.strictEqual(main.gone, true);
+  assert.strictEqual(main.upstream, 'origin/main');
 });
 
 test('branches: a detached HEAD becomes a current, detached pseudo-branch', async () => {

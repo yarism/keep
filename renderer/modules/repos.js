@@ -1,5 +1,6 @@
 import { $, $$, escapeHtml, state, switchView } from './state.js';
 import { icon } from '../icons.js';
+import { updateSyncBadges } from './sync.js';
 
 let _onSelectRepo = null;
 
@@ -13,11 +14,17 @@ export function setupRepoList(onSelectRepo) {
 
 export function showRepoList() {
   state.repoPath = null;
+  // Going back to the list is a decision about where to start next time, too
+  window.git.saveSettings({ lastRepo: null });
   $('#repo-list-section').hidden = false;
   $('#workspace-nav').hidden = true;
   $('#breadcrumb-sep').hidden = true;
   $('#breadcrumb-repo').hidden = true;
   $$('#toolbar .toolbar-group button:not(#btn-open)').forEach(b => b.disabled = true);
+  // No repository, nothing to push or pull — the counts must not linger on the
+  // buttons from whatever was open a moment ago.
+  state.branchList = [];
+  updateSyncBadges();
   switchView('welcome');
   renderRepoList();
 }
@@ -26,7 +33,7 @@ function renderRepoList() {
   const list = $('#repo-list');
   list.innerHTML = '';
   if (state.repositories.length === 0) {
-    list.innerHTML = '<div style="padding:30px;color:var(--text-dim);text-align:center;font-size:12px">No repositories.<br>Click + to add one.</div>';
+    list.innerHTML = '<div style="padding:30px;color:var(--text-dim);text-align:center;font-size:var(--fs-base)">No repositories.<br>Click + to add one.</div>';
     return;
   }
   state.repositories.forEach((r, i) => {

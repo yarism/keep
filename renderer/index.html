@@ -33,10 +33,12 @@
         <button id="btn-pull" title="Pull" disabled>
           <span class="icon" data-icon="pull" data-size="17"></span>
           <span>Pull</span>
+          <span id="badge-pull" class="btn-badge behind" hidden></span>
         </button>
         <button id="btn-push" title="Push" disabled>
           <span class="icon" data-icon="push" data-size="17"></span>
           <span>Push</span>
+          <span id="badge-push" class="btn-badge ahead" hidden></span>
         </button>
       </div>
       <div class="toolbar-sep"></div>
@@ -107,42 +109,69 @@
     <aside id="sidebar">
       <!-- Repo list mode -->
       <div id="repo-list-section">
-        <div class="section-header sidebar-header-row">
-          Repositories
-          <button id="btn-add-repo" class="sidebar-add-btn" title="Add Repository"><span class="icon" data-icon="plus" data-size="14"></span></button>
+        <div class="sidebar-section" data-section="repositories">
+          <div class="section-header sidebar-header-row">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="repo-list">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Repositories</span>
+            </button>
+            <button id="btn-add-repo" class="sidebar-add-btn" title="Add Repository"><span class="icon" data-icon="plus" data-size="14"></span></button>
+          </div>
+          <div id="repo-list" class="section-list"></div>
         </div>
-        <div id="repo-list" class="section-list"></div>
       </div>
 
       <!-- Workspace mode -->
       <div id="workspace-nav" hidden>
-        <div class="section-header">Workspace</div>
-        <nav id="sidebar-nav">
-          <div class="nav-item active" data-view="working-copy">
-            <span class="icon" data-icon="folder" data-size="16"></span>
-            Working Copy
-            <span id="wc-badge" class="badge" hidden>0</span>
+        <div class="sidebar-section" data-section="workspace">
+          <div class="section-header">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="sidebar-nav">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Workspace</span>
+            </button>
           </div>
-          <div class="nav-item" data-view="history">
-            <span class="icon" data-icon="clock" data-size="16"></span>
-            History
-          </div>
-          <div class="nav-item" data-view="stashes">
-            <span class="icon" data-icon="stash" data-size="16"></span>
-            Stashes
-          </div>
-        </nav>
+          <nav id="sidebar-nav" class="section-list">
+            <div class="nav-item active" data-view="working-copy">
+              <span class="icon" data-icon="folder" data-size="16"></span>
+              Working Copy
+              <span id="wc-badge" class="badge" hidden>0</span>
+            </div>
+            <div class="nav-item" data-view="history">
+              <span class="icon" data-icon="clock" data-size="16"></span>
+              History
+            </div>
+            <div class="nav-item" data-view="stashes">
+              <span class="icon" data-icon="stash" data-size="16"></span>
+              Stashes
+            </div>
+          </nav>
+        </div>
 
-        <div class="sidebar-section">
-          <div class="section-header">Branches</div>
+        <div class="sidebar-section" data-section="branches">
+          <div class="section-header">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="branches-list">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Branches</span>
+            </button>
+          </div>
           <div id="branches-list" class="section-list"></div>
         </div>
-        <div class="sidebar-section">
-          <div class="section-header">Tags</div>
+        <div class="sidebar-section" data-section="tags">
+          <div class="section-header">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="tags-list">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Tags</span>
+            </button>
+          </div>
           <div id="tags-list" class="section-list"></div>
         </div>
-        <div class="sidebar-section">
-          <div class="section-header">Remotes</div>
+        <div class="sidebar-section" data-section="remotes">
+          <div class="section-header">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="remotes-list">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Remotes</span>
+            </button>
+          </div>
           <div id="remotes-list" class="section-list"></div>
         </div>
       </div>
@@ -189,6 +218,7 @@
           <div id="history-list-panel">
             <div class="panel-header">
               <span id="history-branch-label">master</span>
+              <span id="history-tracking" class="tracking" hidden></span>
             </div>
             <div id="history-list" class="commit-list"></div>
           </div>

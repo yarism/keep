@@ -7,6 +7,12 @@ export const state = {
   selectedBranch: null,
   statusFiles: [],
   commits: [],
+  // Hashes of commits no remote has yet — history draws these as hollow nodes,
+  // so "what would a push send?" is answerable by looking rather than counting.
+  unpushed: new Set(),
+  // A search result set is not a contiguous slice of history, so the commit
+  // graph has to be suppressed while one is on screen.
+  searching: false,
   branchList: [],
   tagList: [],
   repositories: [],

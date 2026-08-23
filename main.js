@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const git = require('./git');
@@ -46,12 +46,29 @@ if (process.platform === 'darwin') {
   } catch {}
 }
 
+// The window itself has a colour: the rounded corners, the hairline at the
+// edges and the strip behind the traffic lights are drawn by macOS, not by the
+// page. Left alone they follow the system appearance, which is what puts a dark
+// outline around a light theme. Both are pointed at the theme instead — the
+// window's own background at its --bg, and the native appearance at whether the
+// theme is dark — so the frame disappears into the app.
+function applyWindowChrome(win, chrome) {
+  if (!win || win.isDestroyed() || !chrome) return;
+  if (chrome.background) win.setBackgroundColor(chrome.background);
+  nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
+}
+
 function createWindow() {
+  // Read from settings rather than defaulted, so a dark theme does not launch
+  // through one white frame (and a light one through one dark frame).
+  const chrome = loadSettings().themeChrome || { background: '#ffffff', dark: false };
+  nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    backgroundColor: chrome.background || '#ffffff',
     titleBarStyle: 'hiddenInset',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
@@ -98,11 +115,14 @@ function saveSettings(patch) {
 }
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
+ipcMain.handle('set-window-chrome', (_, chrome) => { applyWindowChrome(mainWindow, chrome); return true; });
 
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit) => git.log(repoPath, branch, limit));
 ipcMain.handle('git-branches', (_, repoPath) => git.branches(repoPath));
+ipcMain.handle('git-unpushed', (_, repoPath, ref) => git.unpushed(repoPath, ref));
 ipcMain.handle('git-repo-fingerprint', (_, repoPath) => git.repoFingerprint(repoPath));
+ipcMain.handle('git-is-repo', (_, repoPath) => git.isRepo(repoPath));
 ipcMain.handle('git-tags', (_, repoPath) => git.tags(repoPath));
 ipcMain.handle('git-remotes', (_, repoPath) => git.remotes(repoPath));
 ipcMain.handle('git-stashes', (_, repoPath) => git.stashes(repoPath));
