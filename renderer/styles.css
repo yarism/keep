@@ -48,8 +48,37 @@
   --tint-accent: color-mix(in srgb, var(--accent) 13%, transparent);
   --tint-accent-strong: color-mix(in srgb, var(--accent) 20%, transparent);
 
+  /* Commit-graph lanes. Mixed from the theme's own colours rather than added as
+   * six more tokens per theme, so a new theme still means one entry in
+   * themes.js and nothing else. */
+  --lane-0: var(--accent);
+  --lane-1: var(--green);
+  --lane-2: var(--yellow);
+  --lane-3: var(--red);
+  --lane-4: color-mix(in srgb, var(--blue) 55%, var(--red));
+  --lane-5: color-mix(in srgb, var(--green) 55%, var(--blue));
+
+  /* Every history row is exactly this tall: each row draws its own half of the
+   * graph's lines, so they only join up if the row and its SVG agree. Keep in
+   * step with ROW_H in renderer/modules/history.js. */
+  --commit-row-h: 52px;
+
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+
+  /* One type scale, so text is sized by role rather than by guesswork. Every
+   * step is a shade larger than a web app would use — this is a desktop tool
+   * read for hours, and Tower-sized text is the comfortable baseline. */
+  --fs-2xs: 10px;   /* HEAD pill and other tiny caps */
+  --fs-xs: 11px;    /* section headers, count badges */
+  --fs-sm: 12px;    /* meta: paths, dates, line numbers */
+  --fs-base: 13px;  /* secondary rows */
+  --fs-md: 13.5px;  /* sidebar rows, list rows, controls */
+  --fs-lg: 14px;    /* body default, text inputs */
+  --fs-xl: 15px;    /* pane and modal titles */
+  --fs-display: 30px;   /* the empty-state headline */
+  --fs-code: 12.5px;    /* diff body */
+  --fs-code-sm: 11.5px; /* hashes, toast detail */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -57,7 +86,7 @@
 
 body {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
@@ -98,7 +127,7 @@ button .icon-svg { pointer-events: none; }
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: var(--text-dim);
   pointer-events: none;
@@ -150,7 +179,7 @@ button .icon-svg { pointer-events: none; }
   padding: 5px 9px 4px;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-family: inherit;
   letter-spacing: 0.1px;
   display: flex;
@@ -207,7 +236,7 @@ button .icon-svg { pointer-events: none; }
 }
 .popover-header {
   padding: 5px 9px 7px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -221,7 +250,7 @@ button .icon-svg { pointer-events: none; }
   padding: 6px 9px;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   color: var(--text);
   outline: none;
 }
@@ -246,7 +275,7 @@ button .icon-svg { pointer-events: none; }
   padding: 0 14px;
   height: 30px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--fs-base);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -302,12 +331,45 @@ button .icon-svg { pointer-events: none; }
 
 .section-header {
   padding: 12px 14px 5px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   color: var(--text-mute);
   letter-spacing: 0.7px;
   font-weight: 700;
 }
+
+/* The header doubles as the section's collapse control. The button inherits the
+   header's type so the row still reads as a label, not a control. */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.section-toggle:hover { color: var(--text-dim); }
+.section-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.section-header .expand-arrow {
+  color: var(--text-mute);
+  display: inline-flex;
+  margin-left: -4px;
+  transition: transform 120ms ease;
+}
+.sidebar-section.collapsed > .section-list { display: none; }
 
 .sidebar-header-row {
   display: flex;
@@ -332,11 +394,11 @@ button .icon-svg { pointer-events: none; }
   align-items: center;
   gap: 8px;
   margin: 1px var(--row-inset);
-  padding: 5px 8px;
+  padding: 6px 8px;
   border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   position: relative;
   transition: background 90ms ease, color 90ms ease;
 }
@@ -349,7 +411,6 @@ button .icon-svg { pointer-events: none; }
   outline-offset: -2px;
 }
 
-.nav-item { padding: 6px 8px; }
 .nav-item.active {
   background: var(--tint-accent);
   color: var(--text);
@@ -360,10 +421,10 @@ button .icon-svg { pointer-events: none; }
 .badge {
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
-  padding: 0 6px;
-  border-radius: 9px;
+  padding: 1px 7px;
+  border-radius: 10px;
   margin-left: auto;
   font-weight: 700;
 }
@@ -376,7 +437,7 @@ button .icon-svg { pointer-events: none; }
   border: none;
   color: var(--text-mute);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-xl);
   line-height: 1;
   opacity: 0;
   padding: 0 2px;
@@ -407,9 +468,9 @@ button .icon-svg { pointer-events: none; }
 .branch-item .head-badge {
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 9px;
-  padding: 1px 5px;
-  border-radius: 3px;
+  font-size: var(--fs-2xs);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-weight: 700;
   letter-spacing: 0.3px;
   margin-left: auto;
@@ -431,7 +492,7 @@ button .icon-svg { pointer-events: none; }
 .view.active { display: flex; }
 
 .welcome { margin: auto; text-align: center; color: var(--text-dim); }
-.welcome h1 { font-size: 30px; letter-spacing: -0.5px; color: var(--text); margin-bottom: 6px; }
+.welcome h1 { font-size: var(--fs-display); letter-spacing: -0.5px; color: var(--text); margin-bottom: 6px; }
 .welcome p { margin-bottom: 18px; }
 .welcome button {
   background: var(--accent);
@@ -439,7 +500,7 @@ button .icon-svg { pointer-events: none; }
   border: none;
   padding: 9px 22px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   font-family: inherit;
   cursor: pointer;
   font-weight: 600;
@@ -453,7 +514,7 @@ button .icon-svg { pointer-events: none; }
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   display: flex;
   align-items: center;
@@ -467,7 +528,7 @@ button .icon-svg { pointer-events: none; }
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-family: inherit;
 }
 .panel-header button:hover { background: var(--bg-active); }
@@ -495,7 +556,7 @@ button .icon-svg { pointer-events: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   transition: background 90ms ease;
 }
 .file-item:hover { background: var(--bg-hover); }
@@ -526,11 +587,11 @@ button .icon-svg { pointer-events: none; }
 /* Status chips: a wash of the status colour, never a solid block — solid
  * chips look fine on a dark background and shout on a light one. */
 .file-status {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 1px 0;
   border-radius: var(--radius-sm);
-  min-width: 17px;
+  min-width: 19px;
   text-align: center;
   flex-shrink: 0;
   font-family: var(--font-mono);
@@ -542,7 +603,7 @@ button .icon-svg { pointer-events: none; }
 .file-status.renamed   { background: color-mix(in srgb, var(--blue) 20%, transparent);   color: var(--blue); }
 
 .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-path { color: var(--text-mute); font-size: 11px; white-space: nowrap; }
+.file-path { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; }
 
 /* Commit box */
 #commit-box {
@@ -561,7 +622,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--text);
   padding: 7px 10px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   font-family: inherit;
   outline: none;
 }
@@ -578,7 +639,7 @@ button .icon-svg { pointer-events: none; }
   padding: 5px 14px;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-base);
   font-family: inherit;
   font-weight: 500;
 }
@@ -598,7 +659,7 @@ button .icon-svg { pointer-events: none; }
   flex: 1;
   overflow: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-code);
   line-height: 1.55;
   background: var(--bg);
 }
@@ -608,7 +669,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--diff-hunk-text);
   padding: 4px 12px;
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -625,7 +686,7 @@ button .icon-svg { pointer-events: none; }
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-family: var(--font-ui);
   font-weight: 600;
 }
@@ -640,7 +701,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--text-mute);
   padding-right: 8px;
   user-select: none;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 }
 .diff-line-content { flex: 1; padding-left: 6px; }
 .diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-text); }
@@ -677,7 +738,7 @@ button .icon-svg { pointer-events: none; }
   border-right: 1px solid var(--border-strong);
   color: var(--text-dim);
   padding: 0 20px 0 9px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-family: inherit;
   outline: none;
   height: 100%;
@@ -704,7 +765,7 @@ button .icon-svg { pointer-events: none; }
   border: none;
   color: var(--text);
   padding: 0;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   font-family: inherit;
   width: 150px;
   outline: none;
@@ -730,6 +791,69 @@ button .icon-svg { pointer-events: none; }
   cursor: pointer;
   transition: background 90ms ease;
 }
+
+/* History rows carry the graph, so they run edge to edge: an inset row would
+ * break every lane line at the row boundary. The padding moves to the body. */
+#history-list .commit-item {
+  display: flex;
+  align-items: stretch;
+  height: var(--commit-row-h);
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+}
+#history-list .commit-body {
+  flex: 1;
+  min-width: 0;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+/* The hairline separates the text, not the graph — a rule drawn across the
+ * lanes reads as part of the drawing. */
+#history-list .commit-item + .commit-item { box-shadow: none; }
+#history-list .commit-item + .commit-item .commit-body { box-shadow: 0 -1px 0 var(--border); }
+#history-list .commit-item:hover .commit-body,
+#history-list .commit-item.selected .commit-body,
+#history-list .commit-item:hover + .commit-item .commit-body,
+#history-list .commit-item.selected + .commit-item .commit-body { box-shadow: none; }
+
+/* The graph ---------------------------------------------------------------
+ * Lane colour is carried by `color` on the lane-N class so one rule can paint
+ * a stroke on the lines and a fill on the node. */
+.commit-graph { flex: 0 0 auto; display: block; }
+.commit-graph .lane-0 { color: var(--lane-0); }
+.commit-graph .lane-1 { color: var(--lane-1); }
+.commit-graph .lane-2 { color: var(--lane-2); }
+.commit-graph .lane-3 { color: var(--lane-3); }
+.commit-graph .lane-4 { color: var(--lane-4); }
+.commit-graph .lane-5 { color: var(--lane-5); }
+.commit-graph .lane {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+}
+.commit-graph .graph-node {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+/* Hollow = this commit exists here and on no remote. */
+.commit-graph .graph-node.unpushed { fill: var(--bg); }
+
+/* "local" on the row, hollow node in the graph: the same fact twice, because
+ * the graph column is easy to miss while scanning the text. */
+.commit-local {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent);
+  background: var(--tint-accent-strong);
+}
 .commit-item + .commit-item { box-shadow: 0 -1px 0 var(--border); }
 .commit-item:hover { background: var(--bg-hover); box-shadow: none; }
 .commit-item.selected { background: var(--tint-accent); box-shadow: none; }
@@ -742,17 +866,23 @@ button .icon-svg { pointer-events: none; }
   gap: 8px;
   margin-bottom: 3px;
 }
-.commit-author { font-weight: 600; font-size: 12px; }
-.commit-date { color: var(--text-mute); font-size: 11px; margin-left: auto; }
+.commit-author { font-weight: 600; font-size: var(--fs-base); }
+.commit-date { color: var(--text-mute); font-size: var(--fs-sm); margin-left: auto; }
 .commit-hash {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-code-sm);
   color: var(--text-mute);
 }
-.commit-subject-text { font-size: 12.5px; color: var(--text); }
+.commit-subject-text {
+  font-size: var(--fs-code);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .commit-ref {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 600;
@@ -761,6 +891,60 @@ button .icon-svg { pointer-events: none; }
 .commit-ref.head { background: var(--accent); color: var(--on-accent); }
 .commit-ref.branch { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
 .commit-ref.tag { background: color-mix(in srgb, var(--yellow) 22%, transparent); color: var(--yellow); }
+/* A remote-tracking ref is where the branch is *published*, so it reads as the
+ * quieter, outlined twin of the local branch chip. */
+.commit-ref.remote {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-mute) 60%, transparent);
+  color: var(--text-dim);
+  padding: 0 5px;
+}
+/* On a row the chips lead the subject, so the gap goes after them. */
+.commit-subject-text .commit-ref { margin: 0 5px 0 0; }
+
+/* Tracking state ----------------------------------------------------------
+ * "↑2 ↓1" wherever a branch is named: sidebar rows, the History header. */
+.track-chip {
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.track-chip.ahead { background: var(--tint-accent-strong); color: var(--accent); }
+.track-chip.behind { background: color-mix(in srgb, var(--yellow) 22%, transparent); color: var(--yellow); }
+.track-chip.gone { background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red); }
+.track-chip.synced, .track-chip.none { color: var(--text-mute); font-weight: 500; }
+
+.branch-item .branch-name { margin-right: auto; }
+
+#history-tracking { display: flex; align-items: center; }
+.track-upstream {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code-sm);
+  color: var(--text-mute);
+  font-weight: 500;
+}
+
+/* The same counts on the buttons that act on them. */
+.btn-badge {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  color: var(--on-status);
+  font-variant-numeric: tabular-nums;
+}
+.btn-badge.ahead { background: var(--accent); }
+.btn-badge.behind { background: var(--yellow); }
 
 /* Commit detail */
 #commit-info {
@@ -769,7 +953,7 @@ button .icon-svg { pointer-events: none; }
   background: var(--bg-surface);
   flex-shrink: 0;
 }
-#commit-info table { width: 100%; font-size: 12px; }
+#commit-info table { width: 100%; font-size: var(--fs-base); }
 #commit-info td { padding: 2px 8px; vertical-align: top; }
 #commit-info td:first-child { color: var(--text-mute); white-space: nowrap; width: 108px; }
 
@@ -777,7 +961,7 @@ button .icon-svg { pointer-events: none; }
 #commit-changeset { padding: 0; }
 .changeset-summary {
   padding: 8px 16px;
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
 }
@@ -788,7 +972,7 @@ button .icon-svg { pointer-events: none; }
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
 }
 .changeset-file-header:hover { background: var(--bg-hover); }
 .changeset-file-header .file-path { margin-left: auto; }
@@ -796,7 +980,7 @@ button .icon-svg { pointer-events: none; }
   display: none;
   border-top: 1px solid var(--border);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-code);
   line-height: 1.55;
   background: var(--bg);
 }
@@ -817,7 +1001,7 @@ button .icon-svg { pointer-events: none; }
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   color: var(--text);
   white-space: nowrap;
 }
@@ -850,7 +1034,7 @@ button .icon-svg { pointer-events: none; }
   max-width: 420px;
   box-shadow: var(--shadow-modal);
 }
-.modal-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.modal-title { font-size: var(--fs-xl); font-weight: 600; margin-bottom: 12px; color: var(--text); }
 .modal-input, #stash-select {
   width: 100%;
   background: var(--bg);
@@ -858,7 +1042,7 @@ button .icon-svg { pointer-events: none; }
   color: var(--text);
   padding: 8px 10px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   font-family: inherit;
   outline: none;
   margin-bottom: 14px;
@@ -871,7 +1055,7 @@ button .icon-svg { pointer-events: none; }
 #stash-select { max-height: 200px; }
 #stash-select option { background: var(--bg-elevated); color: var(--text); padding: 4px; }
 .modal-message {
-  font-size: 13px;
+  font-size: var(--fs-lg);
   color: var(--text-dim);
   margin-bottom: 14px;
   line-height: 1.55;
@@ -885,7 +1069,7 @@ button .icon-svg { pointer-events: none; }
   background: var(--bg-hover);
   color: var(--text);
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   font-family: inherit;
 }
 .modal-actions button:hover { background: var(--bg-active); }
@@ -908,7 +1092,7 @@ button .icon-svg { pointer-events: none; }
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-family: inherit;
 }
 .stash-item-actions button:hover { background: var(--bg-active); }
@@ -940,7 +1124,7 @@ button .icon-svg { pointer-events: none; }
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-menu);
-  font-size: 12.5px;
+  font-size: var(--fs-md);
   color: var(--text);
   cursor: pointer;
   opacity: 0;
@@ -960,10 +1144,10 @@ button .icon-svg { pointer-events: none; }
   white-space: pre-line;
   line-height: 1.45;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-code-sm);
   overflow-wrap: anywhere;
 }
-.toast-busy .toast-text { font-family: var(--font-ui); font-size: 12.5px; }
+.toast-busy .toast-text { font-family: var(--font-ui); font-size: var(--fs-md); }
 
 .spinner {
   display: block;

@@ -31,8 +31,8 @@ const PATHS = {
 
   // ── Stashes ──
   stash: '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/>',
-  'stash-save': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 10.25v4.75"/><path d="m9.9 12.9 2.1 2.1 2.1-2.1"/>',
-  'stash-apply': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 15v-4.75"/><path d="m9.9 12.35 2.1-2.1 2.1 2.1"/>',
+  'stash-save': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 15v-4.75"/><path d="m9.9 12.35 2.1-2.1 2.1 2.1"/>',
+  'stash-apply': '<path d="M9 4.5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-12a2 2 0 0 0-2-2h-2"/><rect x="9" y="2.75" width="6" height="3.5" rx="1.25"/><path d="M12 10.25v4.75"/><path d="m9.9 12.9 2.1 2.1 2.1-2.1"/>',
 
   // ── Branch topology ──
   branch: '<circle cx="7" cy="6" r="2.5"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="6" r="2.5"/><path d="M7 8.5v7"/><path d="M17 8.5v3a6.5 6.5 0 0 1-6.5 6.5H9.5"/>',

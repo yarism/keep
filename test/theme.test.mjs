@@ -130,6 +130,15 @@ test('styles.css keeps every colour in a custom property', async () => {
   assert.deepStrictEqual(literals, [], 'literal colours cannot be themed');
 });
 
+test('styles.css sizes every piece of text from the type scale', async () => {
+  const css = await read('renderer/styles.css');
+  // Same argument as the colours above: a literal px size outside :root is a
+  // size nothing can adjust, and it drifts out of step with the scale.
+  const afterRoot = css.slice(css.indexOf('}', css.indexOf(':root {')) + 1);
+  const literals = afterRoot.match(/font-size:\s*[\d.]+px/g) || [];
+  assert.deepStrictEqual(literals, [], 'font sizes belong to the --fs-* scale');
+});
+
 test('styles.css defines a default for every token a theme sets', async () => {
   const css = await read('renderer/styles.css');
   const rootBlock = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));

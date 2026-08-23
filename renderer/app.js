@@ -6,6 +6,7 @@ import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
+import { setupCollapsibleSections } from './modules/sections.js';
 import { busyToast, toast } from './modules/toast.js';
 import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
@@ -44,6 +45,8 @@ async function enterWorkspace(path) {
   _lastFingerprint = null;
   state.selectedFile = null;
   state.selectedCommit = null;
+  state.unpushed = new Set();
+  state.searching = false;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;
@@ -55,6 +58,8 @@ async function enterWorkspace(path) {
   $('#commit-subject').value = '';
   $$('#toolbar .toolbar-group button').forEach(b => b.disabled = false);
   switchView('working-copy');
+  // So the next launch can come straight back here
+  window.git.saveSettings({ lastRepo: path });
   await refresh();
   startPolling();
 }
@@ -217,6 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (settings.sidebarWidth) {
     $('#sidebar').style.width = settings.sidebarWidth + 'px';
   }
+  setupCollapsibleSections(settings);
   setupSidebarResize();
   setupRepoList(enterWorkspace);
   setupNavigation();
@@ -224,5 +230,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupContextMenu();
   setupCommitBox(refresh);
   setupHistorySearch(refresh);
-  showRepoList();
+  await restoreLastRepo(settings);
 });
+
+// Reopen whatever repository the app was last left in. It has to still be in
+// the list and still be a working copy — a folder can be moved or deleted
+// between launches, and falling back to the repository list beats opening a
+// workspace onto nothing.
+async function restoreLastRepo(settings) {
+  const last = settings.lastRepo;
+  if (last && state.repositories.some(r => r.path === last)) {
+    let ok = false;
+    try { ok = await window.git.isRepo(last); } catch {}
+    if (ok) { await enterWorkspace(last); return; }
+  }
+  showRepoList();
+}

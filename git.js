@@ -66,47 +66,112 @@ exports.status = async (repoPath) => {
   return results;
 };
 
-exports.log = async (repoPath, branch, limit = 100) => {
-  const args = ['log', '--format=%H%n%an%n%ae%n%aI%n%s', '-n', String(limit)];
-  if (branch) args.push(branch);
-  const out = await run(repoPath, args);
-  const lines = out.trim().split('\n');
-  const commits = [];
-  for (let i = 0; i < lines.length; i += 5) {
-    if (!lines[i]) break;
-    commits.push({
-      hash: lines[i],
-      author: lines[i + 1],
-      email: lines[i + 2],
-      date: lines[i + 3],
-      subject: lines[i + 4],
+// One record per commit, fields separated by US (0x1f) and records by RS
+// (0x1e). The old newline-per-field format could not carry %D — a decoration
+// list holds commas and spaces but the fixed field count is what breaks first
+// once any field may be empty, and %D is empty for most commits.
+const LOG_FORMAT = '%H%x1f%an%x1f%ae%x1f%aI%x1f%P%x1f%D%x1f%s%x1e';
+
+// "HEAD -> main, origin/main, tag: v1.0" — what %D gives, turned into something
+// the UI can label. Remote names are asked for rather than guessed from the
+// slash, since a local branch may well be called `feature/thing`.
+function parseDecoration(decoration, remoteNames) {
+  if (!decoration) return [];
+  return decoration.split(',').map(s => s.trim()).filter(Boolean).map(ref => {
+    if (ref.startsWith('tag: ')) return { name: ref.slice(5), type: 'tag' };
+    if (ref.startsWith('HEAD -> ')) return { name: ref.slice(8), type: 'head' };
+    if (ref === 'HEAD') return { name: 'HEAD', type: 'head' };
+    if (remoteNames.some(r => ref.startsWith(r + '/'))) return { name: ref, type: 'remote' };
+    return { name: ref, type: 'branch' };
+  });
+}
+
+function parseLog(out, remoteNames) {
+  return out.split('\x1e')
+    .map(rec => rec.replace(/^[\r\n]+/, ''))
+    .filter(rec => rec.trim())
+    .map(rec => {
+      const f = rec.split('\x1f');
+      return {
+        hash: f[0],
+        author: f[1],
+        email: f[2],
+        date: f[3],
+        // First parent first — the graph draws it as the lane that carries on.
+        parents: f[4] ? f[4].split(' ').filter(Boolean) : [],
+        refs: parseDecoration(f[5], remoteNames),
+        subject: f[6] || '',
+      };
     });
-  }
-  return commits;
+}
+
+// Cheap and network-free; the decoration parser needs it to tell origin/main
+// from a local branch that merely has a slash in its name.
+async function remoteNames(repoPath) {
+  try {
+    return (await run(repoPath, ['remote'])).split('\n').map(s => s.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+exports.log = async (repoPath, branch, limit = 100) => {
+  const args = ['log', '--format=' + LOG_FORMAT, '-n', String(limit)];
+  if (branch) args.push(branch);
+  const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
+  return parseLog(out, remotes);
 };
 
+// The commits on `ref` that no remote-tracking branch contains — i.e. what a
+// push would send. Reported per commit rather than as a count so history can
+// mark each unpushed row, and empty in a repo with no remotes at all, where
+// every commit would otherwise qualify and the whole list would light up.
+exports.unpushed = async (repoPath, ref, limit = 500) => {
+  const hasRemote = await run(repoPath, ['for-each-ref', '--count=1', 'refs/remotes']).catch(() => '');
+  if (!hasRemote.trim()) return [];
+  const out = await run(repoPath, [
+    'rev-list', '--max-count=' + String(limit), ref || 'HEAD', '--not', '--remotes',
+  ]).catch(() => '');
+  return out.trim().split('\n').filter(Boolean);
+};
+
+// "[ahead 2, behind 1]", "[behind 3]", "[gone]", or empty when in sync — the
+// one place git will tell us how far a branch has drifted from its upstream
+// without a second command per branch.
+function parseTrack(track) {
+  const ahead = /\bahead (\d+)/.exec(track || '');
+  const behind = /\bbehind (\d+)/.exec(track || '');
+  return {
+    ahead: ahead ? Number(ahead[1]) : 0,
+    behind: behind ? Number(behind[1]) : 0,
+    gone: /\[gone\]/.test(track || ''),
+  };
+}
+exports.parseTrack = parseTrack;
+
 exports.branches = async (repoPath) => {
-  const out = await run(repoPath, ['branch', '-a', '--format=%(refname:short) %(HEAD) %(upstream:short)']);
+  // Tab-separated: %(upstream:track) contains spaces and commas, so the old
+  // split-on-space parse would have read "[ahead" as the upstream name.
+  const format = '%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)';
+  const out = await run(repoPath, ['branch', '-a', '--format=' + format]);
   const branches = [];
   let detachedHead = false;
-  out.trim().split('\n').filter(Boolean).forEach(line => {
-    const parts = line.trim().split(' ');
-    const name = parts[0];
-    const current = parts[1] === '*';
-    const upstream = parts[2] || null;
-    const isRemote = name.startsWith('origin/');
+  const remotes = await remoteNames(repoPath);
+  out.split('\n').filter(Boolean).forEach(line => {
+    const [name, head, upstreamRaw, track] = line.split('\t');
+    const current = head === '*';
+    const upstream = upstreamRaw || null;
+    const isRemote = remotes.some(r => name.startsWith(r + '/'));
     // Detect detached HEAD — git outputs "(HEAD" as the name
     if (name.startsWith('(HEAD')) {
       detachedHead = true;
       return; // skip this pseudo-branch
     }
-    branches.push({ name, current, upstream, isRemote });
+    branches.push({ name, current, upstream, isRemote, ...parseTrack(track) });
   });
   // If detached, find the current commit hash
   if (detachedHead) {
     try {
       const hash = (await run(repoPath, ['rev-parse', '--short', 'HEAD'])).trim();
-      branches.unshift({ name: hash, current: true, upstream: null, isRemote: false, detached: true });
+      branches.unshift({ name: hash, current: true, upstream: null, isRemote: false, detached: true, ahead: 0, behind: 0, gone: false });
     } catch {}
   }
   return branches;
@@ -116,6 +181,16 @@ exports.branches = async (repoPath) => {
 // every ref resolves to. The poller compares this between ticks so changes made
 // outside the app (a terminal commit, a checkout, a fetch) get picked up instead
 // of leaving the sidebar and history frozen at whatever they were on open.
+// Cheap "is this path still a working copy?" check, used before reopening the
+// repository the app was last left in — the folder may have been moved,
+// deleted, or had its .git removed since.
+exports.isRepo = async (repoPath) => {
+  try {
+    const out = await run(repoPath, ['rev-parse', '--is-inside-work-tree']);
+    return out.trim() === 'true';
+  } catch { return false; }
+};
+
 exports.repoFingerprint = async (repoPath) => {
   const [head, refs] = await Promise.all([
     // `rev-parse HEAD --abbrev-ref HEAD` prints the sha, then the branch name

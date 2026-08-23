@@ -39,6 +39,19 @@ export function applyTheme(id) {
   root.style.colorScheme = theme.dark ? 'dark' : 'light';
   root.dataset.theme = theme.id;
   currentId = theme.id;
+  // The window frame is macOS's, not ours, so it has to be told separately —
+  // otherwise a light theme sits inside a dark outline. Sent on preview too:
+  // the frame is part of what the theme looks like.
+  windowChrome(theme);
+}
+
+// The two things the main process needs to match the window to the theme.
+function chromeOf(theme) {
+  return { background: theme.tokens.bg, dark: theme.dark };
+}
+
+function windowChrome(theme) {
+  try { window.git.setWindowChrome(chromeOf(theme)); } catch {}
 }
 
 // Paints a theme and records it as the choice.
@@ -47,7 +60,9 @@ function selectTheme(id, { persist = true } = {}) {
   savedId = currentId;
   if (persist) {
     try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
-    window.git.saveSettings({ theme: savedId });
+    // The chrome goes to disk alongside the id so the next launch can colour
+    // the window before the renderer exists to say what the theme is.
+    window.git.saveSettings({ theme: savedId, themeChrome: chromeOf(resolveTheme(savedId)) });
   }
   renderThemeMenu();
 }
@@ -66,6 +81,7 @@ export function syncThemeFromSettings(settings) {
   applyTheme(id);
   savedId = currentId;
   try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
+  window.git.saveSettings({ themeChrome: chromeOf(resolveTheme(savedId)) });
   renderThemeMenu();
 }
 

@@ -2,6 +2,7 @@ import { $, escapeHtml, state, switchView } from './state.js';
 import { showBranchContextMenu, showTagContextMenu, confirmCheckout } from './context-menu.js';
 import { icon } from '../icons.js';
 import { refreshHistory } from './history.js';
+import { trackingFor, trackingChips, updateSyncBadges } from './sync.js';
 
 // Matches on the data-branch attribute rather than a class so this covers local
 // branches, remote branches and tags — anything the sidebar can pin history to.
@@ -49,9 +50,13 @@ export async function refreshBranches(refresh) {
     item.dataset.branch = b.name;
     const glyph = icon(b.detached ? 'alert' : 'branch', 14);
     const label = b.detached ? `(HEAD detached at ${b.name})` : b.name;
+    // The ahead/behind chips are what make a stale branch visible without
+    // checking it out — the sidebar is where you look before deciding to.
+    const chips = trackingChips(trackingFor(b.name));
     item.innerHTML = `
       ${glyph}
-      <span>${escapeHtml(label)}</span>
+      <span class="branch-name">${escapeHtml(label)}</span>
+      ${chips}
       ${b.current ? '<span class="head-badge">HEAD</span>' : ''}
     `;
     item.addEventListener('click', async () => {
@@ -69,6 +74,8 @@ export async function refreshBranches(refresh) {
   });
   // Rebuilding the list drops the class, so restore it from state
   if (state.selectedBranch) highlightBranch(state.selectedBranch);
+  // The toolbar reads the same numbers, and branchList has just been refreshed.
+  updateSyncBadges();
 }
 
 export async function refreshTags(refresh) {
