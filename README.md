@@ -146,7 +146,18 @@ releasing them — useful for testing a build before you tag it.
 
 1. Double-click the `.dmg` to mount it
 2. Drag **Keep** into your **Applications** folder
-3. On first launch, macOS may block it since it's unsigned — right-click the app → **Open** → click **Open** in the dialog
+3. The first launch is refused: *"Apple could not verify 'Keep' is free of
+   malware."* Keep is not signed with an Apple Developer certificate, so there is
+   nothing for macOS to check it against. Click **Done** — never **Move to Bin**
+   — then open **System Settings → Privacy & Security**, scroll down to
+   **Security**, and click **Open Anyway** beside the message about Keep.
+
+   The right-click → **Open** shortcut that used to work was removed in macOS 15.
+   From a terminal, this does the same job in one step:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Keep.app
+   ```
 
 ### Windows
 
