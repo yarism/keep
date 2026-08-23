@@ -11,7 +11,9 @@
     "dist": "electron-builder --mac dmg",
     "dist:win": "electron-builder --win nsis",
     "dist:linux": "electron-builder --linux AppImage",
-    "dist:all": "electron-builder --mac dmg --win nsis --linux AppImage"
+    "dist:all": "electron-builder --mac dmg --win nsis --linux AppImage",
+    "preversion": "npm test",
+    "postversion": "git push --follow-tags"
   },
   "keywords": [
     "git",
@@ -36,15 +38,18 @@
     },
     "mac": {
       "icon": "assets/icon.icns",
+      "artifactName": "${productName}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
       "target": "dmg"
     },
     "win": {
       "icon": "assets/icon.png",
+      "artifactName": "${productName}-win-${arch}.${ext}",
       "target": "nsis"
     },
     "linux": {
       "icon": "assets/icon.png",
+      "artifactName": "${productName}-linux-${arch}.${ext}",
       "target": "AppImage",
       "category": "Development"
     },

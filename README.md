@@ -2,9 +2,26 @@
 
 A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Electron.
 
+[![Build](https://github.com/yarism/keep/actions/workflows/build.yml/badge.svg)](https://github.com/yarism/keep/actions/workflows/build.yml)
+
 ![Working Copy](screenshots/working_copy.png)
 
 ![History](screenshots/history.png)
+
+## Download
+
+Grab the newest release — these links never go stale, they always resolve to
+whatever the latest published release is:
+
+| Platform | |
+|---|---|
+| [**macOS — Apple Silicon**](https://github.com/yarism/keep/releases/latest/download/Keep-mac-arm64.dmg) | M1 and later |
+| [**macOS — Intel**](https://github.com/yarism/keep/releases/latest/download/Keep-mac-x64.dmg) | |
+| [**Windows**](https://github.com/yarism/keep/releases/latest/download/Keep-win-x64.exe) | 64-bit installer |
+
+Or browse [all releases](https://github.com/yarism/keep/releases). Nothing is
+code-signed yet, so see [Installing Without Terminal](#installing-without-terminal)
+for the one extra click each platform asks for.
 
 ## Features
 
@@ -98,6 +115,29 @@ npm run dist:all
 ```
 
 Output goes to the `dist/` folder.
+
+## Releasing
+
+Cutting a release is one command. Pick the part of the version that moved:
+
+```bash
+npm version patch   # 1.0.0 -> 1.0.1  a fix
+npm version minor   # 1.0.0 -> 1.1.0  a new feature
+npm version major   # 1.0.0 -> 2.0.0  a breaking change
+```
+
+Each one runs the test suite first and stops if anything fails, then bumps
+`package.json`, commits, tags, and pushes the tag. GitHub Actions picks the tag
+up, builds the DMGs and the Windows installer on real macOS and Windows runners,
+and attaches them to a **draft** release.
+
+The draft is the last manual step: open
+[Releases](https://github.com/yarism/keep/releases), write the notes, and hit
+publish. Only then do the download links at the top of this README point at it.
+
+Every push to `main` builds the same installers too, but leaves them as workflow
+artifacts on the [run](https://github.com/yarism/keep/actions) rather than
+releasing them — useful for testing a build before you tag it.
 
 ## Installing Without Terminal
 
