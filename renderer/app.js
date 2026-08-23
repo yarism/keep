@@ -3,7 +3,7 @@ import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal } from './modules/modal.js';
 import { refreshStatus, setupCommitBox } from './modules/working-copy.js';
-import { refreshHistory, setupHistorySearch } from './modules/history.js';
+import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
 import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
@@ -230,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupContextMenu();
   setupCommitBox(refresh);
   setupHistorySearch(refresh);
+  setupHistoryScope(refresh, settings);
   await restoreLastRepo(settings);
 });
 

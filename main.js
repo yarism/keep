@@ -118,9 +118,9 @@ ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
 ipcMain.handle('set-window-chrome', (_, chrome) => { applyWindowChrome(mainWindow, chrome); return true; });
 
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
-ipcMain.handle('git-log', (_, repoPath, branch, limit) => git.log(repoPath, branch, limit));
+ipcMain.handle('git-log', (_, repoPath, branch, limit, opts) => git.log(repoPath, branch, limit, opts));
 ipcMain.handle('git-branches', (_, repoPath) => git.branches(repoPath));
-ipcMain.handle('git-unpushed', (_, repoPath, ref) => git.unpushed(repoPath, ref));
+ipcMain.handle('git-unpushed', (_, repoPath, ref, opts) => git.unpushed(repoPath, ref, 500, opts));
 ipcMain.handle('git-repo-fingerprint', (_, repoPath) => git.repoFingerprint(repoPath));
 ipcMain.handle('git-is-repo', (_, repoPath) => git.isRepo(repoPath));
 ipcMain.handle('git-tags', (_, repoPath) => git.tags(repoPath));

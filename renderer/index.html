@@ -218,7 +218,13 @@
           <div id="history-list-panel">
             <div class="panel-header">
               <span id="history-branch-label">master</span>
-              <span id="history-tracking" class="tracking" hidden></span>
+              <div class="panel-header-right">
+                <span id="history-tracking" class="tracking" hidden></span>
+                <div id="history-scope" class="segmented" role="group" aria-label="History scope">
+                  <button type="button" data-scope="branch" class="active">This branch</button>
+                  <button type="button" data-scope="all">All branches</button>
+                </div>
+              </div>
             </div>
             <div id="history-list" class="commit-list"></div>
           </div>

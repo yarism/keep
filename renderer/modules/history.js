@@ -3,7 +3,7 @@ import { renderDiff } from './diff.js';
 import { showCommitContextMenu } from './context-menu.js';
 import { icon } from '../icons.js';
 import { buildGraph } from '../graph.js';
-import { trackingFor, trackingChips } from './sync.js';
+import { trackingFor, trackingChips, headTracking } from './sync.js';
 
 // Graph geometry. The row height is fixed and shared with the stylesheet
 // (--commit-row-h) because each row draws its own half of every line: if a row
@@ -62,10 +62,46 @@ function clearSearch() {
   if (_refresh) refreshHistory(_refresh);
 }
 
+// "This branch" vs "All branches". The choice outlives the session because it
+// is a way of working, not a per-visit decision.
+export function setupHistoryScope(refresh, settings) {
+  state.historyScope = settings.historyScope === 'all' ? 'all' : 'branch';
+  const group = $('#history-scope');
+  if (!group) return;
+  syncScopeButtons();
+  group.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-scope]');
+    if (!btn || btn.dataset.scope === state.historyScope) return;
+    state.historyScope = btn.dataset.scope;
+    // A branch pinned from the sidebar is a statement about which branch to
+    // look at, which "all branches" contradicts — and its highlight would
+    // otherwise sit there pointing at nothing in particular.
+    if (state.historyScope === 'all') state.selectedBranch = null;
+    window.git.saveSettings({ historyScope: state.historyScope });
+    syncScopeButtons();
+    refresh();
+  });
+}
+
+function syncScopeButtons() {
+  document.querySelectorAll('#history-scope button[data-scope]').forEach(b => {
+    const on = b.dataset.scope === state.historyScope;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+}
+
 export async function refreshHistory(refresh, branchOverride) {
   _refresh = refresh;
   if ($('#search-input').value.trim()) return;
   const currentBranch = state.branchList.find(b => b.current);
+  // Clicking a branch or tag is a request to see that ref, so it takes the
+  // list back out of "all branches".
+  if (branchOverride !== undefined && state.historyScope === 'all') {
+    state.historyScope = 'branch';
+    window.git.saveSettings({ historyScope: 'branch' });
+    syncScopeButtons();
+  }
   let branchName;
   if (branchOverride !== undefined) {
     state.selectedBranch = branchOverride;
@@ -78,20 +114,23 @@ export async function refreshHistory(refresh, branchOverride) {
     branchName = null;
   }
   state.searching = false;
+  const all = state.historyScope === 'all';
   try {
     // Both in one round trip: the commits, and which of them no remote has.
     const [commits, unpushed] = await Promise.all([
-      window.git.log(state.repoPath, branchName, 200),
-      window.git.unpushed(state.repoPath, branchName).catch(() => []),
+      window.git.log(state.repoPath, all ? null : branchName, 200, { all }),
+      window.git.unpushed(state.repoPath, all ? null : branchName, { all }).catch(() => []),
     ]);
     state.commits = commits;
     state.unpushed = new Set(unpushed);
     const displayLabel = currentBranch && currentBranch.detached && branchName === 'HEAD'
       ? `HEAD (${currentBranch.name})`
       : (branchName || 'History');
-    $('#history-branch-label').textContent = displayLabel;
+    $('#history-branch-label').textContent = all ? 'All branches' : displayLabel;
   } catch { state.commits = []; state.unpushed = new Set(); }
-  renderTracking(branchName);
+  // Across all branches there is no one branch the list is "about", so the
+  // header falls back to reporting where HEAD stands.
+  renderTracking(all ? null : branchName);
   renderCommitList(refresh);
 }
 
@@ -100,7 +139,7 @@ export async function refreshHistory(refresh, branchOverride) {
 function renderTracking(branchName) {
   const el = $('#history-tracking');
   if (!el) return;
-  const t = trackingFor(branchName);
+  const t = branchName === null ? headTracking() : trackingFor(branchName);
   if (!t) { el.hidden = true; el.innerHTML = ''; return; }
   const upstream = t.upstream ? `<span class="track-upstream">${escapeHtml(t.upstream)}</span>` : '';
   el.innerHTML = upstream + trackingChips(t, { showSynced: true });
