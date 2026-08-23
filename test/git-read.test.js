@@ -835,6 +835,47 @@ test('repoFingerprint: survives a repo with no commits', async () => {
   assert.strictEqual(fp.branch, null);
 });
 
+// ── searchLog ──
+
+test('searchLog: searching a branch does not reach into another one', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'other');
+  h.write(repo, 'o.txt', 'x\n');
+  h.commitAll(repo, 'widget on the other branch');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'm.txt', 'x\n');
+  h.commitAll(repo, 'widget on main');
+
+  const onMain = await git.searchLog(repo, 'widget', 'message', 'main');
+
+  assert.deepStrictEqual(onMain.map(c => c.subject), ['widget on main']);
+});
+
+test('searchLog: all-branches mode searches every ref', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'other');
+  h.write(repo, 'o.txt', 'x\n');
+  h.commitAll(repo, 'widget on the other branch');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'm.txt', 'x\n');
+  h.commitAll(repo, 'widget on main');
+
+  const all = await git.searchLog(repo, 'widget', 'message', 'main', 200, { all: true });
+
+  assert.deepStrictEqual(all.map(c => c.subject).sort(),
+    ['widget on main', 'widget on the other branch']);
+});
+
+test('searchLog: results carry the same fields the list renders from', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'tag', 'v9');
+
+  const [hit] = await git.searchLog(repo, 'initial', 'message', 'main');
+
+  assert.deepStrictEqual(hit.parents, [], 'parents, for the graph');
+  assert.ok(hit.refs.some(r => r.name === 'v9' && r.type === 'tag'), 'and refs, for the chips');
+});
+
 // ── error propagation ──
 
 test('a git failure rejects with git\'s stderr', async () => {

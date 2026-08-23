@@ -63,6 +63,7 @@ async function enterWorkspace(path) {
   window.git.saveSettings({ lastRepo: path });
   await refresh();
   startPolling();
+  startAutoFetch();
 }
 
 let _lastFingerprint = null;
@@ -109,6 +110,66 @@ function stopPolling() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
+// ── Fetching in the background ──
+//
+// Ahead/behind is only as truthful as the last fetch, and until now the only
+// fetch was one you pressed a button for — so a branch could sit there claiming
+// to be up to date for a week. This keeps the remote-tracking refs current on a
+// timer. Nothing about the working copy is touched, so there is nothing to
+// interrupt: the ref changes land in the fingerprint the poller already watches
+// and the UI refreshes itself.
+//
+// Set `autoFetchMinutes` to 0 in settings.json to turn it off.
+const DEFAULT_AUTO_FETCH_MINUTES = 10;
+let _autoFetchMinutes = DEFAULT_AUTO_FETCH_MINUTES;
+let _fetchTimer = null;
+let _lastFetch = null;
+let _fetching = false;
+
+function startAutoFetch() {
+  stopAutoFetch();
+  if (!_autoFetchMinutes) return;
+  // Once shortly after opening — the counts on screen when you sit down are the
+  // ones most likely to be stale — and on the interval after that.
+  setTimeout(autoFetch, 4000);
+  _fetchTimer = setInterval(autoFetch, _autoFetchMinutes * 60 * 1000);
+}
+
+function stopAutoFetch() {
+  if (_fetchTimer) { clearInterval(_fetchTimer); _fetchTimer = null; }
+}
+
+async function autoFetch() {
+  if (!state.repoPath || _fetching) return;
+  _fetching = true;
+  try {
+    const result = await window.git.fetchQuiet(state.repoPath);
+    if (result.ok) _lastFetch = Date.now();
+    describeLastFetch(result);
+  } catch { /* a background job has nobody to tell */ }
+  finally { _fetching = false; }
+}
+
+// The only visible trace: the Fetch button says when it last managed one.
+function describeLastFetch(result) {
+  const btn = $('#btn-fetch');
+  if (!btn) return;
+  if (result && !result.ok) {
+    btn.title = 'Fetch — the last automatic fetch did not get through';
+    return;
+  }
+  btn.title = _lastFetch ? `Fetch — last fetched ${ago(_lastFetch)}` : 'Fetch';
+}
+
+function ago(when) {
+  const mins = Math.round((Date.now() - when) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins === 1) return 'a minute ago';
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.round(mins / 60);
+  return hours === 1 ? 'an hour ago' : `${hours} hours ago`;
+}
+
 // ── Navigation ──
 function setupNavigation() {
   document.addEventListener('click', (e) => {
@@ -147,7 +208,12 @@ async function runAction(selector, label, work) {
 
 function setupToolbar() {
   $('#btn-fetch').addEventListener('click', () =>
-    runAction('#btn-fetch', 'Fetch', () => window.git.fetch(state.repoPath)));
+    runAction('#btn-fetch', 'Fetch', async () => {
+      const out = await window.git.fetch(state.repoPath);
+      _lastFetch = Date.now();
+      describeLastFetch(null);
+      return out;
+    }));
   $('#btn-pull').addEventListener('click', () =>
     runAction('#btn-pull', 'Pull', () => window.git.pull(state.repoPath)));
   $('#btn-push').addEventListener('click', async () => {
@@ -234,6 +300,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupThemePicker();
   state.repositories = await window.git.loadRepos();
   const settings = await window.git.loadSettings();
+  // Minutes between background fetches; 0 turns them off entirely.
+  const configured = Number(settings.autoFetchMinutes);
+  _autoFetchMinutes = Number.isFinite(configured) && configured >= 0
+    ? configured
+    : DEFAULT_AUTO_FETCH_MINUTES;
   syncThemeFromSettings(settings);
   if (settings.sidebarWidth) {
     $('#sidebar').style.width = settings.sidebarWidth + 'px';

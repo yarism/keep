@@ -10,7 +10,12 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 
 - Visual working copy with staged/unstaged changes
 - Inline diffs with hunk-level staging and discarding
-- Commit history browser with full commit details and changesets
+- Commit history browser with a commit graph, full details and changesets
+- Local vs remote at a glance — ahead/behind counts on branches and on the
+  Pull and Push buttons, and unpushed commits drawn as hollow nodes
+- History scoped to one branch or to every branch at once
+- Commit subjects and descriptions, amending, and publishing a new branch
+- Conflict handling — merge and rebase state, per-file resolution, abort
 - Branch management — create, rename, delete, checkout
 - Remote branches visible under each remote
 - Stash support — save, apply, drop
@@ -21,6 +26,18 @@ A Git GUI client inspired by [Tower](https://www.git-tower.com/), built with Ele
 - Context menus throughout (right-click on branches, commits, files)
 - Six colour themes, switchable from the toolbar
 - Progress and results reported for every toolbar command
+
+## Fetching
+
+Keep fetches in the background every ten minutes, so the ahead/behind counts
+mean something without you pressing Fetch first. It never touches the working
+copy — only the remote-tracking refs — and it runs non-interactively, so a
+repository that would ask for a password is skipped rather than left hanging.
+The Fetch button's tooltip says when the last one got through.
+
+To change the interval, or switch it off, set `autoFetchMinutes` in
+`settings.json` (`0` disables it). The file lives in Electron's user-data
+directory — `~/Library/Application Support/Keep` on macOS.
 
 ## Themes
 
