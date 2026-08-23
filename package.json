@@ -40,7 +40,9 @@
       "icon": "assets/icon.icns",
       "artifactName": "${productName}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
-      "target": "dmg"
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "notarize": true
     },
     "win": {
       "icon": "assets/icon.png",
