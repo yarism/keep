@@ -8,6 +8,7 @@ export const state = {
   statusFiles: [],
   commits: [],
   branchList: [],
+  tagList: [],
   repositories: [],
 };
 
@@ -56,7 +57,7 @@ export function updateTitlebar() {
   textEl.textContent = `${repoName} \u2013 ${viewLabel} (${detail})`;
 }
 
-// The branch we last saw HEAD pointing at. Clicking a branch in the sidebar pins
+// The branch we last saw HEAD pointing at. Clicking a branch or tag in the sidebar pins
 // history to it via state.selectedBranch, and that pin used to survive forever —
 // so after a checkout (in the app or in a terminal) history kept rendering the
 // old branch and only re-opening the repo would clear it. Comparing HEAD against
@@ -73,7 +74,10 @@ export function reconcileSelectedBranch() {
   const headName = current ? current.name : null;
 
   if (state.selectedBranch) {
-    const stillExists = state.branchList.some(b => b.name === state.selectedBranch);
+    // The pin can be a branch or a tag; a tag is not in branchList, so checking
+    // only branches here would clear a pinned tag on the very next poll tick.
+    const stillExists = state.branchList.some(b => b.name === state.selectedBranch)
+      || state.tagList.includes(state.selectedBranch);
     const headMovedElsewhere = headName !== _lastHeadBranch && state.selectedBranch !== headName;
     // Drop the pin if its branch is gone (deleted/renamed) or HEAD checked out
     // something else — in both cases history should follow HEAD again.

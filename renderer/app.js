@@ -16,7 +16,7 @@ async function refresh() {
   await Promise.all([
     refreshStatus(),
     refreshHistory(refresh),
-    refreshTags(),
+    refreshTags(refresh),
     refreshRemotes(refresh),
     refreshStashes(),
   ]);

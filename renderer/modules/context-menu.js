@@ -69,6 +69,29 @@ export function showBranchContextMenu(e, branch, refresh) {
   ]);
 }
 
+export function showTagContextMenu(e, tag, refresh) {
+  showContextMenu(e, [
+    { label: 'Copy Tag Name to Clipboard', action: () => navigator.clipboard.writeText(tag) },
+    { separator: true },
+    // Checking out a tag detaches HEAD; confirmCheckout already warns about
+    // uncommitted changes first, and the sidebar renders the detached state.
+    { label: `Check Out "${tag}"`, action: () => confirmCheckout(tag, refresh) },
+    { label: `Create New Branch from "${tag}"...`, action: async () => {
+      const n = await showModal('Create Branch', `Branch name (from "${tag}")`);
+      if (!n) return;
+      try { await window.git.createBranch(state.repoPath, n, tag); await refresh(); }
+      catch (err) { alert(err.message); }
+    }},
+    { separator: true },
+    { label: `Delete "${tag}"...`, action: async () => {
+      const ok = await showConfirm('Delete Tag', `Delete the local tag "${tag}"?\n\nThis does not delete it from the remote.`);
+      if (!ok) return;
+      try { await window.git.deleteTag(state.repoPath, tag); await refresh(); }
+      catch (err) { alert(err.message); }
+    }},
+  ]);
+}
+
 export function showCommitContextMenu(e, commit, refresh) {
   const h = commit.hash.substring(0, 7);
   showContextMenu(e, [

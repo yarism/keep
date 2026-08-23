@@ -1,10 +1,12 @@
 import { $, escapeHtml, state, switchView } from './state.js';
-import { showBranchContextMenu, confirmCheckout } from './context-menu.js';
+import { showBranchContextMenu, showTagContextMenu, confirmCheckout } from './context-menu.js';
 import { refreshHistory } from './history.js';
 
+// Matches on the data-branch attribute rather than a class so this covers local
+// branches, remote branches and tags — anything the sidebar can pin history to.
 function highlightBranch(name) {
-  document.querySelectorAll('.branch-item.selected-branch').forEach(el => el.classList.remove('selected-branch'));
-  document.querySelectorAll('.branch-item[data-branch]').forEach(el => {
+  document.querySelectorAll('.selected-branch').forEach(el => el.classList.remove('selected-branch'));
+  document.querySelectorAll('[data-branch]').forEach(el => {
     if (el.dataset.branch === name) el.classList.add('selected-branch');
   });
 }
@@ -70,17 +72,28 @@ export async function refreshBranches(refresh) {
   if (state.selectedBranch) highlightBranch(state.selectedBranch);
 }
 
-export async function refreshTags() {
+export async function refreshTags(refresh) {
   try {
     const tags = await window.git.tags(state.repoPath);
+    state.tagList = tags;
     const list = $('#tags-list');
     list.innerHTML = '';
     tags.forEach(t => {
       const item = document.createElement('div');
       item.className = 'tag-item';
+      item.dataset.branch = t;
       item.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span>${escapeHtml(t)}</span>`;
+      // Same behaviour as a branch row: show that ref's history
+      item.addEventListener('click', () => {
+        switchView('history');
+        state.selectedBranch = t;
+        highlightBranch(t);
+        refreshHistory(refresh, t);
+      });
+      item.addEventListener('contextmenu', (e) => { e.preventDefault(); showTagContextMenu(e, t, refresh); });
       list.appendChild(item);
     });
+    if (state.selectedBranch) highlightBranch(state.selectedBranch);
   } catch {}
 }
 

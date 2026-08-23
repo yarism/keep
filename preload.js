@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('git', {
   stashDrop: (p, idx) => ipcRenderer.invoke('git-stash-drop', p, idx),
   revert: (p, hash) => ipcRenderer.invoke('git-revert', p, hash),
   createTag: (p, name, ref) => ipcRenderer.invoke('git-create-tag', p, name, ref),
+  deleteTag: (p, name) => ipcRenderer.invoke('git-delete-tag', p, name),
   stageHunk: (p, file, hunk) => ipcRenderer.invoke('git-stage-hunk', p, file, hunk),
   discardHunk: (p, file, hunk) => ipcRenderer.invoke('git-discard-hunk', p, file, hunk),
   discardFile: (p, file) => ipcRenderer.invoke('git-discard-file', p, file),
