@@ -262,7 +262,7 @@ body {
 .branch-item.current { color: var(--accent); font-weight: 600; }
 .branch-item.detached { color: var(--yellow); font-style: italic; }
 .branch-item.detached .head-badge { background: var(--yellow); }
-.branch-item.selected-branch { background: var(--bg-active); color: var(--text); }
+.branch-item.selected-branch, .tag-item.selected-branch { background: var(--bg-active); color: var(--text); }
 .branch-item.current.selected-branch { color: var(--accent); }
 .branch-item .head-badge {
   background: var(--accent);

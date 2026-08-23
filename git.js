@@ -194,6 +194,10 @@ exports.createTag = (repoPath, name, ref) => {
   if (ref) args.push(ref);
   return run(repoPath, args);
 };
+// Local only — deleting the remote tag is a separate, far more destructive
+// operation and is deliberately not exposed here.
+exports.deleteTag = (repoPath, name) => run(repoPath, ['tag', '-d', name]);
+
 exports.stageHunk = async (repoPath, filePath, hunkHeader) => {
   // Use git apply to stage a specific hunk
   const diff = await run(repoPath, ['diff', '--', filePath]);
