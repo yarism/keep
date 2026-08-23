@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('git', {
   status: (p) => ipcRenderer.invoke('git-status', p),
   log: (p, branch, limit) => ipcRenderer.invoke('git-log', p, branch, limit),
   branches: (p) => ipcRenderer.invoke('git-branches', p),
+  repoFingerprint: (p) => ipcRenderer.invoke('git-repo-fingerprint', p),
   tags: (p) => ipcRenderer.invoke('git-tags', p),
   remotes: (p) => ipcRenderer.invoke('git-remotes', p),
   stashes: (p) => ipcRenderer.invoke('git-stashes', p),

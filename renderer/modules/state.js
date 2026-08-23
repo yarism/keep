@@ -56,6 +56,33 @@ export function updateTitlebar() {
   textEl.textContent = `${repoName} \u2013 ${viewLabel} (${detail})`;
 }
 
+// The branch we last saw HEAD pointing at. Clicking a branch in the sidebar pins
+// history to it via state.selectedBranch, and that pin used to survive forever —
+// so after a checkout (in the app or in a terminal) history kept rendering the
+// old branch and only re-opening the repo would clear it. Comparing HEAD against
+// this lets us drop the pin exactly when HEAD moves somewhere else.
+let _lastHeadBranch = null;
+
+export function resetHeadTracking() {
+  _lastHeadBranch = null;
+}
+
+// Call after branchList is refreshed, before history renders.
+export function reconcileSelectedBranch() {
+  const current = state.branchList.find(b => b.current);
+  const headName = current ? current.name : null;
+
+  if (state.selectedBranch) {
+    const stillExists = state.branchList.some(b => b.name === state.selectedBranch);
+    const headMovedElsewhere = headName !== _lastHeadBranch && state.selectedBranch !== headName;
+    // Drop the pin if its branch is gone (deleted/renamed) or HEAD checked out
+    // something else — in both cases history should follow HEAD again.
+    if (!stillExists || headMovedElsewhere) state.selectedBranch = null;
+  }
+
+  _lastHeadBranch = headName;
+}
+
 export function switchView(view) {
   state.currentView = view;
   $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));

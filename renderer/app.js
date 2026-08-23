@@ -1,4 +1,4 @@
-import { $, $$, state, switchView, updateTitlebar } from './modules/state.js';
+import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal } from './modules/modal.js';
@@ -11,6 +11,8 @@ async function refresh() {
   if (!state.repoPath) return;
   // Branches must load first since remotes and history depend on branchList
   await refreshBranches(refresh);
+  // ...and the pin must be settled before history decides what to render
+  reconcileSelectedBranch();
   await Promise.all([
     refreshStatus(),
     refreshHistory(refresh),
@@ -19,6 +21,8 @@ async function refresh() {
     refreshStashes(),
   ]);
   updateTitlebar();
+  // Re-baseline so our own writes don't read as an external change next tick
+  await captureFingerprint();
 }
 
 // ── Enter workspace mode ──
@@ -27,6 +31,8 @@ let _pollTimer = null;
 async function enterWorkspace(path) {
   state.repoPath = path;
   state.selectedBranch = null;
+  resetHeadTracking();
+  _lastFingerprint = null;
   state.selectedFile = null;
   state.selectedCommit = null;
   const name = path.split('/').pop();
@@ -44,6 +50,16 @@ async function enterWorkspace(path) {
   startPolling();
 }
 
+let _lastFingerprint = null;
+let _polling = false;
+
+async function captureFingerprint() {
+  try {
+    const fp = await window.git.repoFingerprint(state.repoPath);
+    _lastFingerprint = fp.fingerprint;
+  } catch { _lastFingerprint = null; }
+}
+
 function startPolling() {
   stopPolling();
   _pollTimer = setInterval(async () => {
@@ -51,7 +67,26 @@ function startPolling() {
     // Don't refresh while user is typing a commit message or a modal is open
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     if (!$('#modal-overlay').hidden) return;
-    await refreshStatus();
+    // A slow refresh must not stack up behind the next tick
+    if (_polling) return;
+    _polling = true;
+    try {
+      // The working copy changes on every keystroke in an editor, so it always
+      // gets refreshed. HEAD and the refs only move on an actual git operation —
+      // when they do, everything else (sidebar, history, tags, stashes) is stale
+      // too and needs the full refresh, which is what used to be missing here.
+      let fp = null;
+      try { fp = await window.git.repoFingerprint(state.repoPath); } catch {}
+      if (fp && _lastFingerprint !== null && fp.fingerprint !== _lastFingerprint) {
+        await refresh();
+      } else {
+        if (fp) _lastFingerprint = fp.fingerprint;
+        await refreshStatus();
+        updateTitlebar();
+      }
+    } finally {
+      _polling = false;
+    }
   }, 3000);
 }
 

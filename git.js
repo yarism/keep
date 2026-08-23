@@ -88,6 +88,25 @@ exports.branches = async (repoPath) => {
   return branches;
 };
 
+// A cheap snapshot of everything the UI keys off: where HEAD points and what
+// every ref resolves to. The poller compares this between ticks so changes made
+// outside the app (a terminal commit, a checkout, a fetch) get picked up instead
+// of leaving the sidebar and history frozen at whatever they were on open.
+exports.repoFingerprint = async (repoPath) => {
+  const [head, refs] = await Promise.all([
+    // `rev-parse HEAD --abbrev-ref HEAD` prints the sha, then the branch name
+    // (or literally "HEAD" when detached). Fails in a repo with no commits yet.
+    run(repoPath, ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD']).catch(() => ''),
+    run(repoPath, ['for-each-ref', '--format=%(objectname) %(refname)']).catch(() => ''),
+  ]);
+  const [hash = '', ref = ''] = head.trim().split('\n');
+  return {
+    hash,
+    branch: ref === 'HEAD' || !ref ? null : ref,
+    fingerprint: head + refs,
+  };
+};
+
 exports.tags = async (repoPath) => {
   const out = await run(repoPath, ['tag', '--sort=-creatordate']);
   return out.trim().split('\n').filter(Boolean);
