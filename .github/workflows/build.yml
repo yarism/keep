@@ -52,16 +52,26 @@ jobs:
             exit 1
           fi
 
+      # electron-builder reads CSC_LINK as a path, so an empty one resolves to the
+      # checkout directory and fails. The signing variables have to be absent
+      # rather than blank, which only a shell can express.
       - name: Build installers
-        run: npx electron-builder ${{ matrix.args }} --publish never
+        shell: bash
         env:
-          # Without a certificate, stop electron-builder hunting the keychain for one.
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
-          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$MAC_CERT_P12" ]; then
+            export CSC_LINK="$MAC_CERT_P12"
+            export CSC_KEY_PASSWORD="$MAC_CERT_PASSWORD"
+          else
+            unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npx electron-builder ${{ matrix.args }} --publish never
 
       - name: Upload installers
         uses: actions/upload-artifact@v7
