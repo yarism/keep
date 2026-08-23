@@ -6,6 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test \"test/*.test.js\" \"test/*.test.mjs\"",
+    "test:watch": "node --test --watch \"test/*.test.js\" \"test/*.test.mjs\"",
     "dist": "electron-builder --mac dmg",
     "dist:win": "electron-builder --win nsis",
     "dist:linux": "electron-builder --linux AppImage",

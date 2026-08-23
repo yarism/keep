@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('git', {
   commitFileDiff: (p, hash, file) => ipcRenderer.invoke('git-commit-file-diff', p, hash, file),
   searchLog: (p, query, field, branch, limit) => ipcRenderer.invoke('git-search-log', p, query, field, branch, limit),
   stage: (p, file) => ipcRenderer.invoke('git-stage', p, file),
-  unstage: (p, file) => ipcRenderer.invoke('git-unstage', p, file),
+  unstage: (p, file, oldPath) => ipcRenderer.invoke('git-unstage', p, file, oldPath),
   stageAll: (p) => ipcRenderer.invoke('git-stage-all', p),
   commit: (p, msg) => ipcRenderer.invoke('git-commit', p, msg),
   checkout: (p, branch) => ipcRenderer.invoke('git-checkout', p, branch),

@@ -67,7 +67,7 @@ function renderFileList() {
     item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
       e.stopPropagation();
       try {
-        if (f.staged) await window.git.unstage(state.repoPath, f.filePath);
+        if (f.staged) await window.git.unstage(state.repoPath, f.filePath, f.oldPath);
         else await window.git.stage(state.repoPath, f.filePath);
         await refreshStatus();
       } catch (err) { alert(err.message); }
@@ -143,7 +143,7 @@ export function setupCommitBox(refresh) {
   $('#btn-stage-all').addEventListener('click', async () => {
     const allStaged = state.statusFiles.length > 0 && state.statusFiles.every(f => f.staged);
     try {
-      if (allStaged) { for (const f of state.statusFiles) await window.git.unstage(state.repoPath, f.filePath); }
+      if (allStaged) { for (const f of state.statusFiles) await window.git.unstage(state.repoPath, f.filePath, f.oldPath); }
       else { await window.git.stageAll(state.repoPath); }
       await refreshStatus();
     } catch (e) { alert(e.message); }
@@ -171,7 +171,7 @@ function showMultiFileContextMenu(e) {
     }},
     { label: `Unstage ${count} Files`, disabled: !hasStaged, action: async () => {
       try {
-        for (const f of files.filter(f2 => f2.staged)) await window.git.unstage(state.repoPath, f.filePath);
+        for (const f of files.filter(f2 => f2.staged)) await window.git.unstage(state.repoPath, f.filePath, f.oldPath);
         await refreshStatus();
       } catch (err) { alert(err.message); }
     }},
@@ -204,7 +204,7 @@ function showFileContextMenu(e, f) {
     { separator: true },
     { label: f.staged ? `Unstage "${name}"` : `Stage "${name}"`, action: async () => {
       try {
-        if (f.staged) await window.git.unstage(state.repoPath, f.filePath);
+        if (f.staged) await window.git.unstage(state.repoPath, f.filePath, f.oldPath);
         else await window.git.stage(state.repoPath, f.filePath);
         await refreshStatus();
       } catch (err) { alert(err.message); }
