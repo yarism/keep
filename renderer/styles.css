@@ -123,6 +123,10 @@ button .icon-svg { pointer-events: none; }
   position: relative;
 }
 
+/* While a menu is open the titlebar stops being a drag handle, so the click
+   that dismisses the menu reaches the document instead of the window manager. */
+body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
+
 .titlebar-title {
   display: flex;
   align-items: center;

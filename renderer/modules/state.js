@@ -31,6 +31,16 @@ export function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Chromium hands mouse presses over a -webkit-app-region: drag region to the
+// window manager, so a click on the titlebar never reaches the document and any
+// menu waiting for an outside click would stay open. Menus suspend the drag
+// region while they are up; dragging the window works again once they close.
+const dragSuspenders = new Set();
+export function suspendTitlebarDrag(owner, on) {
+  if (on) dragSuspenders.add(owner); else dragSuspenders.delete(owner);
+  document.body.classList.toggle('titlebar-locked', dragSuspenders.size > 0);
+}
+
 const viewLabels = {
   'working-copy': 'Working Copy',
   'history': 'History',
