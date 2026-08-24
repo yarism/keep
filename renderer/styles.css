@@ -1202,6 +1202,24 @@ button .icon-svg { pointer-events: none; }
 #commit-info td { padding: 2px 8px; vertical-align: top; }
 #commit-info td:first-child { color: var(--text-mute); white-space: nowrap; width: 108px; }
 
+/* The message reads as one block under the table: subject on top, body below
+ * it. The 8px matches the table cells so the text lines up with them. Bodies
+ * are hand-wrapped, so their line breaks are kept. */
+.commit-message { margin-top: 12px; padding: 0 8px; }
+.commit-message-subject {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.commit-message-body {
+  margin-top: 6px;
+  font-size: var(--fs-base);
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 /* Changeset */
 #commit-changeset { padding: 0; }
 .changeset-summary {

@@ -305,7 +305,10 @@ async function selectCommit(c, refresh) {
         <tr><td>Parent Hash</td><td style="font-family:monospace">${d.parents || '—'}</td></tr>
         <tr><td>Tree Hash</td><td style="font-family:monospace">${d.tree || '—'}</td></tr>
       </table>
-      <div style="margin-top:12px;font-size:var(--fs-xl);font-weight:600">${escapeHtml(d.subject)}</div>
+      <div class="commit-message">
+        <div class="commit-message-subject">${escapeHtml(d.subject)}</div>
+        ${d.body ? `<div class="commit-message-body">${escapeHtml(d.body)}</div>` : ''}
+      </div>
     `;
 
     // Render changeset with expandable files
