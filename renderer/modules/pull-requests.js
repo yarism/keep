@@ -12,7 +12,7 @@ import { $, escapeHtml, state, switchView } from './state.js';
 import { renderChangeset, summarize } from './changeset.js';
 import { forgeForBranch, forgeLabel, pullRequestsNoun, pullRequestsUrl } from './forge.js';
 import { icon } from '../icons.js';
-import { mountMarkdown } from './markdown.js';
+import { commentCard } from './comment.js';
 import {
   setPullRequest, loadThreads, annotateFor, fileBadge, fileNote,
   reviewBarEl, onReviewChange, resetReview,
@@ -261,9 +261,22 @@ function renderInfo(pr, commits) {
           <span class="pr-commit-subject">${escapeHtml(c.subject)}</span>
           <span class="pr-commit-author">${escapeHtml(c.author)}</span>
         </div>`).join('')}</div>` : ''}
-      ${pr.body ? `<div class="pr-body"></div>` : ''}
+      <div class="pr-description-slot"></div>
     </div>
   `;
+  // The description is a comment — the first one on the pull request — and it
+  // is drawn as one, over the author's name, so it does not read as a caption
+  // the tool wrote about the branch.
+  if (pr.body) {
+    info.querySelector('.pr-description-slot').appendChild(commentCard({
+      author: pr.author,
+      avatar: pr.avatar,
+      at: pr.updatedAt,
+      body: pr.body,
+      verb: 'commented',
+      className: 'pr-description',
+    }));
+  }
   const toggle = info.querySelector('.pr-commits-toggle');
   if (toggle) {
     toggle.addEventListener('click', () => {
@@ -274,10 +287,6 @@ function renderInfo(pr, commits) {
       toggle.querySelector('.expand-arrow').classList.toggle('open', open);
     });
   }
-  // The description is the author's own prose, written in a Markdown box, and
-  // rendered through the escape-first renderer rather than as text or markup.
-  const bodyEl = info.querySelector('.pr-body');
-  if (bodyEl) mountMarkdown(bodyEl, pr.body, (url) => window.git.openExternal(url));
   const link = info.querySelector('.pr-web-link');
   // Reviewing still happens on the web: Keep can show the change but has no
   // way to approve it, and pretending otherwise would be the wrong kind of

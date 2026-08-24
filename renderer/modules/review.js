@@ -12,10 +12,10 @@
 // Anchoring is the fiddly part. A comment is not attached to a line of text but
 // to a position in a diff — a file, a side, and a line number on that side —
 // and renderDiff hands those out as it renders (see its `annotate` option).
-import { $, escapeHtml, state } from './state.js';
+import { $, state } from './state.js';
 import { busyToast } from './toast.js';
 import { icon } from '../icons.js';
-import { mountMarkdown } from './markdown.js';
+import { commentCard } from './comment.js';
 
 let _forge = null;
 let _pr = null;
@@ -152,39 +152,15 @@ function slotFor(row) {
   return slot;
 }
 
-function avatarEl(url, name) {
-  if (!url) {
-    const initial = document.createElement('span');
-    initial.className = 'review-avatar review-avatar-fallback';
-    initial.textContent = (name || '?').slice(0, 1).toUpperCase();
-    return initial;
-  }
-  const img = document.createElement('img');
-  img.className = 'review-avatar';
-  img.alt = '';
-  // Asked for at the size it is drawn: GitHub serves whatever `s` says, and the
-  // full-size original is a hundred times the bytes for the same 20 pixels.
-  img.src = `${url}${url.includes('?') ? '&' : '?'}s=48`;
-  return img;
-}
-
 function commentEl(c, { outdated = false } = {}) {
-  const el = document.createElement('div');
-  el.className = 'review-comment' + (outdated ? ' outdated' : '');
-  el.innerHTML = `
-    <div class="review-comment-head">
-      <span class="review-author">${escapeHtml(c.author)}</span>
-      <span class="review-when">${escapeHtml(when(c.createdAt))}</span>
-      ${outdated && c.originalLine ? `<span class="review-chip">was line ${c.originalLine}</span>` : ''}
-    </div>
-    <div class="review-comment-body"></div>
-  `;
-  el.prepend(avatarEl(c.avatar, c.author));
-  // Comment bodies are other people's prose, written in a Markdown box. They
-  // are rendered through the escape-first renderer in markdown.js — never set
-  // as markup, and never trusted to be text-only either.
-  mountMarkdown(el.querySelector('.review-comment-body'), c.body, (url) => window.git.openExternal(url));
-  return el;
+  return commentCard({
+    author: c.author,
+    avatar: c.avatar,
+    at: c.createdAt,
+    body: c.body,
+    chips: outdated && c.originalLine ? [`was line ${c.originalLine}`] : [],
+    className: outdated ? 'outdated' : '',
+  });
 }
 
 // The few lines of diff a comment was written against. Only worth drawing when
@@ -230,26 +206,23 @@ function threadEl(thread, { outdated = false } = {}) {
 }
 
 function pendingEl(draft, row, file, anchor) {
-  const el = document.createElement('div');
-  el.className = 'review-comment pending';
-  el.innerHTML = `
-    <div class="review-comment-head">
-      <span class="review-author">You</span>
-      <span class="review-chip pending">pending</span>
-    </div>
-    <div class="review-comment-body"></div>
-    <div class="review-comment-actions">
-      <button type="button" data-edit>Edit</button>
-      <button type="button" data-delete>Delete</button>
-    </div>
-  `;
-  el.prepend(avatarEl(null, 'You'));
-  el.querySelector('.review-comment-body').textContent = draft.body;
-  el.querySelector('[data-edit]').addEventListener('click', () => {
+  const el = commentCard({
+    author: 'You',
+    at: null,
+    body: draft.body,
+    plain: true,
+    chips: ['pending'],
+    className: 'pending',
+  });
+  const actions = document.createElement('div');
+  actions.className = 'comment-actions';
+  actions.innerHTML = '<button type="button" data-edit>Edit</button><button type="button" data-delete>Delete</button>';
+  el.appendChild(actions);
+  actions.querySelector('[data-edit]').addEventListener('click', () => {
     el.remove();
     openComposer(row, file, anchor, draft);
   });
-  el.querySelector('[data-delete]').addEventListener('click', () => {
+  actions.querySelector('[data-delete]').addEventListener('click', () => {
     _pending = _pending.filter(p => p.key !== draft.key);
     saveDrafts();
     el.remove();
@@ -305,10 +278,6 @@ function openComposer(row, file, anchor, editing) {
   });
 }
 
-function when(iso) {
-  if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString('en-CA'); } catch { return ''; }
-}
 
 // ── Submitting ──
 
