@@ -10,9 +10,24 @@ const { execFile } = require('child_process');
 // Setups that already work keep working: this only suppresses *prompts*, so a
 // configured credential helper and a key held by ssh-agent are still consulted
 // as usual.
-function nonInteractiveEnv() {
+// Keep polls the working copy every few seconds, and `git status` does not just
+// read the index — it writes the refreshed stat cache back, which means taking
+// .git/index.lock. A poll that lands on the same moment as a `git commit` or
+// `git add` typed in a terminal makes that command fail outright with "Unable to
+// create '.../index.lock': File exists", for a repository nobody else is using.
+// GIT_OPTIONAL_LOCKS=0 drops exactly the locks git takes as a side effect and
+// keeps the ones an operation actually needs, so Keep's own add/commit/reset
+// still work while the terminal stays usable alongside the app.
+function gitEnv() {
   return {
     ...process.env,
+    GIT_OPTIONAL_LOCKS: '0',
+  };
+}
+
+function nonInteractiveEnv() {
+  return {
+    ...gitEnv(),
     GIT_TERMINAL_PROMPT: '0',   // no username/password prompt on https
     GIT_ASKPASS: 'echo',        // ...nor through a helper
     SSH_ASKPASS: 'echo',
@@ -103,7 +118,7 @@ function protectedFolder(repoPath) {
 
 function run(repoPath, args) {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd: repoPath, env: gitEnv(), maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
       else resolve(stdout);
     });
@@ -116,7 +131,7 @@ function run(repoPath, args) {
 // result it needs to report.
 function runReporting(repoPath, args) {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd: repoPath, env: gitEnv(), maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
       else resolve([stdout, stderr].filter(s => s && s.trim()).join('\n'));
     });
@@ -655,7 +670,7 @@ function cutHunk(diff, hunkHeader, index) {
 function applyPatch(repoPath, patch, args) {
   return new Promise((resolve, reject) => {
     const { execFile: ef } = require('child_process');
-    const proc = ef('git', ['apply', ...args, '-'], { cwd: repoPath }, (err, stdout, stderr) => {
+    const proc = ef('git', ['apply', ...args, '-'], { cwd: repoPath, env: gitEnv() }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
       else resolve(stdout);
     });
