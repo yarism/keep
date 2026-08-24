@@ -35,6 +35,11 @@ function nonInteractiveEnv() {
   };
 }
 
+// Exported for release.js, which runs a command Keep did not write and which
+// usually ends in a push. The rule that a prompt with nobody to answer it must
+// fail rather than hang belongs to those commands too.
+exports.nonInteractiveEnv = nonInteractiveEnv;
+
 // Long enough for a real transfer over a poor connection, short enough that a
 // wedged command gives the window back rather than owning it for good.
 const NETWORK_TIMEOUT_MS = 120000;

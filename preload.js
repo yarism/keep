@@ -75,6 +75,16 @@ contextBridge.exposeInMainWorld('git', {
   showInFinder: (p, file) => ipcRenderer.invoke('git-show-in-finder', p, file),
 });
 
+// Releasing is its own bridge for the same reason updates are: nothing here
+// speaks git, and the output arrives in pieces while the command runs rather
+// than as the return value of a call.
+contextBridge.exposeInMainWorld('release', {
+  inspect: (p) => ipcRenderer.invoke('release-inspect', p),
+  run: (p, command) => ipcRenderer.invoke('release-run', p, command),
+  cancel: () => ipcRenderer.invoke('release-cancel'),
+  onOutput: (cb) => ipcRenderer.on('release-output', (_, chunk) => cb(chunk)),
+});
+
 // Updates are their own bridge rather than another key on `git` — nothing here
 // touches a repository, and onState pushes from main instead of being called.
 contextBridge.exposeInMainWorld('updates', {

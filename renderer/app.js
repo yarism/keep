@@ -9,6 +9,7 @@ import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, ref
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
+import { setupRelease } from './modules/release.js';
 import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
@@ -95,6 +96,9 @@ function startPolling() {
     // Don't refresh while user is typing a commit message or a modal is open
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     if (!$('#modal-overlay').hidden) return;
+    // The release panel holds a command being edited, and then a command being
+    // run. Neither wants the window redrawn underneath it.
+    if (!$('#release-overlay').hidden) return;
     // A slow refresh must not stack up behind the next tick
     if (_polling) return;
     _polling = true;
@@ -331,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupToolbar();
   setupContextMenu();
   setupUpdates();
+  setupRelease(refresh);
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);

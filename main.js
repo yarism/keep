@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const git = require('./git');
 const forgeApi = require('./forge-api');
+const release = require('./release');
 const { windowBounds } = require('./window-bounds');
 const { initUpdater, checkForUpdates } = require('./updater');
 const { buildMenu } = require('./menu');
@@ -272,3 +273,15 @@ ipcMain.handle('git-discard-hunk', (_, repoPath, filePath, hunkHeader, index) =>
 ipcMain.handle('git-discard-file', (_, repoPath, filePath) => git.discardFile(repoPath, filePath));
 ipcMain.handle('git-trash-file', (_, repoPath, filePath) => git.trashFile(repoPath, filePath));
 ipcMain.handle('git-show-in-finder', (_, repoPath, filePath) => git.showInFinder(repoPath, filePath));
+
+// Releasing is the one thing here that runs a command Keep did not write, so it
+// is kept apart from the git bridge: a different module, a different channel,
+// and output pushed as it arrives rather than returned at the end — a release
+// takes as long as the repository's tests do, and a panel that says nothing
+// until then is indistinguishable from a hung one.
+ipcMain.handle('release-inspect', (_, repoPath) => release.inspect(repoPath));
+ipcMain.handle('release-run', (event, repoPath, command) =>
+  release.run(repoPath, command, (chunk) => {
+    if (!event.sender.isDestroyed()) event.sender.send('release-output', chunk);
+  }));
+ipcMain.handle('release-cancel', () => release.cancel());

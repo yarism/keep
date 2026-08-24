@@ -89,6 +89,16 @@ export function pullRequestsUrl(f) {
   return `${f.base}/pulls`;
 }
 
+// Where a tagged release ends up once the forge has built it. Bitbucket has no
+// such page — its downloads are not tied to tags — so it gets no link rather
+// than one that explains nothing.
+export function releasesUrl(f) {
+  if (!f) return null;
+  if (f.kind === 'gitlab') return `${f.base}/-/releases`;
+  if (f.kind === 'bitbucket') return null;
+  return `${f.base}/releases`;
+}
+
 // The "open a pull request" page, pre-filled with this branch as the source.
 // Each forge spells that differently; none of them need the base branch, which
 // is what keeps this honest — the forge picks its own default and shows the
