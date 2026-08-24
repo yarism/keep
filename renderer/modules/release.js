@@ -191,10 +191,10 @@ async function start() {
   // panel is now describing the repository as it was a minute ago.
   if (refreshAll) { try { await refreshAll(); } catch {} }
 
-  finish(result);
+  await finish(result);
 }
 
-function finish(result) {
+async function finish(result) {
   const el = $('#release-result');
   el.hidden = false;
   el.className = `release-result ${result.ok ? 'ok' : 'bad'}`;
@@ -215,8 +215,11 @@ function finish(result) {
   // still be watching long after this panel is closed.
   //
   // The tag is read back from the repository rather than assumed: the command
-  // was the user's, and it may have tagged differently or not at all.
-  const tag = (state.tagList || []).find(t => t.replace(/^v/, '') === version) || null;
+  // was the user's, and it may have tagged differently or not at all. Asked of
+  // git directly rather than read from the sidebar's copy — the tag was made
+  // seconds ago, and whether a refresh has caught up with it is not something
+  // this should quietly depend on.
+  const tag = await tagFor(version);
   const watching = tag && watchBuild({
     repoPath: session.repoPath,
     repoName: (session.pkg && session.pkg.name) || session.repoPath.split('/').pop(),
@@ -227,12 +230,26 @@ function finish(result) {
   const next = watching
     ? ' GitHub is building the installers — the card in the corner says when they are ready.'
     : '';
+
+  // No link to the releases page while the build is still running: the release
+  // it would show is the previous one, since this version is not published
+  // until the workflow finishes. The card in the corner is the honest answer
+  // for those ten minutes, and it opens the run itself.
+  const linkable = url && !watching;
   el.innerHTML = `<div class="release-result-text">${escapeHtml(done + next)}</div>` +
-    (url ? `<button type="button" class="release-link" id="release-open">${icon('cloud', 14)}<span>View releases</span></button>` : '');
-  if (url) {
+    (linkable ? `<button type="button" class="release-link" id="release-open">${icon('cloud', 14)}<span>View releases</span></button>` : '');
+  if (linkable) {
     $('#release-open').addEventListener('click', () => window.git.openExternal(url));
   }
   toast(done, { prose: true });
+}
+
+async function tagFor(version) {
+  if (!version) return null;
+  try {
+    const tags = await window.git.tags(session.repoPath);
+    return tags.find(t => t.replace(/^v/, '') === version) || null;
+  } catch { return null; }
 }
 
 // Remember the command only when it differs from what Keep would have
