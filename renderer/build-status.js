@@ -95,6 +95,28 @@ export function elapsed(sinceMs, nowMs) {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
+// A call that never reached GitHub at all.
+//
+// Electron wraps whatever the main process threw in "Error invoking remote
+// method 'x': ", which buries the sentence that matters. One failure is worth
+// naming outright: a window reloaded onto newer code than the process running
+// it has no such handler to call, which happens every time Reload is used
+// instead of a relaunch, and reads like a broken feature rather than a stale
+// process.
+//
+// Pure, so it can be tested without an IPC bridge.
+export function explainCallFailure(raw) {
+  const text = String(raw || '');
+  const unwrapped = /Error invoking remote method '[^']*':\s*([\s\S]*)$/.exec(text);
+  const message = (unwrapped ? unwrapped[1] : text).replace(/^Error:\s*/, '').trim();
+
+  if (/No handler registered/i.test(message)) {
+    return 'This window was reloaded onto a newer Keep than the process running it. '
+      + 'Quit Keep and start it again.';
+  }
+  return message || 'The build could not be read.';
+}
+
 // How often to ask. Unauthenticated requests are rationed at sixty an hour, and
 // a ten-minute build polled every fifteen seconds would spend two thirds of
 // that on one release.

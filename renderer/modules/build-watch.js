@@ -15,7 +15,9 @@
 
 import { $ } from './state.js';
 import { icon } from '../icons.js';
-import { describeBuild, isFinished, elapsed, pollInterval, GIVE_UP_MS } from '../build-status.js';
+import {
+  describeBuild, isFinished, elapsed, pollInterval, explainCallFailure, GIVE_UP_MS,
+} from '../build-status.js';
 
 // A watch older than this is not resumed. A build takes minutes; anything still
 // unfinished hours later was abandoned, and reviving it at launch would put a
@@ -77,7 +79,7 @@ async function poll() {
   try {
     result = await window.git.workflowRun(watch.repoPath, watch.forge, { tag: watch.tag, sha: watch.sha });
   } catch (e) {
-    result = { ok: false, message: e.message };
+    result = { ok: false, message: explainCallFailure(e.message) };
   }
   if (!watch) return;
 
