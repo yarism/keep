@@ -1,7 +1,7 @@
 {
   "name": "keep",
   "productName": "Keep",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "A Tower-inspired Git GUI client",
   "main": "main.js",
   "scripts": {
@@ -40,7 +40,10 @@
       "icon": "assets/icon.icns",
       "artifactName": "${productName}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "hardenedRuntime": true,
       "notarize": true
     },
