@@ -1,6 +1,10 @@
 import { $, escapeHtml, state } from './state.js';
 
-export function renderDiff(diffText, containerOrId, stageableFile) {
+// opts.annotate, when given, is called for every rendered line with the row
+// element and where that row sits in the file — which side of the diff, and
+// which line number on that side. It is how the review layer hangs comments off
+// a diff without this module knowing that reviews exist.
+export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
   const container = typeof containerOrId === 'string' ? $(`#${containerOrId}`) : containerOrId;
   container.innerHTML = '';
   if (!diffText || !diffText.trim()) {
@@ -67,7 +71,16 @@ export function renderDiff(diffText, containerOrId, stageableFile) {
     else { oldNum = oldLine++; newNum = newLine++; }
     if (cls) div.classList.add(cls);
     div.innerHTML = `<span class="diff-line-num">${oldNum}</span><span class="diff-line-num">${newNum}</span><span class="diff-line-content">${escapeHtml(line.substring(1))}</span>`;
+    // Where this row is, in the terms a review comment is anchored by: a
+    // deleted line only exists on the left, everything else — added *and*
+    // unchanged — is addressed on the right.
+    const anchor = cls === 'del'
+      ? { side: 'LEFT', line: oldNum }
+      : { side: 'RIGHT', line: newNum };
+    div.dataset.side = anchor.side;
+    div.dataset.line = String(anchor.line);
     container.appendChild(div);
+    if (opts.annotate) opts.annotate(div, anchor, container);
   });
 }
 

@@ -10,7 +10,11 @@ import { icon } from '../icons.js';
 
 // files: what git.js's name-status parse returns.
 // loadDiff: (file) => Promise<string>, called once per file, on first expand.
-export function renderChangeset(container, files, loadDiff) {
+// opts.annotate: (file) => annotate, handed to renderDiff so a caller can
+//   decorate individual rows — how review comments reach the diff.
+// opts.fileNote: (file) => Node | null, put above a file's diff for anything
+//   that belongs to the file rather than to one line.
+export function renderChangeset(container, files, loadDiff, opts = {}) {
   container.innerHTML = '';
 
   const adds = files.filter(f => f.status === 'added').length;
@@ -33,11 +37,13 @@ export function renderChangeset(container, files, loadDiff) {
 
     const header = document.createElement('div');
     header.className = 'changeset-file-header';
+    const badge = opts.fileBadge && opts.fileBadge(f);
     header.innerHTML = `
       <span class="expand-arrow">${icon('chevron', 12)}</span>
       <span class="file-status ${f.status}">${f.statusCode}</span>
       <span class="file-name">${escapeHtml(f.filePath.split('/').pop())}</span>
       <span class="file-path">${escapeHtml(f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : '')}</span>
+      ${badge ? `<span class="changeset-file-badge">${escapeHtml(badge)}</span>` : ''}
     `;
 
     const diffContainer = document.createElement('div');
@@ -53,7 +59,10 @@ export function renderChangeset(container, files, loadDiff) {
       } else {
         if (!loaded) {
           try {
-            renderDiff(await loadDiff(f), diffContainer, null);
+            const note = opts.fileNote && opts.fileNote(f);
+            renderDiff(await loadDiff(f), diffContainer, null,
+              { annotate: opts.annotate && opts.annotate(f) });
+            if (note) diffContainer.prepend(note);
             loaded = true;
           } catch (e) {
             diffContainer.innerHTML = `<div style="padding:8px 16px;color:var(--red)">${escapeHtml(e.message)}</div>`;

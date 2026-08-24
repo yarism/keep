@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('git', {
   rangeCommits: (p, base, head) => ipcRenderer.invoke('git-range-commits', p, base, head),
   fetchPullRequest: (p, remote, number) => ipcRenderer.invoke('git-fetch-pr', p, remote, number),
   pullRequests: (p, forge) => ipcRenderer.invoke('forge-pulls', p, forge),
+  reviewComments: (p, forge, number) => ipcRenderer.invoke('forge-review-comments', p, forge, number),
+  submitReview: (p, forge, review) => ipcRenderer.invoke('forge-submit-review', p, forge, review),
   searchLog: (p, query, field, branch, limit, opts) => ipcRenderer.invoke('git-search-log', p, query, field, branch, limit, opts),
   stage: (p, file) => ipcRenderer.invoke('git-stage', p, file),
   unstage: (p, file, oldPath) => ipcRenderer.invoke('git-unstage', p, file, oldPath),
