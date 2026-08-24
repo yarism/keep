@@ -172,6 +172,7 @@ ipcMain.handle('git-continue-operation', (_, repoPath, kind) => git.continueOper
 ipcMain.handle('git-abort-operation', (_, repoPath, kind) => git.abortOperation(repoPath, kind));
 ipcMain.handle('git-repo-fingerprint', (_, repoPath) => git.repoFingerprint(repoPath));
 ipcMain.handle('git-is-repo', (_, repoPath) => git.isRepo(repoPath));
+ipcMain.handle('git-access-problem', (_, repoPath) => git.accessProblem(repoPath));
 ipcMain.handle('git-tags', (_, repoPath) => git.tags(repoPath));
 ipcMain.handle('git-remotes', (_, repoPath) => git.remotes(repoPath));
 ipcMain.handle('git-stashes', (_, repoPath) => git.stashes(repoPath));

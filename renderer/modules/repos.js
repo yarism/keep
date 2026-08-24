@@ -1,6 +1,7 @@
 import { $, $$, escapeHtml, state, switchView } from './state.js';
 import { icon } from '../icons.js';
 import { updateSyncBadges } from './sync.js';
+import { showAccess } from './access.js';
 
 let _onSelectRepo = null;
 
@@ -14,6 +15,8 @@ export function setupRepoList(onSelectRepo) {
 
 export function showRepoList() {
   state.repoPath = null;
+  // Whatever the last repository could not do is no longer on screen.
+  showAccess(null);
   // Going back to the list is a decision about where to start next time, too
   window.git.saveSettings({ lastRepo: null });
   $('#repo-list-section').hidden = false;

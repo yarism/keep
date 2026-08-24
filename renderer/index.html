@@ -104,6 +104,14 @@
     </span>
   </div>
 
+  <!-- Why the workspace is empty. Persistent rather than a toast: the folder
+       stays unreadable until something changes in System Settings, and a
+       message that fades leaves the same blank window it was explaining. -->
+  <div id="access-banner" class="access-banner" hidden>
+    <span class="icon access-banner-icon" data-icon="alert" data-size="17"></span>
+    <span id="access-banner-text" class="access-banner-text"></span>
+  </div>
+
   <!-- Update banner: full width, above the workspace, because an update is the
        app's business and not any one repository's. -->
   <div id="update-banner" class="update-banner" hidden>

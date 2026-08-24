@@ -8,6 +8,7 @@ import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, ref
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
+import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
 import { describeResult } from './git-output.js';
@@ -62,6 +63,9 @@ async function enterWorkspace(path) {
   switchView('working-copy');
   // So the next launch can come straight back here
   window.git.saveSettings({ lastRepo: path });
+  // Before the refresh, so an unreadable folder explains itself rather than
+  // rendering four empty panes and leaving the reason to guesswork.
+  await checkAccess(path);
   await refresh();
   startPolling();
   startAutoFetch();
@@ -330,6 +334,11 @@ async function restoreLastRepo(settings) {
     let ok = false;
     try { ok = await window.git.isRepo(last); } catch {}
     if (ok) { await enterWorkspace(last); return; }
+    // Fall back to the list, but say why: a repository Keep is not allowed to
+    // read looks exactly like one that was moved or deleted.
+    showRepoList();
+    await checkAccess(last);
+    return;
   }
   showRepoList();
 }
