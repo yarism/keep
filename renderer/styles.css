@@ -77,8 +77,8 @@
   --fs-lg: 14px;    /* body default, text inputs */
   --fs-xl: 15px;    /* pane and modal titles */
   --fs-display: 30px;   /* the empty-state headline */
-  --fs-code: 12px;      /* diff body — Tower-sized, and it stays put */
-  --fs-code-sm: 11px;   /* line numbers, hunk headers, hashes */
+  --fs-code: 11px;      /* diff body */
+  --fs-code-sm: 10px;   /* line numbers, hunk headers, hashes */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
