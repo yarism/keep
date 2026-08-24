@@ -60,10 +60,34 @@ if (process.platform === 'darwin' && !app.isPackaged) {
 // outline around a light theme. Both are pointed at the theme instead — the
 // window's own background at its --bg, and the native appearance at whether the
 // theme is dark — so the frame disappears into the app.
+//
+// The system theme is the exception: there the override is handed back rather
+// than forced, since the point is to follow the OS. That is also the only
+// state in which shouldUseDarkColors reports what the user set in System
+// Settings — while an override is in place it reports the override — so the
+// answer is returned to the renderer, which has no other way to ask.
+let followingSystem = false;
 function applyWindowChrome(win, chrome) {
-  if (!win || win.isDestroyed() || !chrome) return;
-  if (chrome.background) win.setBackgroundColor(chrome.background);
-  nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
+  // No settings yet means a first launch, and the default is to follow the OS.
+  // These two are the Graphite backgrounds; they are only used for the frames
+  // before the renderer writes the real ones to settings.
+  const c = chrome || { system: true, backgrounds: { light: '#ffffff', dark: '#1b1b1f' } };
+  followingSystem = !!c.system;
+  nativeTheme.themeSource = c.system ? 'system' : (c.dark ? 'dark' : 'light');
+  const dark = c.system ? nativeTheme.shouldUseDarkColors : !!c.dark;
+  const background = (c.system && c.backgrounds ? c.backgrounds[dark ? 'dark' : 'light'] : c.background) || '#ffffff';
+  if (win && !win.isDestroyed()) win.setBackgroundColor(background);
+  return { dark, background };
+}
+
+// macOS flips appearance on its own, at sunset or when the user changes it.
+// Only worth passing on while the window is following the OS: with a theme
+// picked, the change is the override going in, which is our own doing.
+function watchSystemAppearance() {
+  nativeTheme.on('updated', () => {
+    if (!followingSystem || !mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('system-theme', { dark: nativeTheme.shouldUseDarkColors });
+  });
 }
 
 // Writing on every resize event would hammer the disk while the mouse moves, so
@@ -85,8 +109,7 @@ function createWindow() {
   // Read from settings rather than defaulted, so a dark theme does not launch
   // through one white frame (and a light one through one dark frame).
   const settings = loadSettings();
-  const chrome = settings.themeChrome || { background: '#ffffff', dark: false };
-  nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
+  const chrome = applyWindowChrome(null, settings.themeChrome);
 
   // Open on whichever screen the pointer is on — on a desk with two monitors
   // that is the one being looked at.
@@ -131,6 +154,7 @@ app.whenReady().then(() => {
     app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')));
   }
   buildMenu({ checkForUpdates });
+  watchSystemAppearance();
   createWindow();
   initUpdater();
 });
@@ -160,7 +184,7 @@ function saveSettings(patch) {
 }
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
-ipcMain.handle('set-window-chrome', (_, chrome) => { applyWindowChrome(mainWindow, chrome); return true; });
+ipcMain.handle('set-window-chrome', (_, chrome) => applyWindowChrome(mainWindow, chrome));
 
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit, opts) => git.log(repoPath, branch, limit, opts));

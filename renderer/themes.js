@@ -247,21 +247,52 @@ export const THEMES = [
   },
 ];
 
-export const DEFAULT_THEME_ID = 'graphite-light';
+// Not a theme but a selection: it follows the operating system's appearance,
+// switching between the two Graphite themes. It has no tokens of its own, so
+// everything downstream of resolveTheme() still deals in real themes only.
+export const SYSTEM_THEME_ID = 'system';
+
+// The pair the system theme switches between.
+export const SYSTEM_PAIR = { light: 'graphite-light', dark: 'graphite-dark' };
+
+export const DEFAULT_THEME_ID = SYSTEM_THEME_ID;
+
+// What the picker lists: the system entry first, then the themes themselves.
+export const SELECTIONS = [
+  { id: SYSTEM_THEME_ID, name: 'System' },
+  ...THEMES.map(t => ({ id: t.id, name: t.name })),
+];
+
+export function isSystemTheme(id) {
+  return id === SYSTEM_THEME_ID;
+}
 
 export function getTheme(id) {
   return THEMES.find(t => t.id === id) || null;
 }
 
-// Falls back to the default rather than leaving the app unstyled when settings
-// name a theme that no longer exists.
-export function resolveTheme(id) {
-  return getTheme(id) || getTheme(DEFAULT_THEME_ID);
+// Turns a selection into the theme to paint. `prefersDark` is what the OS is
+// set to, and only matters for the system selection. Falls back to the default
+// rather than leaving the app unstyled when settings name a theme that no
+// longer exists.
+export function resolveTheme(id, prefersDark = false) {
+  if (isSystemTheme(id)) return getTheme(prefersDark ? SYSTEM_PAIR.dark : SYSTEM_PAIR.light);
+  return getTheme(id) || resolveTheme(DEFAULT_THEME_ID, prefersDark);
 }
 
 // The four colours the picker shows as a preview of a theme.
 export function swatch(theme) {
   return [theme.tokens['bg'], theme.tokens['bg-surface'], theme.tokens['accent'], theme.tokens['green']];
+}
+
+// The same preview, for a selection rather than a theme. The system entry gets
+// half of each side of the pair, so it reads as "either" instead of as a
+// sixth palette.
+export function swatchFor(id) {
+  if (!isSystemTheme(id)) return swatch(resolveTheme(id));
+  const light = getTheme(SYSTEM_PAIR.light).tokens;
+  const dark = getTheme(SYSTEM_PAIR.dark).tokens;
+  return [light['bg'], light['accent'], dark['bg'], dark['accent']];
 }
 
 // Returns the token names a theme is missing or defines but shouldn't.
