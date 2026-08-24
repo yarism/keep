@@ -1,4 +1,4 @@
-import { $, state } from './state.js';
+import { $, state, suspendTitlebarDrag } from './state.js';
 import { showModal, showConfirm } from './modal.js';
 
 async function hasDirtyFiles() {
@@ -40,6 +40,7 @@ export function showContextMenu(e, items) {
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.hidden = false;
+  suspendTitlebarDrag('context-menu', true);
   requestAnimationFrame(() => {
     const rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
@@ -49,6 +50,7 @@ export function showContextMenu(e, items) {
 
 function hideContextMenu() {
   $('#context-menu').hidden = true;
+  suspendTitlebarDrag('context-menu', false);
 }
 
 export function showBranchContextMenu(e, branch, refresh) {

@@ -5,7 +5,7 @@
 // wrong colours on every launch. localStorage is synchronous, so it is written
 // alongside and read first to paint the right theme immediately.
 
-import { $, escapeHtml } from './state.js';
+import { $, escapeHtml, suspendTitlebarDrag } from './state.js';
 import { THEMES, DEFAULT_THEME_ID, resolveTheme, swatch } from '../themes.js';
 import { icon } from '../icons.js';
 
@@ -105,6 +105,7 @@ function openThemeMenu() {
   renderThemeMenu();
   $('#theme-menu').hidden = false;
   $('#btn-theme').classList.add('active');
+  suspendTitlebarDrag('theme-menu', true);
 }
 
 // Anything that closes the menu without a click on a row is a cancelled
@@ -115,6 +116,7 @@ function closeThemeMenu() {
   applyTheme(savedId);
   menu.hidden = true;
   $('#btn-theme').classList.remove('active');
+  suspendTitlebarDrag('theme-menu', false);
 }
 
 export function setupThemePicker() {
@@ -134,6 +136,7 @@ export function setupThemePicker() {
     selectTheme(item.dataset.themeId);
     menu.hidden = true;
     btn.classList.remove('active');
+    suspendTitlebarDrag('theme-menu', false);
   });
 
   menu.addEventListener('mouseover', (e) => {
@@ -152,6 +155,7 @@ export function setupThemePicker() {
       selectTheme(item.dataset.themeId);
       menu.hidden = true;
       btn.classList.remove('active');
+      suspendTitlebarDrag('theme-menu', false);
     }
   });
   menu.addEventListener('focusin', (e) => {
