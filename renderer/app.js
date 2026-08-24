@@ -4,7 +4,7 @@ import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
-import { setupSidebarResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
+import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { headTracking } from './modules/sync.js';
@@ -297,8 +297,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (settings.sidebarWidth) {
     $('#sidebar').style.width = settings.sidebarWidth + 'px';
   }
+  if (settings.wcFilesWidth) {
+    $('#wc-files-panel').style.width = settings.wcFilesWidth + 'px';
+  }
+  if (settings.historyListWidth) {
+    $('#history-list-panel').style.width = settings.historyListWidth + 'px';
+  }
   setupCollapsibleSections(settings);
   setupSidebarResize();
+  setupPanelResize('wc-resize', 'wc-files-panel', 'wcFilesWidth', { minWidth: 220, maxWidth: 600 });
+  setupPanelResize('history-resize', 'history-list-panel', 'historyListWidth', { minWidth: 300, maxWidth: 800 });
   setupRepoList(enterWorkspace);
   setupNavigation();
   setupToolbar();
