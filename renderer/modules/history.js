@@ -1,4 +1,4 @@
-import { $, escapeHtml, state } from './state.js';
+import { $, escapeHtml, state, updateTitlebar } from './state.js';
 import { renderChangeset } from './changeset.js';
 import { showCommitContextMenu } from './context-menu.js';
 import { buildGraph } from '../graph.js';
@@ -17,6 +17,66 @@ const LANE_COLORS = 6;    // --lane-0 … --lane-5 in styles.css
 let _refresh = null;
 let _searchTimeout = null;
 
+// ── Paging ──
+//
+// History is unbounded, so the list asks for a page at a time and fetches the
+// next one as it is scrolled — a fixed cap silently answered "your repo has
+// 200 commits". `_depth` is how far the list currently reaches: a poll tick
+// re-reads that many commits rather than snapping back to the first page under
+// someone who has scrolled past it.
+const PAGE_SIZE = 200;
+let _depth = PAGE_SIZE;
+let _atEnd = false;
+let _loadingMore = false;
+// Which ref the loaded pages belong to. Switching branch or scope asks a
+// different question, and the depth reached in the old answer means nothing.
+let _pagedRef = null;
+
+function refKey(branch, all) {
+  return all ? '*all*' : (branch || '*head*');
+}
+
+// Rows are 52px; start fetching a few screens before the end so the next page
+// is usually there by the time the scroll reaches it.
+const PAGE_TRIGGER_PX = 800;
+
+export function setupHistoryPaging(refresh) {
+  _refresh = refresh;
+  const list = $('#history-list');
+  if (!list) return;
+  list.addEventListener('scroll', () => {
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - PAGE_TRIGGER_PX) loadMore();
+  });
+}
+
+async function loadMore() {
+  if (_loadingMore || _atEnd || !state.repoPath) return;
+  _loadingMore = true;
+  try {
+    const { branch, all } = historyRef();
+    const skip = state.commits.length;
+    const query = $('#search-input').value.trim();
+    const page = state.searching && query
+      ? await window.git.searchLog(state.repoPath, query, $('#search-field').value, branch, PAGE_SIZE, { all, skip })
+      : await window.git.log(state.repoPath, all ? null : branch, PAGE_SIZE, { all, skip });
+    // A short page is the end of history; the same commits coming back again
+    // means the log shifted under us, and appending them would duplicate rows.
+    if (page.length < PAGE_SIZE) _atEnd = true;
+    const seen = new Set(state.commits.map(c => c.hash));
+    const fresh = page.filter(c => !seen.has(c.hash));
+    if (!fresh.length) { _atEnd = true; return; }
+    state.commits = state.commits.concat(fresh);
+    _depth = state.commits.length;
+    renderCommitList(_refresh);
+    updateTitlebar();
+  } catch (e) {
+    console.error('[history] load more failed:', e);
+    _atEnd = true;
+  } finally {
+    _loadingMore = false;
+  }
+}
+
 export function setupHistorySearch(refresh) {
   _refresh = refresh;
   const input = $('#search-input');
@@ -24,7 +84,7 @@ export function setupHistorySearch(refresh) {
   const clearBtn = $('#search-clear');
 
   input.addEventListener('input', () => {
-    clearBtn.style.display = input.value ? 'block' : 'none';
+    clearBtn.style.display = input.value ? 'flex' : 'none';
     clearTimeout(_searchTimeout);
     _searchTimeout = setTimeout(() => doSearch(), 300);
   });
@@ -44,8 +104,12 @@ async function doSearch() {
   const field = $('#search-field').value;
   const { branch, all } = historyRef();
   state.searching = true;
+  _depth = PAGE_SIZE;
+  _atEnd = false;
+  _pagedRef = null;
   try {
-    state.commits = await window.git.searchLog(state.repoPath, query, field, branch, 200, { all });
+    state.commits = await window.git.searchLog(state.repoPath, query, field, branch, _depth, { all });
+    _atEnd = state.commits.length < _depth;
     console.log('[search] found', state.commits.length, 'commits for', field, ':', query);
     // The rows still mark what has not been pushed, so the set has to cover
     // whatever the search may have turned up.
@@ -128,19 +192,25 @@ export async function refreshHistory(refresh, branchOverride) {
   }
   state.searching = false;
   const all = state.historyScope === 'all';
+  // A new ref starts at the first page again; the same one keeps however deep
+  // the list has already been scrolled.
+  const key = refKey(branchName, all);
+  if (key !== _pagedRef) { _depth = PAGE_SIZE; _atEnd = false; }
+  _pagedRef = key;
   try {
     // Both in one round trip: the commits, and which of them no remote has.
     const [commits, unpushed] = await Promise.all([
-      window.git.log(state.repoPath, all ? null : branchName, 200, { all }),
+      window.git.log(state.repoPath, all ? null : branchName, _depth, { all }),
       window.git.unpushed(state.repoPath, all ? null : branchName, { all }).catch(() => []),
     ]);
     state.commits = commits;
+    _atEnd = commits.length < _depth;
     state.unpushed = new Set(unpushed);
     const displayLabel = currentBranch && currentBranch.detached && branchName === 'HEAD'
       ? `HEAD (${currentBranch.name})`
       : (branchName || 'History');
     $('#history-branch-label').textContent = all ? 'All branches' : displayLabel;
-  } catch { state.commits = []; state.unpushed = new Set(); }
+  } catch { state.commits = []; state.unpushed = new Set(); _atEnd = true; }
   // Across all branches there is no one branch the list is "about", so the
   // header falls back to reporting where HEAD stands.
   renderTracking(all ? null : branchName);
@@ -161,6 +231,9 @@ function renderTracking(branchName) {
 
 function renderCommitList(refresh) {
   const list = $('#history-list');
+  // Every render rebuilds the rows, which would otherwise drop a scrolled list
+  // back to the top — including the render that appends a freshly loaded page.
+  const scrollTop = list.scrollTop;
   list.innerHTML = '';
   // Search results are matches scattered through history, not a contiguous
   // slice of it, so lanes drawn between two rows would connect commits that are
@@ -198,7 +271,9 @@ function renderCommitList(refresh) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         const next = items[idx + 1];
-        if (next) { next.focus(); next.click(); }
+        // Arrowing off the bottom of the loaded pages asks for the next one,
+        // the same as scrolling there would.
+        if (next) { next.focus(); next.click(); } else loadMore();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const prev = items[idx - 1];
@@ -211,9 +286,12 @@ function renderCommitList(refresh) {
     // focus out of whatever the user is actually using — a poll tick or the
     // auto-selection below must not steal the caret from the commit box.
     if (state.selectedCommit === c.hash && keyboardIsIdleIn(list)) {
-      requestAnimationFrame(() => item.focus());
+      // preventScroll: holding on to focus should not also drag the viewport
+      // back to the selected row while someone is scrolling further down.
+      requestAnimationFrame(() => item.focus({ preventScroll: true }));
     }
   });
+  list.scrollTop = scrollTop;
   ensureSelection(refresh);
 }
 
