@@ -15,6 +15,7 @@
 import { $, escapeHtml, state } from './state.js';
 import { busyToast } from './toast.js';
 import { icon } from '../icons.js';
+import { mountMarkdown } from './markdown.js';
 
 let _forge = null;
 let _pr = null;
@@ -104,7 +105,11 @@ export function fileNote(file) {
   // Whole threads, not just the comment that started them: an answer to a
   // question is the half worth reading, and it is no less lost than the
   // question when the line it hung on goes away.
-  stale.forEach(t => box.appendChild(threadEl(t, { outdated: true })));
+  stale.forEach(t => {
+    const hunk = hunkEl(t.diffHunk);
+    if (hunk) box.appendChild(hunk);
+    box.appendChild(threadEl(t, { outdated: true }));
+  });
   return box;
 }
 
@@ -147,6 +152,22 @@ function slotFor(row) {
   return slot;
 }
 
+function avatarEl(url, name) {
+  if (!url) {
+    const initial = document.createElement('span');
+    initial.className = 'review-avatar review-avatar-fallback';
+    initial.textContent = (name || '?').slice(0, 1).toUpperCase();
+    return initial;
+  }
+  const img = document.createElement('img');
+  img.className = 'review-avatar';
+  img.alt = '';
+  // Asked for at the size it is drawn: GitHub serves whatever `s` says, and the
+  // full-size original is a hundred times the bytes for the same 20 pixels.
+  img.src = `${url}${url.includes('?') ? '&' : '?'}s=48`;
+  return img;
+}
+
 function commentEl(c, { outdated = false } = {}) {
   const el = document.createElement('div');
   el.className = 'review-comment' + (outdated ? ' outdated' : '');
@@ -158,10 +179,31 @@ function commentEl(c, { outdated = false } = {}) {
     </div>
     <div class="review-comment-body"></div>
   `;
-  // Comment bodies are other people's prose and may contain anything at all,
-  // so they are set as text rather than built into the markup above.
-  el.querySelector('.review-comment-body').textContent = c.body;
+  el.prepend(avatarEl(c.avatar, c.author));
+  // Comment bodies are other people's prose, written in a Markdown box. They
+  // are rendered through the escape-first renderer in markdown.js — never set
+  // as markup, and never trusted to be text-only either.
+  mountMarkdown(el.querySelector('.review-comment-body'), c.body, (url) => window.git.openExternal(url));
   return el;
+}
+
+// The few lines of diff a comment was written against. Only worth drawing when
+// the comment has floated free of the diff — anchored ones already sit on the
+// code they are about.
+function hunkEl(diffHunk) {
+  const lines = String(diffHunk || '').split('\n').filter(Boolean);
+  if (!lines.length) return null;
+  const box = document.createElement('div');
+  box.className = 'review-hunk';
+  // The tail: the last lines of a hunk are the ones the comment sits on.
+  lines.slice(-5).forEach(line => {
+    const row = document.createElement('div');
+    const kind = line[0] === '+' ? ' add' : line[0] === '-' ? ' del' : line.startsWith('@@') ? ' meta' : '';
+    row.className = 'review-hunk-line' + kind;
+    row.textContent = line;
+    box.appendChild(row);
+  });
+  return box;
 }
 
 function threadEl(thread, { outdated = false } = {}) {
@@ -201,6 +243,7 @@ function pendingEl(draft, row, file, anchor) {
       <button type="button" data-delete>Delete</button>
     </div>
   `;
+  el.prepend(avatarEl(null, 'You'));
   el.querySelector('.review-comment-body').textContent = draft.body;
   el.querySelector('[data-edit]').addEventListener('click', () => {
     el.remove();
@@ -346,11 +389,20 @@ export async function submitReview({ onSubmitted } = {}) {
   if (onSubmitted) onSubmitted();
 }
 
-// The bar above the changeset: what is drafted, and the way to send it.
-export function reviewBarEl() {
+// The one band above the file list. It carries what the changeset is, what is
+// drafted against it, and the way to send that — three things that were three
+// separate full-width strips before, stacked between the title and the first
+// line of code.
+export function reviewBarEl(summary) {
   const el = document.createElement('div');
   el.className = 'review-bar';
   const count = _pending.length;
+
+  const files = document.createElement('span');
+  files.className = 'review-bar-files';
+  files.textContent = summary || '';
+  el.appendChild(files);
+
   const label = document.createElement('span');
   label.className = 'review-bar-count';
   label.textContent = count
