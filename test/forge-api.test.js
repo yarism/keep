@@ -485,17 +485,32 @@ test('reactions: a comment with none, or with no summary at all, has no chips', 
   assert.deepStrictEqual(result.threads[0].reactions, []);
 });
 
-test('reactToComment: adds one, and refuses without a token', async () => {
+const COMMENT_TARGET = { type: 'comment', id: 900 };
+const ISSUE_TARGET = { type: 'issue', number: 12 };
+
+test('react: adds one to a review comment, and refuses without a token', async () => {
   const fetchImpl = fakeFetch(reply(201, { id: 7, content: '+1' }));
 
-  const added = await api.reactToComment('/repo', GH, { commentId: 900, content: '+1', token: 'tok', fetchImpl });
+  const added = await api.react('/repo', GH, { target: COMMENT_TARGET, content: '+1', token: 'tok', fetchImpl });
   assert.strictEqual(added.ok, true);
   assert.strictEqual(fetchImpl.calls[0].init.method, 'POST');
   assert.deepStrictEqual(JSON.parse(fetchImpl.calls[0].init.body), { content: '+1' });
   assert.match(fetchImpl.calls[0].url, /\/pulls\/comments\/900\/reactions$/);
 
-  const refused = await api.reactToComment('/repo', GH, { commentId: 900, content: '+1', token: null, fetchImpl });
+  const refused = await api.react('/repo', GH, { target: COMMENT_TARGET, content: '+1', token: null, fetchImpl });
   assert.strictEqual(refused.reason, 'no-token');
+});
+
+// The pull request's description is the body of an issue as far as the API is
+// concerned, and neither the pulls list nor a single pull carries a reaction
+// summary — only the issue view of the same number does.
+test('react: the description reacts through the issue of the same number', async () => {
+  const fetchImpl = fakeFetch(reply(201, { id: 9, content: 'heart' }));
+
+  await api.react('/repo', GH, { target: ISSUE_TARGET, content: 'heart', token: 'tok', fetchImpl });
+
+  assert.match(fetchImpl.calls[0].url, /\/repos\/yarism\/keep\/issues\/12\/reactions$/);
+  assert.doesNotMatch(fetchImpl.calls[0].url, /pulls/);
 });
 
 // A DELETE answers 204 with an empty body, which is not JSON — taking that as a
@@ -503,22 +518,28 @@ test('reactToComment: adds one, and refuses without a token', async () => {
 test('reactToComment: removing one treats an empty answer as success', async () => {
   const noContent = { status: 204, ok: true, headers: { get: () => null }, json: async () => { throw new Error('empty'); } };
 
-  const result = await api.reactToComment('/repo', GH, {
-    commentId: 900, reactionId: 7, remove: true, token: 'tok', fetchImpl: fakeFetch(noContent),
+  const result = await api.react('/repo', GH, {
+    target: COMMENT_TARGET, reactionId: 7, remove: true, token: 'tok', fetchImpl: fakeFetch(noContent),
   });
 
   assert.strictEqual(result.ok, true);
 });
 
-test('listCommentReactions: reports who left each one, so yours can be taken back', async () => {
-  const body = [{ id: 7, content: '+1', user: { login: 'yarism' } }, { id: 8, content: 'eyes', user: { login: 'octocat' } }];
+test('listReactions: reports who left each one, so yours can be taken back', async () => {
+  const body = [
+    { id: 7, content: '+1', user: { login: 'yarism' } },
+    { id: 8, content: 'eyes', user: { login: 'octocat' } },
+    { id: 9, content: '+1', user: { login: 'octocat' } },
+  ];
 
-  const result = await api.listCommentReactions('/repo', GH, { commentId: 900, token: 'tok', fetchImpl: fakeFetch(body && reply(200, body)) });
+  const result = await api.listReactions('/repo', GH, { target: COMMENT_TARGET, token: 'tok', fetchImpl: fakeFetch(reply(200, body)) });
 
-  assert.deepStrictEqual(result.reactions, [
-    { id: 7, content: '+1', user: 'yarism' },
-    { id: 8, content: 'eyes', user: 'octocat' },
+  assert.deepStrictEqual(result.reactions.map(r => [r.id, r.content, r.user]), [
+    [7, '+1', 'yarism'], [8, 'eyes', 'octocat'], [9, '+1', 'octocat'],
   ]);
+  // Counts derived from the same answer, which is how the description gets its
+  // chips without a summary to draw them from.
+  assert.deepStrictEqual(result.counts.map(c => [c.key, c.count]), [['+1', 2], ['eyes', 1]]);
 });
 
 // ── resolved conversations ──

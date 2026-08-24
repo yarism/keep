@@ -43,7 +43,7 @@ contextBridge.exposeInMainWorld('git', {
   reviewComments: (p, forge, number) => ipcRenderer.invoke('forge-review-comments', p, forge, number),
   submitReview: (p, forge, review) => ipcRenderer.invoke('forge-submit-review', p, forge, review),
   react: (p, forge, opts) => ipcRenderer.invoke('forge-react', p, forge, opts),
-  commentReactions: (p, forge, id) => ipcRenderer.invoke('forge-comment-reactions', p, forge, id),
+  reactions: (p, forge, target) => ipcRenderer.invoke('forge-reactions', p, forge, target),
   viewerLogin: (p, forge) => ipcRenderer.invoke('forge-viewer', p, forge),
   searchLog: (p, query, field, branch, limit, opts) => ipcRenderer.invoke('git-search-log', p, query, field, branch, limit, opts),
   stage: (p, file) => ipcRenderer.invoke('git-stage', p, file),

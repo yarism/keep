@@ -163,7 +163,7 @@ function commentEl(c, { outdated = false } = {}) {
     className: outdated ? 'outdated' : '',
     // Reacting needs the comment's own id, so only real comments get a row —
     // a draft nobody has posted has nothing to react to.
-    footer: c.id ? reactionsEl(c, _forge, () => loadThreads()) : null,
+    footer: c.id ? reactionsEl({ type: 'comment', id: c.id }, _forge, () => loadThreads(), c.reactions) : null,
   });
 }
 

@@ -506,12 +506,25 @@ exports.listThreadState = async (repoPath, forge, opts = {}) => {
 
 // ── Reacting ──
 
-exports.reactToComment = async (repoPath, forge, opts = {}) => {
+// A reaction hangs off one of two things, and GitHub keeps them in different
+// places: a review comment has its own endpoint, while the pull request's
+// description is the body of an issue as far as the API is concerned. Neither
+// the pulls list nor a single pull carries a reaction summary at all — only the
+// issue view of the same number does — which is why the description's counts
+// are read rather than arriving with the pull request.
+function reactionsUrl(forge, target) {
+  const base = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}`;
+  return target && target.type === 'issue'
+    ? `${base}/issues/${target.number}/reactions`
+    : `${base}/pulls/comments/${target.id}/reactions`;
+}
+
+exports.react = async (repoPath, forge, opts = {}) => {
   if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
   const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
   if (!token) return fail('no-token', 'Reacting writes to the pull request, so it needs a token.');
 
-  const base = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/pulls/comments/${opts.commentId}/reactions`;
+  const base = reactionsUrl(forge, opts.target);
   if (opts.remove) {
     const gone = await request(`${base}/${opts.reactionId}`, {
       token, host: forge.host, method: 'DELETE', fetchImpl: opts.fetchImpl,
@@ -527,24 +540,25 @@ exports.reactToComment = async (repoPath, forge, opts = {}) => {
   });
 };
 
-// Who reacted to one comment, asked for only when somebody opens the picker —
-// the summary on the comment carries the counts but not the names, and without
-// the names there is no way to know which of them is yours to take back.
-exports.listCommentReactions = async (repoPath, forge, opts = {}) => {
+// Who reacted, and with what. The counts can be derived from this, which is how
+// the description gets its chips: unlike a review comment it arrives with no
+// summary to draw them from.
+exports.listReactions = async (repoPath, forge, opts = {}) => {
   if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
   const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
-  const url = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/pulls/comments/${opts.commentId}/reactions?per_page=${PER_PAGE}`;
+  const url = `${reactionsUrl(forge, opts.target)}?per_page=${PER_PAGE}`;
   const result = await request(url, { token, host: forge.host, fetchImpl: opts.fetchImpl });
   if (!result.ok) return result;
   if (!Array.isArray(result.body)) return fail('http', 'Unexpected answer.');
-  return {
-    ok: true,
-    reactions: result.body.map(r => ({
-      id: r.id,
-      content: r.content,
-      user: (r.user && r.user.login) || '',
-    })),
-  };
+  const reactions = result.body.map(r => ({
+    id: r.id,
+    content: r.content,
+    user: (r.user && r.user.login) || '',
+  }));
+  const counts = REACTIONS
+    .map(r => ({ key: r.key, emoji: r.emoji, count: reactions.filter(x => x.content === r.key).length }))
+    .filter(r => r.count > 0);
+  return { ok: true, reactions, counts };
 };
 
 // The signed-in account, cached per host: needed to tell your own reaction from
