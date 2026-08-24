@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeTheme, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const git = require('./git');
+const { windowBounds } = require('./window-bounds');
 
 let mainWindow;
 const reposFile = path.join(app.getPath('userData'), 'repositories.json');
@@ -58,14 +59,41 @@ function applyWindowChrome(win, chrome) {
   nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
 }
 
+// Writing on every resize event would hammer the disk while the mouse moves, so
+// let the drag settle first. The close handler writes straight away, since there
+// may be no later tick to settle into.
+let rememberTimer = null;
+function rememberWindow(win) {
+  if (!win || win.isDestroyed()) return;
+  // A maximized window reports the whole screen; getNormalBounds is the shape it
+  // returns to, which is the one worth keeping.
+  saveSettings({ window: { ...win.getNormalBounds(), maximized: win.isMaximized() } });
+}
+function scheduleRemember(win) {
+  clearTimeout(rememberTimer);
+  rememberTimer = setTimeout(() => rememberWindow(win), 400);
+}
+
 function createWindow() {
   // Read from settings rather than defaulted, so a dark theme does not launch
   // through one white frame (and a light one through one dark frame).
-  const chrome = loadSettings().themeChrome || { background: '#ffffff', dark: false };
+  const settings = loadSettings();
+  const chrome = settings.themeChrome || { background: '#ffffff', dark: false };
   nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
+
+  // Open on whichever screen the pointer is on — on a desk with two monitors
+  // that is the one being looked at.
+  const active = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const bounds = windowBounds(
+    settings.window,
+    active.workArea,
+    screen.getAllDisplays().map((d) => d.workArea),
+  );
+
   mainWindow = new BrowserWindow({
-    width: 1540,
-    height: 945,
+    width: bounds.width,
+    height: bounds.height,
+    ...(Number.isFinite(bounds.x) ? { x: bounds.x, y: bounds.y } : { center: true }),
     minWidth: 900,
     minHeight: 600,
     backgroundColor: chrome.background || '#ffffff',
@@ -77,6 +105,14 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+  if (bounds.maximized) mainWindow.maximize();
+
+  mainWindow.on('resize', () => scheduleRemember(mainWindow));
+  mainWindow.on('move', () => scheduleRemember(mainWindow));
+  mainWindow.on('maximize', () => scheduleRemember(mainWindow));
+  mainWindow.on('unmaximize', () => scheduleRemember(mainWindow));
+  mainWindow.on('close', () => { clearTimeout(rememberTimer); rememberWindow(mainWindow); });
+
   mainWindow.webContents.session.clearCache().then(() => {
     mainWindow.loadFile('renderer/index.html');
   });

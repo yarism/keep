@@ -59,6 +59,7 @@
       "main.js",
       "preload.js",
       "git.js",
+      "window-bounds.js",
       "renderer/**/*",
       "assets/icon.png",
       "package.json"
