@@ -59,7 +59,7 @@ test('themes: the system selection follows the OS, and the rest ignore it', () =
   assert.strictEqual(resolveTheme(SYSTEM_THEME_ID, false).id, SYSTEM_PAIR.light);
   assert.strictEqual(resolveTheme(SYSTEM_THEME_ID, true).id, SYSTEM_PAIR.dark);
   assert.strictEqual(resolveTheme(SYSTEM_PAIR.light, true).id, SYSTEM_PAIR.light);
-  assert.strictEqual(resolveTheme('midnight', false).id, 'midnight');
+  assert.strictEqual(resolveTheme('ember', false).id, 'ember');
 });
 
 test('themes: the pair the system selection switches between is a light one and a dark one', () => {
