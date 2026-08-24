@@ -1,5 +1,9 @@
 import { $, state, suspendTitlebarDrag } from './state.js';
 import { showModal, showConfirm } from './modal.js';
+import {
+  forgeForBranch, remoteBranchName, forgeLabel, pullRequestNoun, pullRequestsNoun,
+  newPullRequestUrl, branchUrl, commitUrl, pullRequestsUrl,
+} from './forge.js';
 
 async function hasDirtyFiles() {
   try {
@@ -53,12 +57,55 @@ function hideContextMenu() {
   suspendTitlebarDrag('context-menu', false);
 }
 
+// ── Links out to the hosting forge ──
+//
+// Keep holds no account and asks the forge nothing; these items only build a
+// URL and hand it to the browser. They are absent, rather than disabled, when
+// the repository has no remote Keep recognises — a menu that grows an inert
+// "GitHub" row on a repo that lives on a company GitLab is worse than one that
+// says nothing.
+function openExternal(url) {
+  if (url) window.git.openExternal(url);
+}
+
+function forgeBranchItems(branch) {
+  if (branch.detached) return [];
+  const f = forgeForBranch(state.remotes, branch.upstream);
+  if (!f) return [];
+  const where = forgeLabel(f);
+  // A pull request is a comparison between two branches the server can see, so
+  // an unpublished branch has nothing to open one from, and its /tree/ page
+  // does not exist yet. Push comes first; the item stays visible to say so.
+  const published = Boolean(branch.upstream);
+  const ref = remoteBranchName(state.remotes, branch.upstream, branch.name);
+  return [
+    { separator: true },
+    { label: `Create ${pullRequestNoun(f)} on ${where}...`, disabled: !published, action: () => openExternal(newPullRequestUrl(f, ref)) },
+    { label: `View ${pullRequestsNoun(f)} on ${where}`, action: () => openExternal(pullRequestsUrl(f)) },
+    { label: `View Branch on ${where}`, disabled: !published, action: () => openExternal(branchUrl(f, ref)) },
+  ];
+}
+
+function forgeCommitItems(commit) {
+  const f = forgeForBranch(state.remotes, null);
+  if (!f) return [];
+  // History already knows which commits no remote has — the same set that draws
+  // them as hollow nodes — so an unpushed commit's page is known to be a 404
+  // before the browser is opened.
+  const pushed = !state.unpushed.has(commit.hash);
+  return [
+    { separator: true },
+    { label: `View Commit on ${forgeLabel(f)}`, disabled: !pushed, action: () => openExternal(commitUrl(f, commit.hash)) },
+  ];
+}
+
 export function showBranchContextMenu(e, branch, refresh) {
   showContextMenu(e, [
     { label: `Check Out "${branch.name}"`, disabled: branch.current, action: () => confirmCheckout(branch.name, refresh) },
     { separator: true },
     { label: 'Pull...', action: async () => { try { await window.git.pull(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Push...', action: async () => { try { await window.git.push(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
+    ...forgeBranchItems(branch),
     { separator: true },
     { label: 'Merge With Revision...', disabled: branch.current, action: async () => { try { await window.git.merge(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Rebase On Revision...', disabled: branch.current, action: async () => { try { await window.git.rebase(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } }},
@@ -117,5 +164,6 @@ export function showCommitContextMenu(e, commit, refresh) {
     { separator: true },
     { label: `Create New Branch from "${h}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from ${h})`); if (n) { try { await window.git.createBranch(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
     { label: `Create New Tag from "${h}"...`, action: async () => { const n = await showModal('Create Tag', `Tag name (from ${h})`); if (n) { try { await window.git.createTag(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
+    ...forgeCommitItems(commit),
   ]);
 }

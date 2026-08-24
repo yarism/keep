@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeTheme, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const git = require('./git');
@@ -185,6 +185,17 @@ function saveSettings(patch) {
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
 ipcMain.handle('set-window-chrome', (_, chrome) => applyWindowChrome(mainWindow, chrome));
+
+// The renderer builds forge URLs (renderer/modules/forge.js) but must not be
+// trusted to hand the OS an arbitrary string — a file: or a custom scheme would
+// launch whatever is registered for it. Only ordinary web pages get through.
+ipcMain.handle('open-external', async (_, url) => {
+  let parsed;
+  try { parsed = new URL(String(url)); } catch { return false; }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+  await shell.openExternal(parsed.href);
+  return true;
+});
 
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit, opts) => git.log(repoPath, branch, limit, opts));

@@ -133,6 +133,7 @@ export async function refreshTags(refresh) {
 export async function refreshRemotes(refresh) {
   try {
     const remotes = await window.git.remotes(state.repoPath);
+    state.remotes = remotes;
     const remoteBranches = state.branchList.filter(b => b.isRemote);
     const list = $('#remotes-list');
     list.innerHTML = '';

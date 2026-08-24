@@ -49,6 +49,8 @@ async function enterWorkspace(path) {
   state.selectedFile = null;
   state.selectedCommit = null;
   state.unpushed = new Set();
+  // Stale remotes would put the previous repo's forge in this one's menus.
+  state.remotes = [];
   state.searching = false;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
