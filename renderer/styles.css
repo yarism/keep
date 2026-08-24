@@ -304,6 +304,68 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 .breadcrumb-current .icon { color: var(--accent); }
 
+
+/* Update banner ----------------------------------------------------------- */
+
+/* A strip in the accent's wash rather than a modal: an available update is
+ * worth noticing and never worth interrupting a commit for. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px 0 14px;
+  height: 34px;
+  flex-shrink: 0;
+  font-size: var(--fs-base);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.update-banner-icon { color: var(--accent); }
+.update-banner-text { color: var(--text); white-space: nowrap; }
+
+.update-progress {
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+/* The first progress event often arrives well past zero, so the bar eases into
+   place instead of jumping there. */
+.update-progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+.update-banner-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.update-restart {
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.update-restart:hover { background: var(--accent-hover); }
+.update-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.update-dismiss:hover { background: var(--bg-hover); color: var(--text); }
+
 #app { display: flex; flex: 1; overflow: hidden; }
 
 /* Sidebar ----------------------------------------------------------------- */
@@ -1414,7 +1476,8 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-size: var(--fs-code-sm);
   overflow-wrap: anywhere;
 }
-.toast-busy .toast-text { font-family: var(--font-ui); font-size: var(--fs-md); }
+.toast-busy .toast-text,
+.toast-prose .toast-text { font-family: var(--font-ui); font-size: var(--fs-md); }
 
 .spinner {
   display: block;

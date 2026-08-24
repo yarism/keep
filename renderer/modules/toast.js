@@ -34,10 +34,14 @@ function dismiss(el) {
   setTimeout(() => el.remove(), 400);
 }
 
-export function toast(message, { type = 'success' } = {}) {
+// `prose` is for messages Keep wrote itself rather than relayed from git — the
+// monospace default is there to keep git's own formatting, and a sentence in it
+// reads as a leak of something internal.
+export function toast(message, { type = 'success', prose = false } = {}) {
   const host = container();
   if (!host) return { dismiss() {} };
   const el = build(type, message);
+  if (prose) el.classList.add('toast-prose');
   host.appendChild(el);
   requestAnimationFrame(() => el.classList.add('shown'));
   const life = type === 'error' ? ERROR_MS : SUCCESS_MS;
