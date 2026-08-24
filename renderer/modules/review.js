@@ -101,7 +101,10 @@ export function fileNote(file) {
   title.className = 'review-outdated-title';
   title.textContent = `${stale.length} comment${stale.length !== 1 ? 's' : ''} on lines that have since changed`;
   box.appendChild(title);
-  stale.forEach(c => box.appendChild(commentEl(c, { outdated: true })));
+  // Whole threads, not just the comment that started them: an answer to a
+  // question is the half worth reading, and it is no less lost than the
+  // question when the line it hung on goes away.
+  stale.forEach(t => box.appendChild(threadEl(t, { outdated: true })));
   return box;
 }
 
@@ -161,12 +164,12 @@ function commentEl(c, { outdated = false } = {}) {
   return el;
 }
 
-function threadEl(thread) {
+function threadEl(thread, { outdated = false } = {}) {
   const el = document.createElement('div');
   el.className = 'review-thread';
-  el.appendChild(commentEl(thread));
-  thread.replies.forEach(r => {
-    const reply = commentEl(r);
+  el.appendChild(commentEl(thread, { outdated }));
+  (thread.replies || []).forEach(r => {
+    const reply = commentEl(r, { outdated });
     reply.classList.add('review-reply');
     el.appendChild(reply);
   });
