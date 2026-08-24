@@ -943,3 +943,118 @@ test('git runs with optional locks off, so a terminal can commit alongside Keep'
 
   assert.strictEqual(handed, '0', 'GIT_OPTIONAL_LOCKS reaches git');
 });
+
+// ── comparing two refs (what a pull request shows) ──
+//
+// A branch that has fallen behind is the whole reason these use the three-dot
+// form. The repo below is the shape that catches it: `base` gained a file after
+// `topic` left, so a two-dot diff would report that file as deleted by the
+// branch — a review of changes the branch never made.
+function makeDivergedRepo() {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'topic');
+  h.write(repo, 'feature.txt', 'from the branch\n');
+  h.commitAll(repo, 'add feature');
+  h.git(repo, 'checkout', '-q', 'main');
+  h.write(repo, 'unrelated.txt', 'landed on main afterwards\n');
+  h.commitAll(repo, 'unrelated work on main');
+  return repo;
+}
+
+test('rangeFiles: reports only what the branch changed, not what base gained meanwhile', async () => {
+  const repo = makeDivergedRepo();
+
+  const files = await git.rangeFiles(repo, 'main', 'topic');
+
+  assert.deepStrictEqual(files, [
+    { filePath: 'feature.txt', oldPath: null, status: 'added', statusCode: 'A' },
+  ]);
+});
+
+test('rangeFiles: a rename arrives as one record with both paths', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'long-enough-to-detect.txt', 'x\n'.repeat(40));
+  h.commitAll(repo, 'add file');
+  h.git(repo, 'checkout', '-q', '-b', 'topic');
+  h.git(repo, 'mv', 'long-enough-to-detect.txt', 'renamed.txt');
+  h.commitAll(repo, 'rename it');
+
+  const files = await git.rangeFiles(repo, 'main', 'topic');
+
+  assert.strictEqual(files.length, 1);
+  assert.partialDeepStrictEqual(files[0], {
+    filePath: 'renamed.txt', oldPath: 'long-enough-to-detect.txt', status: 'renamed',
+  });
+});
+
+test('rangeFiles: a branch with nothing on it yields no files rather than failing', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'topic');
+
+  assert.deepStrictEqual(await git.rangeFiles(repo, 'main', 'topic'), []);
+});
+
+test('rangeFileDiff: shows the branch\'s own change to one file', async () => {
+  const repo = makeDivergedRepo();
+
+  const diff = await git.rangeFileDiff(repo, 'main', 'topic', 'feature.txt');
+
+  assert.match(diff, /\+from the branch/);
+  assert.doesNotMatch(diff, /unrelated/, 'base-side work is not part of the branch\'s diff');
+});
+
+test('rangeCommits: lists the commits the branch adds, newest first', async () => {
+  const repo = makeDivergedRepo();
+
+  const commits = await git.rangeCommits(repo, 'main', 'topic');
+
+  assert.deepStrictEqual(commits.map(c => c.subject), ['add feature']);
+});
+
+test('rangeCommits: base-side commits are never listed as the branch\'s own', async () => {
+  const repo = makeDivergedRepo();
+  h.git(repo, 'checkout', '-q', 'topic');
+  h.write(repo, 'feature.txt', 'revised\n');
+  h.commitAll(repo, 'revise feature');
+
+  const commits = await git.rangeCommits(repo, 'main', 'topic');
+
+  assert.deepStrictEqual(commits.map(c => c.subject), ['revise feature', 'add feature']);
+});
+
+// The number reaches a refspec, so it is validated rather than trusted — the
+// API is the source today, but a refspec is not the place to find out that
+// changed.
+test('fetchPullRequest: refuses a number that is not one', async () => {
+  const repo = h.makeRepo();
+
+  for (const bad of ['12; rm -rf /', '../../evil', '', 'HEAD', '-1']) {
+    await assert.rejects(
+      () => git.fetchPullRequest(repo, 'origin', bad),
+      /Not a pull request number/,
+      `rejected: ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test('fetchPullRequest: fetches GitHub\'s pull ref into refs/keep, touching nothing else', async () => {
+  // A bare repo standing in for origin, with a "pull request" published the way
+  // GitHub publishes one: a read-only ref under refs/pull/N/head.
+  const origin = h.makeRepo();
+  h.git(origin, 'checkout', '-q', '-b', 'topic');
+  h.write(origin, 'from-the-pr.txt', 'hello\n');
+  const prHead = h.commitAll(origin, 'work in the pull request');
+  h.git(origin, 'update-ref', 'refs/pull/7/head', prHead);
+  h.git(origin, 'checkout', '-q', 'main');
+
+  const local = h.makeRepo();
+  h.git(local, 'remote', 'add', 'origin', origin);
+
+  const ref = await git.fetchPullRequest(local, 'origin', 7);
+
+  assert.strictEqual(ref, 'refs/keep/pr/7');
+  assert.strictEqual(h.git(local, 'rev-parse', ref).trim(), prHead);
+  // Not a branch, not checked out: the sidebar's lists are unaffected.
+  assert.strictEqual(h.git(local, 'branch', '--format=%(refname:short)').trim(), 'main');
+  assert.strictEqual(h.git(local, 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'main');
+});

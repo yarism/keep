@@ -74,6 +74,7 @@
       "main.js",
       "preload.js",
       "git.js",
+      "forge-api.js",
       "menu.js",
       "updater.js",
       "window-bounds.js",

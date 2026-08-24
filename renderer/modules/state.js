@@ -21,6 +21,11 @@ export const state = {
   searching: false,
   branchList: [],
   tagList: [],
+  // Open pull requests, once the Pull Requests view has been opened at least
+  // once — unlike the rest of the sidebar this is not kept fresh by the poll,
+  // because every refresh is a network round trip against a rate limit.
+  pullRequests: [],
+  selectedPr: null,
   // Name and URL of every configured remote. Kept here because the context
   // menus are built synchronously and cannot go and ask git first.
   remotes: [],
@@ -47,6 +52,7 @@ export function suspendTitlebarDrag(owner, on) {
 const viewLabels = {
   'working-copy': 'Working Copy',
   'history': 'History',
+  'pull-requests': 'Pull Requests',
   'stashes': 'Stashes',
   'settings': 'Settings',
 };

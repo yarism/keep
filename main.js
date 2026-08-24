@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, nativeTheme, screen, shell } = requ
 const path = require('path');
 const fs = require('fs');
 const git = require('./git');
+const forgeApi = require('./forge-api');
 const { windowBounds } = require('./window-bounds');
 const { initUpdater, checkForUpdates } = require('./updater');
 const { buildMenu } = require('./menu');
@@ -231,6 +232,13 @@ ipcMain.handle('git-commit-detail', (_, repoPath, hash) => git.commitDetail(repo
 ipcMain.handle('git-commit-diff', (_, repoPath, hash) => git.commitDiff(repoPath, hash));
 ipcMain.handle('git-commit-files', (_, repoPath, hash) => git.commitFiles(repoPath, hash));
 ipcMain.handle('git-commit-file-diff', (_, repoPath, hash, filePath) => git.commitFileDiff(repoPath, hash, filePath));
+ipcMain.handle('git-range-files', (_, repoPath, base, head) => git.rangeFiles(repoPath, base, head));
+ipcMain.handle('git-range-file-diff', (_, repoPath, base, head, filePath) => git.rangeFileDiff(repoPath, base, head, filePath));
+ipcMain.handle('git-range-commits', (_, repoPath, base, head) => git.rangeCommits(repoPath, base, head));
+ipcMain.handle('git-fetch-pr', (_, repoPath, remote, number) => git.fetchPullRequest(repoPath, remote, number));
+// The token stays in the main process: the renderer sends the repository and
+// the forge it parsed out of the remote, and gets back pull requests.
+ipcMain.handle('forge-pulls', (_, repoPath, forge) => forgeApi.listPullRequests(repoPath, forge));
 ipcMain.handle('git-search-log', (_, repoPath, query, field, branch, limit, opts) => git.searchLog(repoPath, query, field, branch, limit, opts));
 ipcMain.handle('git-stage', (_, repoPath, filePath) => git.stage(repoPath, filePath));
 ipcMain.handle('git-unstage', (_, repoPath, filePath, oldPath) => git.unstage(repoPath, filePath, oldPath));
