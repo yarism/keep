@@ -13,7 +13,8 @@ const ROOT = new URL('../', import.meta.url);
 const read = (p) => readFile(new URL(p, ROOT), 'utf-8');
 
 const {
-  THEMES, TOKENS, DEFAULT_THEME_ID, getTheme, resolveTheme, swatch, validateTheme,
+  THEMES, TOKENS, DEFAULT_THEME_ID, SYSTEM_THEME_ID, SYSTEM_PAIR, SELECTIONS,
+  isSystemTheme, getTheme, resolveTheme, swatch, swatchFor, validateTheme,
 } = await loadEsm('renderer/themes.js');
 
 const { icon, iconNames, hasIcon, STROKE_WIDTH } = await loadEsm('renderer/icons.js');
@@ -21,8 +22,8 @@ const { icon, iconNames, hasIcon, STROKE_WIDTH } = await loadEsm('renderer/icons
 // ── Themes ──
 
 test('themes: ids and names are unique', () => {
-  const ids = THEMES.map(t => t.id);
-  const names = THEMES.map(t => t.name);
+  const ids = SELECTIONS.map(t => t.id);
+  const names = SELECTIONS.map(t => t.name);
   assert.strictEqual(new Set(ids).size, ids.length);
   assert.strictEqual(new Set(names).size, names.length);
 });
@@ -44,16 +45,35 @@ test('themes: no token is left blank', () => {
   }
 });
 
-test('themes: the default theme exists', () => {
-  assert.ok(getTheme(DEFAULT_THEME_ID));
+test('themes: the system selection is not a theme, and every selection resolves to one', () => {
+  // It has no tokens of its own, so nothing downstream of resolveTheme() ever
+  // has to know it exists.
+  assert.strictEqual(getTheme(SYSTEM_THEME_ID), null);
+  assert.ok(isSystemTheme(DEFAULT_THEME_ID), 'a fresh install follows the OS');
+  for (const selection of SELECTIONS) {
+    assert.ok(resolveTheme(selection.id), `${selection.id} resolves to nothing`);
+  }
+});
+
+test('themes: the system selection follows the OS, and the rest ignore it', () => {
+  assert.strictEqual(resolveTheme(SYSTEM_THEME_ID, false).id, SYSTEM_PAIR.light);
+  assert.strictEqual(resolveTheme(SYSTEM_THEME_ID, true).id, SYSTEM_PAIR.dark);
+  assert.strictEqual(resolveTheme(SYSTEM_PAIR.light, true).id, SYSTEM_PAIR.light);
+  assert.strictEqual(resolveTheme('midnight', false).id, 'midnight');
+});
+
+test('themes: the pair the system selection switches between is a light one and a dark one', () => {
+  assert.strictEqual(getTheme(SYSTEM_PAIR.light).dark, false);
+  assert.strictEqual(getTheme(SYSTEM_PAIR.dark).dark, true);
 });
 
 test('themes: an unknown id falls back to the default instead of returning nothing', () => {
   // A theme can be removed while a settings file still names it; the app must
   // still paint something.
   assert.strictEqual(getTheme('no-such-theme'), null);
-  assert.strictEqual(resolveTheme('no-such-theme').id, DEFAULT_THEME_ID);
-  assert.strictEqual(resolveTheme(undefined).id, DEFAULT_THEME_ID);
+  assert.strictEqual(resolveTheme('no-such-theme').id, SYSTEM_PAIR.light);
+  assert.strictEqual(resolveTheme('no-such-theme', true).id, SYSTEM_PAIR.dark);
+  assert.strictEqual(resolveTheme(undefined).id, SYSTEM_PAIR.light);
 });
 
 test('themes: swatch previews four colours', () => {
@@ -62,6 +82,17 @@ test('themes: swatch previews four colours', () => {
     assert.strictEqual(colours.length, 4);
     colours.forEach(c => assert.ok(c, `${theme.id} swatch has a hole`));
   }
+});
+
+test('themes: every picker row has a four-colour swatch, the system one drawn from both sides', () => {
+  for (const selection of SELECTIONS) {
+    const colours = swatchFor(selection.id);
+    assert.strictEqual(colours.length, 4);
+    colours.forEach(c => assert.ok(c, `${selection.id} swatch has a hole`));
+  }
+  const system = swatchFor(SYSTEM_THEME_ID);
+  assert.ok(system.includes(getTheme(SYSTEM_PAIR.light).tokens['bg']));
+  assert.ok(system.includes(getTheme(SYSTEM_PAIR.dark).tokens['bg']));
 });
 
 // ── Icons ──
