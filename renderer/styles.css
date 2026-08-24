@@ -1476,6 +1476,10 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 .build-open:hover { background: var(--bg-hover); }
 .build-mark { display: flex; width: 15px; flex: none; color: var(--text-dim); }
+/* Slower than the spinner everywhere else, and only here. The toolbar and the
+   toasts spin for seconds and a brisk turn suits them; this one turns for ten
+   minutes, where the same speed reads as impatience. */
+.build-card .spinner { animation-duration: 1800ms; }
 .build-card[data-state="done"] .build-mark { color: var(--green); }
 .build-card[data-state="failed"] .build-mark,
 .build-card[data-state="unknown"] .build-mark { color: var(--red); }
@@ -1489,6 +1493,13 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   white-space: nowrap;
 }
 /* Monospace so the seconds do not shuffle the card's width every tick. */
+/* A state is a label and fits on a line; a failure is a sentence, and clipping
+   it to one leaves the reason off the end. */
+.build-card[data-state="failed"] .build-detail,
+.build-card[data-state="unknown"] .build-detail {
+  white-space: normal;
+  line-height: 1.45;
+}
 .build-elapsed {
   flex: none;
   margin-left: auto;

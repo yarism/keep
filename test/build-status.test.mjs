@@ -135,6 +135,27 @@ test('describeBuild: a commit build is built, not published', () => {
   assert.match(d.detail, /artifacts/);
 });
 
+// ── a call that never got there ──
+
+// Reload re-reads the renderer from disk and leaves the main process as it
+// was, so the window ends up calling a handler that does not exist yet. The
+// raw wording reads like a broken feature rather than a stale process.
+test('explainCallFailure: a stale main process is named as one', () => {
+  const message = B.explainCallFailure(
+    "Error invoking remote method 'forge-workflow-run': Error: No handler registered for 'forge-workflow-run'");
+
+  assert.match(message, /Quit Keep and start it again/);
+  assert.doesNotMatch(message, /invoking remote method/);
+});
+
+test('explainCallFailure: anything else keeps its own sentence, unwrapped', () => {
+  assert.strictEqual(
+    B.explainCallFailure("Error invoking remote method 'forge-workflow-run': Error: Could not reach github.com."),
+    'Could not reach github.com.');
+  assert.strictEqual(B.explainCallFailure('Could not reach github.com.'), 'Could not reach github.com.');
+  assert.match(B.explainCallFailure(''), /could not be read/);
+});
+
 // ── the clock ──
 
 test('elapsed: minutes and seconds, then hours', () => {
