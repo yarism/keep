@@ -704,12 +704,10 @@ exports.showInFinder = (repoPath, filePath) => {
   require('electron').shell.showItemInFolder(fullPath);
 };
 
-exports.commitFiles = async (repoPath, hash) => {
-  // -M turns on rename detection (diff.renames is not honoured by diff-tree, so
-  // without this a rename always arrives as a delete plus an add). -z keeps
-  // paths unquoted and separates the two paths of a rename into their own
-  // fields, which is what makes the R record parseable at all.
-  const out = await run(repoPath, ['diff-tree', '--no-commit-id', '-r', '-M', '-z', '--name-status', hash]);
+// `--name-status -z` output, from either diff-tree or diff. -z keeps paths
+// unquoted and separates the two paths of a rename into their own fields, which
+// is what makes the R record parseable at all.
+function parseNameStatus(out) {
   const fields = out.split('\0').filter(Boolean);
   const files = [];
   for (let i = 0; i < fields.length;) {
@@ -725,10 +723,63 @@ exports.commitFiles = async (repoPath, hash) => {
     files.push({ filePath, oldPath, status: statusName, statusCode: code[0] });
   }
   return files;
+}
+
+exports.commitFiles = async (repoPath, hash) => {
+  // -M turns on rename detection (diff.renames is not honoured by diff-tree, so
+  // without this a rename always arrives as a delete plus an add).
+  const out = await run(repoPath, ['diff-tree', '--no-commit-id', '-r', '-M', '-z', '--name-status', hash]);
+  return parseNameStatus(out);
 };
 
 exports.commitFileDiff = async (repoPath, hash, filePath) => {
   return run(repoPath, ['diff-tree', '-p', hash, '--', filePath]);
+};
+
+// ── Comparing two refs ──
+//
+// What a pull request shows is not `base..head` but the diff from their merge
+// base to head: the three-dot form. The difference between them is everything
+// that landed on base after the branch left it — with two dots those commits
+// read as the branch *removing* them, which is how a review ends up arguing
+// about code nobody in it touched.
+const mergeBaseRange = (base, head) => `${base}...${head}`;
+
+exports.rangeFiles = async (repoPath, base, head) => {
+  const out = await run(repoPath, ['diff', '--name-status', '-M', '-z', mergeBaseRange(base, head)]);
+  return parseNameStatus(out);
+};
+
+exports.rangeFileDiff = async (repoPath, base, head, filePath) => {
+  return run(repoPath, ['diff', mergeBaseRange(base, head), '--', filePath]);
+};
+
+// A pull request's own commits: the ones head has and base does not. Two dots
+// here, deliberately — the question is which commits belong to the branch, not
+// what its net effect on the files is.
+exports.rangeCommits = async (repoPath, base, head, limit = 200) => {
+  const [out, remotes] = await Promise.all([
+    run(repoPath, ['log', '--format=' + LOG_FORMAT, '-n', String(limit), `${base}..${head}`]),
+    remoteNames(repoPath),
+  ]);
+  return parseLog(out, remotes);
+};
+
+// GitHub publishes every pull request as a read-only ref on the origin
+// repository, so the head of a PR — including one from a fork Keep has no
+// remote for — is one ordinary fetch away. Nothing is checked out and no local
+// branch is created: the ref lands under refs/keep/, clear of the user's own
+// refs and of everything the sidebar lists.
+//
+// The number is interpolated into a refspec, so it is checked rather than
+// trusted, even coming from the API.
+exports.fetchPullRequest = async (repoPath, remote, number) => {
+  const n = String(number);
+  if (!/^[0-9]{1,9}$/.test(n)) throw new Error(`Not a pull request number: ${number}`);
+  const local = `refs/keep/pr/${n}`;
+  // Leading + so a force-pushed branch updates the ref instead of failing.
+  await runNetwork(repoPath, ['fetch', remote, `+refs/pull/${n}/head:${local}`], 'Fetch pull request');
+  return local;
 };
 
 exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {}) => {

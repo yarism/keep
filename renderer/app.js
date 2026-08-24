@@ -4,6 +4,7 @@ import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
+import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
 import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
@@ -33,6 +34,9 @@ async function refresh() {
     refreshRemotes(refresh),
     refreshStashes(),
   ]);
+  // refreshRemotes has just settled state.remotes, which is what decides
+  // whether this repository has pull requests at all.
+  syncPullRequestNav();
   updateTitlebar();
   // Re-baseline so our own writes don't read as an external change next tick
   await captureFingerprint();
@@ -51,6 +55,7 @@ async function enterWorkspace(path) {
   state.unpushed = new Set();
   // Stale remotes would put the previous repo's forge in this one's menus.
   state.remotes = [];
+  resetPullRequests();
   state.searching = false;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
@@ -183,6 +188,9 @@ function setupNavigation() {
     const navItem = e.target.closest('.nav-item');
     if (!navItem || !state.repoPath) return;
     switchView(navItem.dataset.view);
+    // The one view that costs a network request to fill, so it is filled on
+    // arrival rather than on every poll tick.
+    if (navItem.dataset.view === 'pull-requests') loadPullRequests();
   });
 }
 
@@ -310,10 +318,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (settings.historyListWidth) {
     $('#history-list-panel').style.width = settings.historyListWidth + 'px';
   }
+  if (settings.prListWidth) {
+    $('#pr-list-panel').style.width = settings.prListWidth + 'px';
+  }
   setupCollapsibleSections(settings);
   setupSidebarResize();
   setupPanelResize('wc-resize', 'wc-files-panel', 'wcFilesWidth', { minWidth: 220, maxWidth: 600 });
   setupPanelResize('history-resize', 'history-list-panel', 'historyListWidth', { minWidth: 300, maxWidth: 800 });
+  setupPanelResize('pr-resize', 'pr-list-panel', 'prListWidth', { minWidth: 260, maxWidth: 800 });
   setupRepoList(enterWorkspace);
   setupNavigation();
   setupToolbar();
@@ -323,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupOpBanner(refresh);
   setupHistorySearch(refresh);
   setupHistoryScope(refresh, settings);
+  setupPullRequests();
   await restoreLastRepo(settings);
 });
 

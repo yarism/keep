@@ -164,6 +164,13 @@
               <span class="icon" data-icon="clock" data-size="16"></span>
               History
             </div>
+            <!-- Hidden unless the repository is on GitHub — see
+                 syncPullRequestNav() in modules/pull-requests.js. -->
+            <div class="nav-item" data-view="pull-requests" hidden>
+              <span class="icon" data-icon="merge" data-size="16"></span>
+              Pull Requests
+              <span id="pr-badge" class="badge" hidden>0</span>
+            </div>
             <div class="nav-item" data-view="stashes">
               <span class="icon" data-icon="stash" data-size="16"></span>
               Stashes
@@ -285,6 +292,28 @@
           <div id="history-detail-panel">
             <div id="commit-info"></div>
             <div id="commit-changeset"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pull Requests. Same two-panel shape as History, and for the same
+           reason: a list of changes on the left, the selected one on the right. -->
+      <div id="pull-requests-view" class="view">
+        <div id="pr-container">
+          <div id="pr-list-panel">
+            <div class="panel-header">
+              <span>Open Pull Requests</span>
+              <div class="panel-header-right">
+                <button id="pr-refresh" class="panel-btn" type="button">Refresh</button>
+                <button id="pr-open-web" class="panel-btn" type="button">Open on GitHub</button>
+              </div>
+            </div>
+            <div id="pr-list" class="commit-list"></div>
+          </div>
+          <div id="pr-resize"></div>
+          <div id="pr-detail-panel">
+            <div id="pr-info"></div>
+            <div id="pr-changeset"></div>
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import { $, escapeHtml, state } from './state.js';
-import { renderDiff } from './diff.js';
+import { renderChangeset } from './changeset.js';
 import { showCommitContextMenu } from './context-menu.js';
-import { icon } from '../icons.js';
 import { buildGraph } from '../graph.js';
 import { trackingFor, trackingChips, headTracking } from './sync.js';
 
@@ -313,69 +312,9 @@ async function selectCommit(c, refresh) {
 
     // Render changeset with expandable files
     const files = await window.git.commitFiles(state.repoPath, c.hash);
-    renderChangeset(c.hash, files);
+    renderChangeset($('#commit-changeset'), files,
+      (f) => window.git.commitFileDiff(state.repoPath, c.hash, f.filePath));
   } catch (e) {
     $('#commit-info').innerHTML = `<div style="padding:16px;color:var(--red)">${escapeHtml(e.message)}</div>`;
   }
-}
-
-function renderChangeset(hash, files) {
-  const container = $('#commit-changeset');
-  container.innerHTML = '';
-
-  const adds = files.filter(f => f.status === 'added').length;
-  const dels = files.filter(f => f.status === 'deleted').length;
-  const mods = files.length - adds - dels;
-  const summary = document.createElement('div');
-  summary.className = 'changeset-summary';
-  const parts = [];
-  if (mods) parts.push(`${mods} modified`);
-  if (adds) parts.push(`${adds} added`);
-  if (dels) parts.push(`${dels} deleted`);
-  summary.textContent = `${files.length} changed file${files.length !== 1 ? 's' : ''} (${parts.join(', ')})`;
-  container.appendChild(summary);
-
-  files.forEach(f => {
-    const fileEl = document.createElement('div');
-    fileEl.className = 'changeset-file';
-
-    const header = document.createElement('div');
-    header.className = 'changeset-file-header';
-    const statusLabel = f.statusCode;
-    header.innerHTML = `
-      <span class="expand-arrow">${icon('chevron', 12)}</span>
-      <span class="file-status ${f.status}">${statusLabel}</span>
-      <span class="file-name">${escapeHtml(f.filePath.split('/').pop())}</span>
-      <span class="file-path">${escapeHtml(f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : '')}</span>
-    `;
-
-    const diffContainer = document.createElement('div');
-    diffContainer.className = 'changeset-file-diff';
-    let loaded = false;
-
-    header.addEventListener('click', async () => {
-      const arrow = header.querySelector('.expand-arrow');
-      const isOpen = diffContainer.style.display === 'block';
-      if (isOpen) {
-        diffContainer.style.display = 'none';
-        arrow.classList.remove('open');
-      } else {
-        if (!loaded) {
-          try {
-            const diff = await window.git.commitFileDiff(state.repoPath, hash, f.filePath);
-            renderDiff(diff, diffContainer, null);
-            loaded = true;
-          } catch (e) {
-            diffContainer.innerHTML = `<div style="padding:8px 16px;color:var(--red)">${escapeHtml(e.message)}</div>`;
-          }
-        }
-        diffContainer.style.display = 'block';
-        arrow.classList.add('open');
-      }
-    });
-
-    fileEl.appendChild(header);
-    fileEl.appendChild(diffContainer);
-    container.appendChild(fileEl);
-  });
 }
