@@ -470,15 +470,18 @@ exports.diff = async (repoPath, filePath, staged) => {
   return result;
 };
 
+// -s keeps the diff and the stat out of it: the body is everything after the
+// subject line, and anything git appends below would land in it. The file list
+// comes from commitFiles() anyway.
 exports.commitDetail = async (repoPath, hash) => {
   const fmt = '%H%n%an%n%ae%n%aI%n%cn%n%ce%n%cI%n%D%n%P%n%T%n%s%n%b';
-  const out = await run(repoPath, ['show', '--format=' + fmt, '--stat', hash]);
+  const out = await run(repoPath, ['show', '-s', '--format=' + fmt, hash]);
   const lines = out.split('\n');
   return {
     hash: lines[0], author: lines[1], authorEmail: lines[2], authorDate: lines[3],
     committer: lines[4], committerEmail: lines[5], committerDate: lines[6],
     refs: lines[7], parents: lines[8], tree: lines[9],
-    subject: lines[10], body: lines.slice(11).join('\n'),
+    subject: lines[10], body: lines.slice(11).join('\n').replace(/\s+$/, ''),
   };
 };
 

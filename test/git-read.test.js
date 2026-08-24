@@ -592,6 +592,27 @@ test('commitDetail: splits the fixed-format header into fields', async () => {
   assert.strictEqual(detail.subject, 'subject line');
 });
 
+// The body is what the detail pane shows under the subject, so it has to end
+// where the message ends — no stat block, no trailing blank lines.
+test('commitDetail: keeps the whole body and nothing after it', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  const hash = h.commitAll(repo, 'subject line\n\nfirst body line\nsecond body line\n');
+
+  const detail = await git.commitDetail(repo, hash);
+
+  assert.strictEqual(detail.subject, 'subject line');
+  assert.strictEqual(detail.body, 'first body line\nsecond body line');
+});
+
+test('commitDetail: a subject-only commit has an empty body', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'a.txt', 'a\n');
+  const hash = h.commitAll(repo, 'subject line');
+
+  assert.strictEqual((await git.commitDetail(repo, hash)).body, '');
+});
+
 test('commitDetail: the root commit has no parents', async () => {
   const repo = h.makeRepo();
   const root = h.git(repo, 'rev-parse', 'HEAD').trim();
