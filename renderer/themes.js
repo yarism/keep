@@ -100,6 +100,44 @@ export const THEMES = [
     },
   },
   {
+    // Claude Code's own dark palette: warm near-black neutrals that read as
+    // grey until you put a real grey next to them, clay for anything you can
+    // click, and diff colours bright enough to find at a glance against it.
+    id: 'claude',
+    name: 'Claude',
+    dark: true,
+    tokens: {
+      'bg': '#0f0f0e',
+      'bg-surface': '#161615',
+      'bg-elevated': '#1c1b1a',
+      'bg-hover': '#222120',
+      'bg-active': '#2e2c28',
+      'border': '#232220',
+      'border-strong': '#38352f',
+      'text': '#f5f4ef',
+      'text-dim': '#a8a49b',
+      'text-mute': '#7d7973',
+      'accent': '#d97757',
+      'accent-hover': '#e89075',
+      'on-accent': '#0f0f0e',
+      'green': '#4ec97a',
+      'red': '#f4696d',
+      'yellow': '#e5b84b',
+      'blue': '#6fa8d6',
+      'on-status': '#0f0f0e',
+      'diff-add-bg': 'rgba(78, 201, 122, 0.14)',
+      'diff-add-text': '#6fdb96',
+      'diff-del-bg': 'rgba(244, 105, 109, 0.14)',
+      'diff-del-text': '#ff8c8f',
+      'diff-hunk-bg': 'rgba(217, 119, 87, 0.13)',
+      'diff-hunk-text': '#e59a7d',
+      'shadow-menu': '0 10px 28px rgba(0, 0, 0, 0.6)',
+      'shadow-modal': '0 20px 50px rgba(0, 0, 0, 0.7)',
+      'scrollbar': '#38352f',
+      'overlay': 'rgba(0, 0, 0, 0.65)',
+    },
+  },
+  {
     // The warm dark one: charcoal that has been left near a fire. Everything
     // sits on the orange side of neutral, so the amber accent reads as part of
     // the surface rather than a sticker on top of it.
