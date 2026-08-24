@@ -131,6 +131,7 @@ function normalize(pr) {
     title: pr.title || '',
     body: pr.body || '',
     author: (pr.user && pr.user.login) || 'unknown',
+    avatar: (pr.user && pr.user.avatar_url) || null,
     // The commit a review is anchored to. Comments are positions in a diff, and
     // a diff is only meaningful against the revision it was taken from.
     headSha: head.sha || null,
@@ -296,6 +297,11 @@ function normalizeComment(c) {
     originalLine: typeof c.original_line === 'number' ? c.original_line : null,
     outdated: typeof c.line !== 'number',
     author: (c.user && c.user.login) || 'unknown',
+    avatar: (c.user && c.user.avatar_url) || null,
+    // The slice of diff the comment was written against. GitHub sends it with
+    // every comment, and it is the only way to show what an outdated one was
+    // about once its line has left the diff.
+    diffHunk: c.diff_hunk || '',
     body: c.body || '',
     createdAt: c.created_at || null,
     url: c.html_url || '',

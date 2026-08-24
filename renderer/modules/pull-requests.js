@@ -9,9 +9,10 @@
 //
 // Read-only. Nothing here approves, comments or merges.
 import { $, escapeHtml, state, switchView } from './state.js';
-import { renderChangeset } from './changeset.js';
+import { renderChangeset, summarize } from './changeset.js';
 import { forgeForBranch, forgeLabel, pullRequestsNoun, pullRequestsUrl } from './forge.js';
 import { icon } from '../icons.js';
+import { mountMarkdown } from './markdown.js';
 import {
   setPullRequest, loadThreads, annotateFor, fileBadge, fileNote,
   reviewBarEl, onReviewChange, resetReview,
@@ -210,8 +211,8 @@ async function selectPullRequest(pr) {
     _rerenderChangeset = () => {
       renderChangeset(changeset, files,
         (f) => window.git.rangeFileDiff(state.repoPath, base, head, f.filePath),
-        { annotate: annotateFor, fileBadge, fileNote });
-      changeset.prepend(reviewBarEl());
+        { annotate: annotateFor, fileBadge, fileNote, summary: false });
+      changeset.prepend(reviewBarEl(summarize(files)));
     };
     _rerenderChangeset();
   } catch (e) {
@@ -233,33 +234,50 @@ function renderInfo(pr, commits) {
   const info = $('#pr-info');
   if (!info) return;
   const forge = forgeForRepo();
+  // Title and the one sentence that says what this proposes, then the author's
+  // own words. The commit list is a disclosure rather than a band: it is
+  // reference, wanted occasionally, and it was pushing the code further down
+  // the pane every time it was not.
+  const commitCount = commits ? commits.length : 0;
   info.innerHTML = `
     <div class="pr-detail-header">
-      <div class="pr-detail-title">${escapeHtml(pr.title)}</div>
+      <div class="pr-detail-top">
+        <div class="pr-detail-title">${escapeHtml(pr.title)}</div>
+        <button class="pr-web-link" type="button">${icon('cloud', 13)}Review on ${escapeHtml(forgeLabel(forge))}</button>
+      </div>
       <div class="pr-detail-sub">
         <span class="pr-number">#${pr.number}</span>
         ${pr.draft ? '<span class="pr-chip draft">draft</span>' : ''}
         <span>${escapeHtml(pr.author)} wants to merge
           <strong>${escapeHtml(pr.fromFork && pr.headRepo ? `${pr.headRepo}:${pr.head}` : pr.head)}</strong>
           into <strong>${escapeHtml(pr.base)}</strong></span>
-      </div>
-      <div class="pr-detail-actions">
-        ${commits ? `<span class="pr-commit-count">${commits.length} commit${commits.length !== 1 ? 's' : ''}</span>` : ''}
+        ${commitCount ? `<button class="pr-commits-toggle" type="button" aria-expanded="false">
+          <span class="expand-arrow">${icon('chevron', 11)}</span>${commitCount} commit${commitCount !== 1 ? 's' : ''}</button>` : ''}
         ${pr.comments ? `<span class="pr-commit-count">${pr.comments} comment${pr.comments !== 1 ? 's' : ''}</span>` : ''}
-        <button class="pr-web-link" type="button">${icon('cloud', 13)}Review on ${escapeHtml(forgeLabel(forge))}</button>
       </div>
+      ${commitCount ? `<div class="pr-commits" hidden>${commits.map(c => `
+        <div class="pr-commit">
+          <span class="commit-hash">${c.hash.substring(0, 7)}</span>
+          <span class="pr-commit-subject">${escapeHtml(c.subject)}</span>
+          <span class="pr-commit-author">${escapeHtml(c.author)}</span>
+        </div>`).join('')}</div>` : ''}
+      ${pr.body ? `<div class="pr-body"></div>` : ''}
     </div>
-    ${pr.body ? `<div class="pr-body"></div>` : ''}
-    ${commits && commits.length ? `<div class="pr-commits">${commits.map(c => `
-      <div class="pr-commit">
-        <span class="commit-hash">${c.hash.substring(0, 7)}</span>
-        <span class="pr-commit-subject">${escapeHtml(c.subject)}</span>
-        <span class="pr-commit-author">${escapeHtml(c.author)}</span>
-      </div>`).join('')}</div>` : ''}
   `;
-  // The description is the author's own prose — set as text, never as markup.
+  const toggle = info.querySelector('.pr-commits-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      const list = info.querySelector('.pr-commits');
+      const open = list.hidden;
+      list.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.querySelector('.expand-arrow').classList.toggle('open', open);
+    });
+  }
+  // The description is the author's own prose, written in a Markdown box, and
+  // rendered through the escape-first renderer rather than as text or markup.
   const bodyEl = info.querySelector('.pr-body');
-  if (bodyEl) bodyEl.textContent = pr.body;
+  if (bodyEl) mountMarkdown(bodyEl, pr.body, (url) => window.git.openExternal(url));
   const link = info.querySelector('.pr-web-link');
   // Reviewing still happens on the web: Keep can show the change but has no
   // way to approve it, and pretending otherwise would be the wrong kind of

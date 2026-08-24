@@ -8,28 +8,37 @@ import { escapeHtml } from './state.js';
 import { renderDiff } from './diff.js';
 import { icon } from '../icons.js';
 
+// A changeset in one line: how many files, and what happened to them.
+export function summarize(files) {
+  const adds = files.filter(f => f.status === 'added').length;
+  const dels = files.filter(f => f.status === 'deleted').length;
+  const mods = files.length - adds - dels;
+  const parts = [];
+  if (mods) parts.push(`${mods} modified`);
+  if (adds) parts.push(`${adds} added`);
+  if (dels) parts.push(`${dels} deleted`);
+  return files.length
+    ? `${files.length} changed file${files.length !== 1 ? 's' : ''} (${parts.join(', ')})`
+    : 'No changed files';
+}
+
 // files: what git.js's name-status parse returns.
 // loadDiff: (file) => Promise<string>, called once per file, on first expand.
 // opts.annotate: (file) => annotate, handed to renderDiff so a caller can
 //   decorate individual rows — how review comments reach the diff.
 // opts.fileNote: (file) => Node | null, put above a file's diff for anything
 //   that belongs to the file rather than to one line.
+// opts.summary: false to leave out the count line, for callers that show it
+//   somewhere of their own.
 export function renderChangeset(container, files, loadDiff, opts = {}) {
   container.innerHTML = '';
 
-  const adds = files.filter(f => f.status === 'added').length;
-  const dels = files.filter(f => f.status === 'deleted').length;
-  const mods = files.length - adds - dels;
-  const summary = document.createElement('div');
-  summary.className = 'changeset-summary';
-  const parts = [];
-  if (mods) parts.push(`${mods} modified`);
-  if (adds) parts.push(`${adds} added`);
-  if (dels) parts.push(`${dels} deleted`);
-  summary.textContent = files.length
-    ? `${files.length} changed file${files.length !== 1 ? 's' : ''} (${parts.join(', ')})`
-    : 'No changed files';
-  container.appendChild(summary);
+  if (opts.summary !== false) {
+    const summary = document.createElement('div');
+    summary.className = 'changeset-summary';
+    summary.textContent = summarize(files);
+    container.appendChild(summary);
+  }
 
   files.forEach(f => {
     const fileEl = document.createElement('div');
