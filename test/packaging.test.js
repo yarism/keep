@@ -72,12 +72,37 @@ test('packaging: electron-updater is a real dependency, not a dev one', () => {
 
 // Squirrel.Mac cannot read a DMG, so a mac release without a zip publishes a
 // feed the updater can see and nothing it can install.
-test('packaging: macOS ships the zip the updater needs alongside the dmg', () => {
+//
+// The arches have to be declared here rather than passed as --arm64 --x64,
+// which is the subtle half. Flags split the build into one electron-builder run
+// per arch, and each run overwrites the previous one's latest-mac.yml: the feed
+// ends up naming a single arch, and electron-updater's filterFilesForArch finds
+// nothing at all on the other one. Nothing about the artifacts looks wrong — the
+// dmg and zip for both arches are sitting right there in the release.
+test('packaging: macOS ships both formats for both arches in one feed', () => {
   const targets = build.mac.target;
+  assert.ok(Array.isArray(targets), 'mac.target should list its formats');
 
-  assert.ok(Array.isArray(targets), 'mac.target should list both formats');
-  assert.ok(targets.includes('zip'), 'macOS auto-update needs a zip target');
-  assert.ok(targets.includes('dmg'), 'first-time downloads still want a dmg');
+  for (const format of ['dmg', 'zip']) {
+    const target = targets.find((t) => t && t.target === format);
+    assert.ok(target, `macOS should build a ${format}`);
+    assert.ok(
+      Array.isArray(target.arch) && target.arch.includes('x64') && target.arch.includes('arm64'),
+      `${format} must declare both arches, or the feed will name only one`,
+    );
+  }
+});
+
+// The same rule, from the other side: the workflow must not reintroduce the
+// flags, which would override the config above and split the build again.
+test('packaging: CI does not pass arch flags that would split the mac feed', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/build.yml'), 'utf-8');
+  const macArgs = workflow.match(/args: --mac.*/g) || [];
+
+  assert.ok(macArgs.length > 0, 'the macOS build args should still be there');
+  for (const line of macArgs) {
+    assert.doesNotMatch(line, /--(arm64|x64|universal)/, `${line.trim()} splits latest-mac.yml per arch`);
+  }
 });
 
 // Without a publish block electron-builder writes no app-update.yml into the

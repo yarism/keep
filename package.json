@@ -41,8 +41,14 @@
       "artifactName": "${productName}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
       ],
       "hardenedRuntime": true,
       "notarize": true

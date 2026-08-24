@@ -166,6 +166,11 @@ Three things have to be true for that to work, and all three are configured:
   That file *is* the update feed; without it the app finds a release and
   nothing to compare against. The `.blockmap` beside it is why a patch release
   usually transfers a fraction of the app rather than all 110 MB.
+- The two macOS arches are declared per target in `package.json`, never as
+  `--arm64 --x64` on the command line. Flags split the build into a run per
+  arch, and each run overwrites the previous one's `latest-mac.yml`, leaving a
+  feed that names one arch and an updater that finds nothing on the other. The
+  release looks complete either way, which is what makes it worth a test.
 - macOS refuses to install an update that is not signed by the same Developer
   ID as the running app, so this depends on the certificate below.
 
