@@ -245,6 +245,7 @@ ipcMain.handle('forge-submit-review', (_, repoPath, forge, review) => forgeApi.s
 ipcMain.handle('forge-react', (_, repoPath, forge, opts) => forgeApi.react(repoPath, forge, opts));
 ipcMain.handle('forge-reactions', (_, repoPath, forge, target) => forgeApi.listReactions(repoPath, forge, { target }));
 ipcMain.handle('forge-viewer', (_, repoPath, forge) => forgeApi.viewerLogin(repoPath, forge));
+ipcMain.handle('forge-workflow-run', (_, repoPath, forge, target) => forgeApi.workflowRun(repoPath, forge, target || {}));
 ipcMain.handle('git-search-log', (_, repoPath, query, field, branch, limit, opts) => git.searchLog(repoPath, query, field, branch, limit, opts));
 ipcMain.handle('git-stage', (_, repoPath, filePath) => git.stage(repoPath, filePath));
 ipcMain.handle('git-unstage', (_, repoPath, filePath, oldPath) => git.unstage(repoPath, filePath, oldPath));

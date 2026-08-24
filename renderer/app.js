@@ -10,6 +10,7 @@ import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/th
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
 import { setupRelease } from './modules/release.js';
+import { setupBuildWatch } from './modules/build-watch.js';
 import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
@@ -336,6 +337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupContextMenu();
   setupUpdates();
   setupRelease(refresh);
+  setupBuildWatch(settings);
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);

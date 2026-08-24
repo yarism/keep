@@ -630,3 +630,133 @@ test('listReviewComments: still returns the comments when GraphQL will not answe
   assert.strictEqual(result.resolutionKnown, false);
   assert.strictEqual(result.threads[0].resolved, undefined, 'unknown is not the same as open');
 });
+
+// ── watching a build ──
+//
+// Two requests deep: the run belonging to the tag, then its jobs. A stand-in
+// that answers them in order, so the second is not served the first's body.
+function fakeSequence(responses) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url, init });
+    return responses[Math.min(calls.length - 1, responses.length - 1)];
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+const RUN = {
+  id: 4242,
+  head_branch: 'v1.0.17',
+  run_number: 88,
+  status: 'in_progress',
+  conclusion: null,
+  html_url: 'https://github.com/yarism/keep/actions/runs/4242',
+  run_started_at: '2026-08-24T21:35:00Z',
+};
+
+// A tag push is an ordinary push event whose head_branch is the tag — whatever
+// the field is called.
+test('pickRun: the run belonging to a tag, not to main', () => {
+  const picked = api.pickRun([
+    { id: 1, head_branch: 'main', run_number: 87 },
+    RUN,
+  ], { tag: 'v1.0.17' });
+
+  assert.strictEqual(picked.id, 4242);
+});
+
+// Re-running a workflow files a fresh run against the same tag, and the older
+// one keeps its conclusion. Showing that one would report the failure that was
+// already dealt with.
+test('pickRun: a re-run wins over the run it replaced', () => {
+  const picked = api.pickRun([
+    { id: 1, head_branch: 'v1.0.17', run_number: 88, conclusion: 'failure' },
+    { id: 2, head_branch: 'v1.0.17', run_number: 91, conclusion: 'success' },
+  ], { tag: 'v1.0.17' });
+
+  assert.strictEqual(picked.id, 2);
+});
+
+test('pickRun: no run for this tag is null, not the newest of somebody else’s', () => {
+  assert.strictEqual(api.pickRun([{ id: 1, head_branch: 'main', run_number: 90 }], { tag: 'v1.0.17' }), null);
+  assert.strictEqual(api.pickRun([], { tag: 'v1.0.17' }), null);
+  assert.strictEqual(api.pickRun(null, { tag: 'v1.0.17' }), null);
+});
+
+// Not every build is a release. A push to main builds the same installers and
+// leaves them as artifacts, and that run is found by the commit's sha.
+test('pickRun: an ordinary push is found by its commit', () => {
+  const runs = [
+    { id: 1, head_branch: 'main', head_sha: 'aaa111', run_number: 90 },
+    { id: 2, head_branch: 'main', head_sha: 'bbb222', run_number: 91 },
+  ];
+
+  assert.strictEqual(api.pickRun(runs, { sha: 'aaa111' }).id, 1);
+  assert.strictEqual(api.pickRun(runs, { sha: 'ccc333' }), null);
+});
+
+test('pickRun: with neither a tag nor a commit there is nothing to find', () => {
+  assert.strictEqual(api.pickRun([{ id: 1, head_branch: 'main', run_number: 90 }], {}), null);
+});
+
+test('workflowRun: the run and its jobs, reduced to what the card shows', async () => {
+  const fetchImpl = fakeSequence([
+    reply(200, { workflow_runs: [RUN] }),
+    reply(200, { jobs: [{ name: 'test', status: 'completed', conclusion: 'success' }] }),
+  ]);
+
+  const result = await api.workflowRun('/repo', GH, { tag: 'v1.0.17', token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.run.id, 4242);
+  assert.strictEqual(result.run.status, 'in_progress');
+  assert.deepStrictEqual(result.run.jobs, [
+    { name: 'test', status: 'completed', conclusion: 'success', url: null },
+  ]);
+  assert.match(fetchImpl.calls[0].url, /\/repos\/yarism\/keep\/actions\/runs\?event=push/);
+  assert.match(fetchImpl.calls[1].url, /\/actions\/runs\/4242\/jobs/);
+});
+
+// Seconds pass between the tag arriving and GitHub filing a run. That is an
+// answer, not a failure — the card keeps waiting on it.
+test('workflowRun: no run yet is a successful answer of null', async () => {
+  const fetchImpl = fakeSequence([reply(200, { workflow_runs: [] })]);
+
+  const result = await api.workflowRun('/repo', GH, { tag: 'v1.0.17', token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.run, null);
+  assert.strictEqual(fetchImpl.calls.length, 1);
+});
+
+// The jobs are the detail, not the answer: a run that cannot list them can
+// still say it is building.
+test('workflowRun: unreadable jobs do not lose the run', async () => {
+  const fetchImpl = fakeSequence([
+    reply(200, { workflow_runs: [RUN] }),
+    reply(500, null),
+  ]);
+
+  const result = await api.workflowRun('/repo', GH, { tag: 'v1.0.17', token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.run.jobs, []);
+});
+
+test('workflowRun: only GitHub, and only with something to watch', async () => {
+  const gitlab = { kind: 'gitlab', host: 'gitlab.com', owner: 'a', repo: 'b' };
+
+  assert.strictEqual((await api.workflowRun('/repo', gitlab, { tag: 'v1' })).reason, 'unsupported');
+  assert.strictEqual((await api.workflowRun('/repo', GH, { token: 'tok' })).reason, 'unsupported');
+});
+
+test('workflowRun: a repository with no Actions says so in its own words', async () => {
+  const fetchImpl = fakeSequence([reply(404, {})]);
+
+  const result = await api.workflowRun('/repo', GH, { tag: 'v1.0.17', token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, false);
+  assert.match(result.message, /Actions/);
+  assert.doesNotMatch(result.message, /pull request/);
+});

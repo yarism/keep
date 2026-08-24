@@ -16,6 +16,7 @@ import { $, state, escapeHtml } from './state.js';
 import { toast } from './toast.js';
 import { icon } from '../icons.js';
 import { forgeForBranch, releasesUrl } from './forge.js';
+import { watchBuild } from './build-watch.js';
 import {
   BUMPS, BUMP_MEANING, nextVersion, isSemver, detectCommand, takesBump,
   fillCommand, lifecycleSteps, blockedByWorkingCopy, versionFromOutput,
@@ -209,7 +210,24 @@ function finish(result) {
   const forge = forgeForBranch(state.remotes, null);
   const url = releasesUrl(forge);
 
-  el.innerHTML = `<div class="release-result-text">${escapeHtml(done)}</div>` +
+  // The local half is over; the half that decides whether anyone can download
+  // anything is only starting. Hand it to the card in the corner, which will
+  // still be watching long after this panel is closed.
+  //
+  // The tag is read back from the repository rather than assumed: the command
+  // was the user's, and it may have tagged differently or not at all.
+  const tag = (state.tagList || []).find(t => t.replace(/^v/, '') === version) || null;
+  const watching = tag && watchBuild({
+    repoPath: session.repoPath,
+    repoName: (session.pkg && session.pkg.name) || session.repoPath.split('/').pop(),
+    tag,
+    forge,
+  });
+
+  const next = watching
+    ? ' GitHub is building the installers — the card in the corner says when they are ready.'
+    : '';
+  el.innerHTML = `<div class="release-result-text">${escapeHtml(done + next)}</div>` +
     (url ? `<button type="button" class="release-link" id="release-open">${icon('cloud', 14)}<span>View releases</span></button>` : '');
   if (url) {
     $('#release-open').addEventListener('click', () => window.git.openExternal(url));

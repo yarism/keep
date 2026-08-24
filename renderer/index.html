@@ -352,6 +352,22 @@
     </div>
   </div>
 
+  <!-- The build a released tag set off. Bottom left, opposite the toasts:
+       a toast is something that happened, this is something still happening. -->
+  <div id="build-card" class="build-card" hidden>
+    <button type="button" id="build-open" class="build-open">
+      <span class="build-mark" id="build-mark"></span>
+      <span class="build-text">
+        <span class="build-title" id="build-title"></span>
+        <span class="build-detail" id="build-detail"></span>
+      </span>
+      <span class="build-elapsed" id="build-elapsed"></span>
+    </button>
+    <button type="button" id="build-dismiss" class="build-dismiss" title="Dismiss">
+      <span class="icon" data-icon="close" data-size="11"></span>
+    </button>
+  </div>
+
   <div id="release-overlay" class="modal-overlay" hidden>
     <div class="modal release-modal">
       <div class="modal-title" id="release-title">Release</div>
