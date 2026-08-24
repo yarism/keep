@@ -625,6 +625,10 @@ exports.stashSave = (repoPath, message) => {
 exports.stashApply = (repoPath, index) => run(repoPath, ['stash', 'apply', `stash@{${index}}`]);
 exports.stashDrop = (repoPath, index) => run(repoPath, ['stash', 'drop', `stash@{${index}}`]);
 exports.revert = (repoPath, hash) => run(repoPath, ['revert', '--no-edit', hash]);
+// Copy one commit onto the current branch. Reporting, because a cherry-pick
+// that stops on a conflict says why on stderr, and that sentence is the whole
+// explanation the UI has to offer before the conflict banner takes over.
+exports.cherryPick = (repoPath, hash) => runReporting(repoPath, ['cherry-pick', hash]);
 exports.createTag = (repoPath, name, ref) => {
   const args = ['tag', name];
   if (ref) args.push(ref);

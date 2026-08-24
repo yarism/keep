@@ -102,6 +102,17 @@ export function showCommitContextMenu(e, commit, refresh) {
     { separator: true },
     { label: `Check Out "${h}"`, action: () => confirmCheckout(commit.hash, refresh) },
     { separator: true },
+    // Onto whatever is checked out now — which is the one thing a hash in a
+    // list does not tell you, so the branch is named in the question.
+    { label: `Cherry-Pick "${h}"...`, action: async () => {
+      const onto = (state.branchList.find(b => b.current) || {}).name;
+      const ok = await showConfirm('Cherry-Pick Commit', onto
+        ? `Apply the changes from "${h}" as a new commit on "${onto}"?`
+        : `Apply the changes from "${h}" as a new commit on the current branch?`);
+      if (!ok) return;
+      try { await window.git.cherryPick(state.repoPath, commit.hash); await refresh(); }
+      catch (err) { alert(err.message); await refresh(); }
+    }},
     { label: `Revert "${h}"...`, action: async () => { const ok = await showConfirm('Revert Commit', `Create a new commit that undoes changes from "${h}"?`); if (!ok) return; try { await window.git.revert(state.repoPath, commit.hash); await refresh(); } catch (err) { alert(err.message); } }},
     { separator: true },
     { label: `Create New Branch from "${h}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from ${h})`); if (n) { try { await window.git.createBranch(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},

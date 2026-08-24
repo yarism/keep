@@ -49,7 +49,7 @@ warning appears.
 - Branch management — create, rename, delete, checkout
 - Remote branches visible under each remote
 - Stash support — save, apply, drop
-- Merge, rebase, and revert operations
+- Merge, rebase, cherry-pick, and revert operations
 - Tag creation
 - Multi-repository support
 - Detached HEAD state handling

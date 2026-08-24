@@ -240,6 +240,7 @@ ipcMain.handle('git-stash-save', (_, repoPath, message) => git.stashSave(repoPat
 ipcMain.handle('git-stash-apply', (_, repoPath, index) => git.stashApply(repoPath, index));
 ipcMain.handle('git-stash-drop', (_, repoPath, index) => git.stashDrop(repoPath, index));
 ipcMain.handle('git-revert', (_, repoPath, hash) => git.revert(repoPath, hash));
+ipcMain.handle('git-cherry-pick', (_, repoPath, hash) => git.cherryPick(repoPath, hash));
 ipcMain.handle('git-create-tag', (_, repoPath, name, ref) => git.createTag(repoPath, name, ref));
 ipcMain.handle('git-delete-tag', (_, repoPath, name) => git.deleteTag(repoPath, name));
 ipcMain.handle('git-stage-hunk', (_, repoPath, filePath, hunkHeader, index) => git.stageHunk(repoPath, filePath, hunkHeader, index));
