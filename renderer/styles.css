@@ -1828,7 +1828,8 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 .comment-card > .comment-head,
 .comment-card > .comment-body,
-.comment-card > .comment-actions { grid-column: 2; }
+.comment-card > .comment-actions,
+.comment-card > .reaction-row { grid-column: 2; }
 
 .comment-avatar {
   grid-row: 1 / span 2;
@@ -1987,3 +1988,70 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   background: var(--bg-surface);
 }
 .pr-description .comment-body { max-height: 300px; overflow-y: auto; }
+
+/* Reactions ---------------------------------------------------------------
+ * Counts ride along with the comment, so the row is free to draw. The picker
+ * only opens on the button, and asking who reacted only happens when somebody
+ * goes to react themselves. */
+.reaction-row { display: flex; align-items: center; gap: 4px; margin-top: 8px; flex-wrap: wrap; position: relative; }
+.reaction-chip,
+.reaction-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  line-height: 17px;
+}
+.reaction-chip:hover, .reaction-add:hover { border-color: var(--accent); color: var(--text); }
+.reaction-count { font-variant-numeric: tabular-nums; }
+.reaction-add { opacity: 0; }
+.comment-card:hover .reaction-add, .reaction-add:focus-visible { opacity: 1; }
+.reaction-row:has(.reaction-chip) .reaction-add { opacity: 0.6; }
+
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-menu);
+}
+.reaction-picker button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: var(--fs-base);
+}
+.reaction-picker button:hover { background: var(--bg-hover); }
+
+/* A settled conversation is context, not a question. */
+.review-thread.resolved { opacity: 0.85; }
+.review-thread-resolved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+}
+.review-thread-resolved::before { content: '\2713'; color: var(--green); }
+.review-thread-resolved:hover { color: var(--text); }

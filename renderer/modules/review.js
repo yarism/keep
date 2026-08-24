@@ -16,6 +16,7 @@ import { $, state } from './state.js';
 import { busyToast } from './toast.js';
 import { icon } from '../icons.js';
 import { commentCard } from './comment.js';
+import { reactionsEl } from './reactions.js';
 
 let _forge = null;
 let _pr = null;
@@ -160,6 +161,9 @@ function commentEl(c, { outdated = false } = {}) {
     body: c.body,
     chips: outdated && c.originalLine ? [`was line ${c.originalLine}`] : [],
     className: outdated ? 'outdated' : '',
+    // Reacting needs the comment's own id, so only real comments get a row —
+    // a draft nobody has posted has nothing to react to.
+    footer: c.id ? reactionsEl(c, _forge, () => loadThreads()) : null,
   });
 }
 
@@ -184,7 +188,36 @@ function hunkEl(diffHunk) {
 
 function threadEl(thread, { outdated = false } = {}) {
   const el = document.createElement('div');
-  el.className = 'review-thread';
+  el.className = 'review-thread' + (thread.resolved ? ' resolved' : '');
+
+  // A settled conversation is context, not a question — it collapses to a line
+  // saying who settled what, and opens again on a click. Until this could be
+  // read at all (it takes a second API, see listThreadState) every resolved
+  // thread sat in the diff looking exactly like a live one.
+  if (thread.resolved) {
+    const summary = document.createElement('button');
+    summary.type = 'button';
+    summary.className = 'review-thread-resolved';
+    const count = 1 + (thread.replies || []).length;
+    summary.textContent = `Resolved · ${thread.author} · ${count} comment${count !== 1 ? 's' : ''}`;
+    const body = document.createElement('div');
+    body.className = 'review-thread-body';
+    body.hidden = true;
+    summary.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      summary.classList.toggle('open', !body.hidden);
+    });
+    el.appendChild(summary);
+    el.appendChild(body);
+    body.appendChild(commentEl(thread, { outdated }));
+    (thread.replies || []).forEach(r => {
+      const reply = commentEl(r, { outdated });
+      reply.classList.add('review-reply');
+      body.appendChild(reply);
+    });
+    return el;
+  }
+
   el.appendChild(commentEl(thread, { outdated }));
   (thread.replies || []).forEach(r => {
     const reply = commentEl(r, { outdated });

@@ -26,9 +26,10 @@ export function avatarEl(url, name) {
 
 // author, avatar, at (ISO), body (Markdown), verb ("commented"), chips
 // (strings), className (extra classes), plain (render body as text, for a draft
-// that has not been posted and so is not yet Markdown from anybody).
+// that has not been posted and so is not yet Markdown from anybody), footer
+// (an element hung under the prose — reactions, or a draft's own buttons).
 export function commentCard({
-  author, avatar, at, body, verb = '', chips = [], className = '', plain = false,
+  author, avatar, at, body, verb = '', chips = [], className = '', plain = false, footer = null,
 }) {
   const el = document.createElement('div');
   el.className = ['comment-card', className].filter(Boolean).join(' ');
@@ -49,5 +50,6 @@ export function commentCard({
   // escape-first renderer, never set as markup.
   else mountMarkdown(bodyEl, body, (url) => window.git.openExternal(url));
 
+  if (footer) el.appendChild(footer);
   return el;
 }
