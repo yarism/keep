@@ -13,6 +13,7 @@ import { renderChangeset, summarize } from './changeset.js';
 import { forgeForBranch, forgeLabel, pullRequestsNoun, pullRequestsUrl } from './forge.js';
 import { icon } from '../icons.js';
 import { commentCard } from './comment.js';
+import { reactionsEl } from './reactions.js';
 import {
   setPullRequest, loadThreads, annotateFor, fileBadge, fileNote,
   reviewBarEl, onReviewChange, resetReview,
@@ -275,6 +276,9 @@ function renderInfo(pr, commits) {
       body: pr.body,
       verb: 'commented',
       className: 'pr-description',
+      // The description is a comment, so it is reacted to like one — the API
+      // just keeps it somewhere else, under the issue of the same number.
+      footer: reactionsEl({ type: 'issue', number: pr.number }, forge, null),
     }));
   }
   const toggle = info.querySelector('.pr-commits-toggle');

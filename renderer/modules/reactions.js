@@ -20,8 +20,9 @@ const ALL = [
 ];
 const emojiFor = (key) => (ALL.find(r => r.key === key) || {}).emoji || key;
 
-// Who left what, per comment id, once asked.
+// Who left what, per target, once asked.
 const detail = new Map();
+const targetKey = (t) => (t.type === 'issue' ? `issue:${t.number}` : `comment:${t.id}`);
 let _viewer;
 
 async function viewer(forge) {
@@ -31,23 +32,29 @@ async function viewer(forge) {
   return _viewer;
 }
 
-async function loadDetail(forge, commentId) {
-  if (detail.has(commentId)) return detail.get(commentId);
+async function loadDetail(forge, target) {
+  const key = targetKey(target);
+  if (detail.has(key)) return detail.get(key);
   try {
-    const result = await window.git.commentReactions(state.repoPath, forge, commentId);
-    detail.set(commentId, result.ok ? result.reactions : []);
-  } catch { detail.set(commentId, []); }
-  return detail.get(commentId);
+    const result = await window.git.reactions(state.repoPath, forge, target);
+    detail.set(key, result.ok ? result : { reactions: [], counts: [] });
+  } catch { detail.set(key, { reactions: [], counts: [] }); }
+  return detail.get(key);
 }
 
 // Yours, if you left this one — the id is what a DELETE needs.
-async function mine(forge, commentId, key) {
-  const [who, list] = await Promise.all([viewer(forge), loadDetail(forge, commentId)]);
+async function mine(forge, target, key) {
+  const [who, loaded] = await Promise.all([viewer(forge), loadDetail(forge, target)]);
   if (!who) return null;
-  return list.find(r => r.content === key && r.user === who) || null;
+  return (loaded.reactions || []).find(r => r.content === key && r.user === who) || null;
 }
 
-export function reactionsEl(comment, forge, onChanged) {
+// target: { type: 'comment', id } or { type: 'issue', number }.
+// counts: the summary that came with the comment, when there was one. The pull
+// request's description arrives without one — the pulls endpoint carries no
+// reactions at all — so for that the row asks, once, and draws itself when the
+// answer comes back.
+export function reactionsEl(target, forge, onChanged, counts) {
   const row = document.createElement('div');
   row.className = 'reaction-row';
 
@@ -62,29 +69,38 @@ export function reactionsEl(comment, forge, onChanged) {
     return b;
   };
 
-  (comment.reactions || []).forEach(r => row.appendChild(chip(r.key, r.count)));
-
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'reaction-add';
   add.title = 'React';
   add.textContent = '\u{1F642}+';
   add.addEventListener('click', () => openPicker(add));
-  row.appendChild(add);
+
+  function draw(list) {
+    row.innerHTML = '';
+    (list || []).forEach(r => row.appendChild(chip(r.key, r.count)));
+    row.appendChild(add);
+  }
+
+  if (counts) draw(counts);
+  else {
+    draw([]);
+    loadDetail(forge, target).then(loaded => draw(loaded.counts));
+  }
 
   async function toggle(key, button) {
     if (button.dataset.busy) return;
     button.dataset.busy = '1';
     try {
-      const existing = await mine(forge, comment.id, key);
+      const existing = await mine(forge, target, key);
       const result = existing
-        ? await window.git.react(state.repoPath, forge, { commentId: comment.id, reactionId: existing.id, remove: true })
-        : await window.git.react(state.repoPath, forge, { commentId: comment.id, content: key });
+        ? await window.git.react(state.repoPath, forge, { target, reactionId: existing.id, remove: true })
+        : await window.git.react(state.repoPath, forge, { target, content: key });
       if (!result.ok) { toast(result.message, { type: 'error', prose: true }); return; }
-      // What is on screen came from a summary that is now out of date, and the
-      // cached detail with it.
-      detail.delete(comment.id);
+      // What is on screen came from an answer that is now out of date.
+      detail.delete(targetKey(target));
       if (onChanged) onChanged();
+      else loadDetail(forge, target).then(loaded => draw(loaded.counts));
     } finally {
       delete button.dataset.busy;
     }
