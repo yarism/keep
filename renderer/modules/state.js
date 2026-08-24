@@ -21,6 +21,9 @@ export const state = {
   searching: false,
   branchList: [],
   tagList: [],
+  // Name and URL of every configured remote. Kept here because the context
+  // menus are built synchronously and cannot go and ask git first.
+  remotes: [],
   repositories: [],
 };
 

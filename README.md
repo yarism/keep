@@ -54,6 +54,8 @@ warning appears.
 - Multi-repository support
 - Detached HEAD state handling
 - Context menus throughout (right-click on branches, commits, files)
+- Links out to GitHub, GitLab and Bitbucket — open a pull request from a
+  branch, or view a branch or commit on the web, straight from the context menu
 - Six colour themes, switchable from the toolbar
 - Progress and results reported for every toolbar command
 

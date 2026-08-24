@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('git', {
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (s) => ipcRenderer.invoke('save-settings', s),
   setWindowChrome: (c) => ipcRenderer.invoke('set-window-chrome', c),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   // Pushed, not asked for: macOS changes appearance on its own, and while the
   // window follows the OS the main process is the only side that can see it.
   onSystemTheme: (cb) => ipcRenderer.on('system-theme', (_, s) => cb(s)),
