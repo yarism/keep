@@ -30,9 +30,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # No --arm64 --x64 here: the arches are declared per target in
+          # package.json instead. Passing them as flags splits the build into one
+          # electron-builder run per arch, and each run overwrites the previous
+          # one's latest-mac.yml — leaving a feed that names a single arch and an
+          # updater that finds nothing on the other.
           - os: macos-latest
             label: macos
-            args: --mac --arm64 --x64
+            args: --mac
           - os: windows-latest
             label: windows
             args: --win nsis --x64
