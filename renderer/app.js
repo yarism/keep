@@ -3,7 +3,7 @@ import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
-import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules/history.js';
+import { refreshHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
 import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
@@ -334,6 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);
+  setupHistoryPaging(refresh);
   setupHistoryScope(refresh, settings);
   setupPullRequests();
   await restoreLastRepo(settings);

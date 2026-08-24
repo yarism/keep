@@ -284,6 +284,9 @@ async function remoteNames(repoPath) {
 // keeping every parent below its children, so the lanes stay drawable.
 exports.log = async (repoPath, branch, limit = 100, opts = {}) => {
   const args = ['log', '--format=' + LOG_FORMAT, '-n', String(limit)];
+  // History pages as it is scrolled: each page asks for the next `limit`
+  // commits past the ones already on screen.
+  if (opts.skip) args.push('--skip=' + String(opts.skip));
   if (opts.all) args.push('--all', '--date-order');
   else if (branch) args.push(branch);
   const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
@@ -784,6 +787,7 @@ exports.fetchPullRequest = async (repoPath, remote, number) => {
 
 exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {}) => {
   const args = ['log', '--format=' + LOG_FORMAT, '-n', String(limit)];
+  if (opts.skip) args.push('--skip=' + String(opts.skip));
   // Search whatever the list is showing: the branch it is pinned to, or every
   // ref when it is showing all branches. Searching HEAD's branch regardless —
   // which is what this did — quietly answered a different question than the one
