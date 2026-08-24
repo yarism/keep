@@ -1073,17 +1073,26 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 #search-input::placeholder { color: var(--text-mute); }
 
-#search-clear {
+/* Sits inside the field, so it stays a small square glyph rather than
+ * inheriting the toolbar button's label-sized box. */
+#toolbar #search-clear {
   background: none;
   border: none;
   color: var(--text-mute);
   cursor: pointer;
   padding: 0;
+  margin-right: -2px;
   line-height: 0;
   display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  flex: none;
 }
-#search-clear.visible { display: block; }
-#search-clear:hover { color: var(--text); }
+#toolbar #search-clear:hover { background: var(--bg-active); color: var(--text); }
 
 .commit-item {
   padding: 8px 12px;
