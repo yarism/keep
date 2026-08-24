@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('git', {
   react: (p, forge, opts) => ipcRenderer.invoke('forge-react', p, forge, opts),
   reactions: (p, forge, target) => ipcRenderer.invoke('forge-reactions', p, forge, target),
   viewerLogin: (p, forge) => ipcRenderer.invoke('forge-viewer', p, forge),
+  workflowRun: (p, forge, target) => ipcRenderer.invoke('forge-workflow-run', p, forge, target),
   searchLog: (p, query, field, branch, limit, opts) => ipcRenderer.invoke('git-search-log', p, query, field, branch, limit, opts),
   stage: (p, file) => ipcRenderer.invoke('git-stage', p, file),
   unstage: (p, file, oldPath) => ipcRenderer.invoke('git-unstage', p, file, oldPath),

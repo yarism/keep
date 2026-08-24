@@ -4,6 +4,7 @@ import {
   forgeForBranch, remoteBranchName, forgeLabel, pullRequestNoun, pullRequestsNoun,
   newPullRequestUrl, branchUrl, commitUrl, pullRequestsUrl,
 } from './forge.js';
+import { watchBuild } from './build-watch.js';
 
 async function hasDirtyFiles() {
   try {
@@ -93,9 +94,15 @@ function forgeCommitItems(commit) {
   // them as hollow nodes — so an unpushed commit's page is known to be a 404
   // before the browser is opened.
   const pushed = !state.unpushed.has(commit.hash);
+  const short = commit.hash.substring(0, 7);
   return [
     { separator: true },
     { label: `View Commit on ${forgeLabel(f)}`, disabled: !pushed, action: () => openExternal(commitUrl(f, commit.hash)) },
+    // A commit no remote has cannot have been built, and the card would sit
+    // waiting for a run that was never asked for.
+    ...(f.kind === 'github' ? [{ label: `Watch the Build for "${short}"`, disabled: !pushed, action: () => {
+      watchBuild({ repoPath: state.repoPath, repoName: state.repoPath.split('/').pop(), sha: commit.hash, forge: f });
+    } }] : []),
   ];
 }
 
@@ -119,8 +126,21 @@ export function showBranchContextMenu(e, branch, refresh) {
 }
 
 export function showTagContextMenu(e, tag, refresh) {
+  // Only GitHub is asked about builds, so the item is absent rather than dead
+  // everywhere else.
+  const forge = forgeForBranch(state.remotes, null);
+  const buildable = forge && forge.kind === 'github';
+
   showContextMenu(e, [
     { label: 'Copy Tag Name to Clipboard', action: () => navigator.clipboard.writeText(tag) },
+    ...(buildable ? [{ label: `Watch the Build for "${tag}"`, action: () => {
+      watchBuild({
+        repoPath: state.repoPath,
+        repoName: state.repoPath.split('/').pop(),
+        tag,
+        forge,
+      });
+    } }] : []),
     { separator: true },
     // Checking out a tag detaches HEAD; confirmCheckout already warns about
     // uncommitted changes first, and the sidebar renders the detached state.

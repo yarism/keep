@@ -577,3 +577,85 @@ exports.viewerLogin = async (repoPath, forge, opts = {}) => {
   viewerCache.set(forge.host, login);
   return login;
 };
+
+// ── The build a tag set off ──
+//
+// A release is only half local. `npm version` ends by pushing a tag, and
+// everything that makes the release downloadable happens afterwards on a
+// runner: tests, an installer per platform, and the release itself being cut.
+// That is the part worth watching, and the only way to see it is to ask.
+
+// The run belonging to a tag or to a commit.
+//
+// A tag push is an ordinary push event whose head_branch is the tag name — not
+// a branch, whatever the field is called. A commit is matched by its sha, which
+// is what makes an everyday push to main watchable too: not every build is a
+// release, and the wait is the same either way.
+//
+// The newest match wins, since re-running a workflow files a fresh run and the
+// one it replaced keeps whatever conclusion it had.
+//
+// Pure, so the matching can be tested against a recorded response.
+function pickRun(runs, { tag = null, sha = null } = {}) {
+  if (!Array.isArray(runs) || (!tag && !sha)) return null;
+  const mine = runs.filter(r => r && (
+    (tag && (r.head_branch === tag || r.head_branch === `refs/tags/${tag}`))
+    || (sha && r.head_sha === sha)
+  ));
+  if (mine.length === 0) return null;
+  return mine.reduce((newest, r) => (r.run_number > newest.run_number ? r : newest), mine[0]);
+}
+exports.pickRun = pickRun;
+
+// One run and its jobs, reduced to what a card can hold. The renderer decides
+// what to say about it; this only decides what it is allowed to know.
+function normalizeRun(run, jobs) {
+  return {
+    id: run.id,
+    tag: run.head_branch || null,
+    status: run.status || null,
+    conclusion: run.conclusion || null,
+    url: run.html_url || null,
+    startedAt: run.run_started_at || run.created_at || null,
+    jobs: (Array.isArray(jobs) ? jobs : []).map(j => ({
+      name: j.name,
+      status: j.status || null,
+      conclusion: j.conclusion || null,
+      url: j.html_url || null,
+    })),
+  };
+}
+exports.normalizeRun = normalizeRun;
+
+exports.workflowRun = async (repoPath, forge, opts = {}) => {
+  if (!forge || forge.kind !== 'github') {
+    return fail('unsupported', 'Keep can only watch builds on GitHub so far.');
+  }
+  const { tag = null, sha = null } = opts;
+  if (!tag && !sha) return fail('unsupported', 'There is nothing to watch: no tag and no commit.');
+
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  const base = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}`;
+  const call = (url) => request(url, { token, host: forge.host, fetchImpl: opts.fetchImpl });
+
+  const runs = await call(`${base}/actions/runs?event=push&per_page=20`);
+  if (!runs.ok) {
+    // request() words its 404 for the review endpoints it was written for.
+    return runs.reason === 'not-found'
+      ? fail('not-found', `${forge.owner}/${forge.repo} has no Actions, or the token cannot see them.`)
+      : runs;
+  }
+
+  const run = pickRun(runs.body && runs.body.workflow_runs, { tag, sha });
+  // Not an error: seconds pass between a tag arriving and a run being filed.
+  if (!run) return { ok: true, authenticated: Boolean(token), run: null };
+
+  // A run without its jobs can only say "in progress", which is the one thing
+  // the person watching already knows.
+  const jobs = await call(`${base}/actions/runs/${run.id}/jobs?per_page=30`);
+  return {
+    ok: true,
+    authenticated: Boolean(token),
+    run: normalizeRun(run, jobs.ok && jobs.body ? jobs.body.jobs : []),
+  };
+};

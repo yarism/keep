@@ -1441,6 +1441,78 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .modal-actions button:disabled { opacity: .45; cursor: default; }
 .modal-actions button:disabled:hover { background: var(--accent); }
 
+/* The build card ---------------------------------------------------------- */
+
+/* Bottom left, opposite the toasts. A toast is something that happened; this is
+   something still happening, and it stays until it is over or dismissed. */
+.build-card {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 3000;
+  display: flex;
+  align-items: stretch;
+  max-width: 340px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+  overflow: hidden;
+}
+.build-card[hidden] { display: none; }
+.build-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 4px 10px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.build-open:hover { background: var(--bg-hover); }
+.build-mark { display: flex; width: 15px; flex: none; color: var(--text-dim); }
+.build-card[data-state="done"] .build-mark { color: var(--green); }
+.build-card[data-state="failed"] .build-mark,
+.build-card[data-state="unknown"] .build-mark { color: var(--red); }
+.build-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.build-title { font-size: var(--fs-md); font-weight: 600; }
+.build-detail {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Monospace so the seconds do not shuffle the card's width every tick. */
+.build-elapsed {
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+}
+.build-card[data-state="done"] .build-elapsed,
+.build-card[data-state="failed"] .build-elapsed { color: var(--text-dim); }
+.build-dismiss {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.build-dismiss:hover { background: var(--bg-hover); color: var(--text); }
+
 /* Release panel ----------------------------------------------------------- */
 
 /* Wider than the other modals: it holds a command line and, once running, a
