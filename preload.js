@@ -58,3 +58,12 @@ contextBridge.exposeInMainWorld('git', {
   trashFile: (p, file) => ipcRenderer.invoke('git-trash-file', p, file),
   showInFinder: (p, file) => ipcRenderer.invoke('git-show-in-finder', p, file),
 });
+
+// Updates are their own bridge rather than another key on `git` — nothing here
+// touches a repository, and onState pushes from main instead of being called.
+contextBridge.exposeInMainWorld('updates', {
+  state: () => ipcRenderer.invoke('update-state'),
+  check: () => ipcRenderer.invoke('update-check'),
+  install: () => ipcRenderer.invoke('update-install'),
+  onState: (cb) => ipcRenderer.on('update-state', (_, s) => cb(s)),
+});

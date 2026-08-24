@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const git = require('./git');
 const { windowBounds } = require('./window-bounds');
+const { initUpdater, checkForUpdates } = require('./updater');
+const { buildMenu } = require('./menu');
 
 let mainWindow;
 const reposFile = path.join(app.getPath('userData'), 'repositories.json');
@@ -123,7 +125,9 @@ app.whenReady().then(() => {
     const { nativeImage } = require('electron');
     app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')));
   }
+  buildMenu({ checkForUpdates });
   createWindow();
+  initUpdater();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

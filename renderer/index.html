@@ -104,6 +104,22 @@
     </span>
   </div>
 
+  <!-- Update banner: full width, above the workspace, because an update is the
+       app's business and not any one repository's. -->
+  <div id="update-banner" class="update-banner" hidden>
+    <span class="icon update-banner-icon" data-icon="download" data-size="16"></span>
+    <span id="update-banner-text" class="update-banner-text"></span>
+    <div id="update-banner-progress" class="update-progress" hidden>
+      <div id="update-banner-bar" class="update-progress-bar"></div>
+    </div>
+    <div class="update-banner-actions">
+      <button id="update-restart" class="update-restart" hidden>Restart to Update</button>
+      <button id="update-dismiss" class="update-dismiss" title="Dismiss">
+        <span class="icon" data-icon="close" data-size="12"></span>
+      </button>
+    </div>
+  </div>
+
   <div id="app">
     <!-- Left sidebar -->
     <aside id="sidebar">

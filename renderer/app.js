@@ -7,6 +7,7 @@ import { refreshHistory, setupHistorySearch, setupHistoryScope } from './modules
 import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
+import { setupUpdates } from './modules/updates.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
 import { describeResult } from './git-output.js';
@@ -311,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   setupToolbar();
   setupContextMenu();
+  setupUpdates();
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);

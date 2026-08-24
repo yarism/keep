@@ -8,10 +8,10 @@
     "start": "electron .",
     "test": "node --test \"test/*.test.js\" \"test/*.test.mjs\"",
     "test:watch": "node --test --watch \"test/*.test.js\" \"test/*.test.mjs\"",
-    "dist": "electron-builder --mac dmg",
+    "dist": "electron-builder --mac",
     "dist:win": "electron-builder --win nsis",
     "dist:linux": "electron-builder --linux AppImage",
-    "dist:all": "electron-builder --mac dmg --win nsis --linux AppImage",
+    "dist:all": "electron-builder --mac --win nsis --linux AppImage",
     "preversion": "npm test",
     "postversion": "git push --follow-tags"
   },
@@ -40,7 +40,7 @@
       "icon": "assets/icon.icns",
       "artifactName": "${productName}-mac-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
-      "target": "dmg",
+      "target": ["dmg", "zip"],
       "hardenedRuntime": true,
       "notarize": true
     },
@@ -59,10 +59,15 @@
       "main.js",
       "preload.js",
       "git.js",
+      "menu.js",
+      "updater.js",
       "window-bounds.js",
       "renderer/**/*",
       "assets/icon.png",
       "package.json"
     ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

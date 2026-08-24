@@ -32,7 +32,7 @@ jobs:
         include:
           - os: macos-latest
             label: macos
-            args: --mac dmg --arm64 --x64
+            args: --mac --arm64 --x64
           - os: windows-latest
             label: windows
             args: --win nsis --x64
@@ -78,6 +78,8 @@ jobs:
           fi
           npx electron-builder ${{ matrix.args }} --publish never
 
+      # The .yml is the update feed and the .blockmap is what turns a patch
+      # release into a partial download, so both travel with the installers.
       - name: Upload installers
         uses: actions/upload-artifact@v7
         with:
@@ -85,6 +87,9 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.exe
+            dist/*.zip
+            dist/latest*.yml
+            dist/*.blockmap
           if-no-files-found: error
           retention-days: 30
 

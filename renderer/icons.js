@@ -41,6 +41,11 @@ const PATHS = {
   tag: '<path d="M11.6 3.75H5.25a1.5 1.5 0 0 0-1.5 1.5v6.35c0 .4.16.78.44 1.06l7.6 7.6a1.5 1.5 0 0 0 2.12 0l6.35-6.35a1.5 1.5 0 0 0 0-2.12l-7.6-7.6a1.5 1.5 0 0 0-1.06-.44Z"/><circle cx="8" cy="8" r="1.15"/>',
 
   // ── Chrome ──
+  // The app updating itself. An arrow into a tray, not `pull`'s arrow onto a
+  // line — that one already means fetching commits, and one glyph cannot mean
+  // two things in the same window.
+  download: '<path d="M12 3.75v9.5"/><path d="m8 9.75 4 4 4-4"/><path d="M4.75 15.5v2.75a2 2 0 0 0 2 2h10.5a2 2 0 0 0 2-2V15.5"/>',
+
   search: '<circle cx="10.75" cy="10.75" r="6.25"/><path d="m19.5 19.5-4.3-4.3"/>',
   palette: '<path d="M12 3.75a8.25 8.25 0 1 0 0 16.5 1.7 1.7 0 0 0 1.7-1.7c0-.44-.17-.84-.44-1.14a1.7 1.7 0 0 1 1.25-2.85h2A3.75 3.75 0 0 0 20.25 10.8C19.8 6.8 16.3 3.75 12 3.75Z"/><circle cx="8" cy="11.75" r="1.05" fill="currentColor" stroke="none"/><circle cx="11" cy="7.9" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.5" cy="9.4" r="1.05" fill="currentColor" stroke="none"/>',
   check: '<path d="m5.25 12.5 4.5 4.5 9-10"/>',

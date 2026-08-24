@@ -147,6 +147,32 @@ Nothing to approve — the links above point at it a few minutes later.
 Pushes to `main` build the same installers as workflow
 [artifacts](https://github.com/yarism/keep/actions) without releasing them.
 
+### Updating
+
+Installed copies update themselves from those same releases, so a new version
+is not a trip back to this page. Keep checks a few seconds after launch and
+every six hours it stays open, downloads anything newer in the background, and
+puts a strip above the workspace when it is ready: **Restart to Update**.
+Ignoring the strip costs nothing — the update installs the next time Keep quits.
+**Keep → Check for Updates…** asks on demand, and is the only path that says
+anything when the answer is no.
+
+Three things have to be true for that to work, and all three are configured:
+
+- macOS builds a `.zip` as well as the `.dmg`, because Squirrel.Mac — the
+  updater underneath — cannot read a DMG. The DMG is still what a first-time
+  download gets.
+- The release carries `latest-mac.yml` / `latest.yml` next to the installers.
+  That file *is* the update feed; without it the app finds a release and
+  nothing to compare against. The `.blockmap` beside it is why a patch release
+  usually transfers a fraction of the app rather than all 110 MB.
+- macOS refuses to install an update that is not signed by the same Developer
+  ID as the running app, so this depends on the certificate below.
+
+Windows updates work the same way but are unsigned, so each one shows a
+SmartScreen warning. Releases from v1.0.8 and earlier have no feed file and
+cannot be updated from — that generation has to be replaced by hand, once.
+
 ### Signing
 
 macOS builds are signed and notarized in CI from five repository secrets:
