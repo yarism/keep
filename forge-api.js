@@ -281,6 +281,30 @@ async function request(url, { token, method = 'GET', body, host, fetchImpl } = {
   return { ok: true, body: parsed };
 }
 
+// The eight GitHub allows, in the order it shows them. Everything else in the
+// reactions object — the url, the total — is summary of these.
+const REACTIONS = [
+  { key: '+1', emoji: '\u{1F44D}' },
+  { key: '-1', emoji: '\u{1F44E}' },
+  { key: 'laugh', emoji: '\u{1F604}' },
+  { key: 'hooray', emoji: '\u{1F389}' },
+  { key: 'confused', emoji: '\u{1F615}' },
+  { key: 'heart', emoji: '\u{2764}\u{FE0F}' },
+  { key: 'rocket', emoji: '\u{1F680}' },
+  { key: 'eyes', emoji: '\u{1F440}' },
+];
+exports.REACTIONS = REACTIONS;
+
+// Counts come free with the comment — GitHub puts a summary on every one — so
+// showing them costs no extra request. Who reacted is not in that summary, and
+// is only asked for when somebody goes to react themselves.
+function normalizeReactions(summary) {
+  if (!summary) return [];
+  return REACTIONS
+    .map(r => ({ key: r.key, emoji: r.emoji, count: Number(summary[r.key] || 0) }))
+    .filter(r => r.count > 0);
+}
+
 // One inline comment, as the diff needs it: which file, which side, which line.
 //
 // `line` is null once a comment has gone stale — the line it was left on is no
@@ -298,6 +322,7 @@ function normalizeComment(c) {
     outdated: typeof c.line !== 'number',
     author: (c.user && c.user.login) || 'unknown',
     avatar: (c.user && c.user.avatar_url) || null,
+    reactions: normalizeReactions(c.reactions),
     // The slice of diff the comment was written against. GitHub sends it with
     // every comment, and it is the only way to show what an outdated one was
     // about once its line has left the diff.
@@ -344,7 +369,26 @@ exports.listReviewComments = async (repoPath, forge, opts = {}) => {
   const result = await request(url, { token, host: forge.host, fetchImpl: opts.fetchImpl });
   if (!result.ok) return result;
   if (!Array.isArray(result.body)) return fail('http', `${forge.host} sent something unexpected.`);
-  return { ok: true, threads: groupThreads(result.body.map(normalizeComment)) };
+  const threads = groupThreads(result.body.map(normalizeComment));
+
+  // Resolution state is a second question to a second API, and an optional one:
+  // without a token it cannot be asked at all, and a repository that answers
+  // the comments is still worth showing when it does not answer this. `resolved`
+  // stays undefined rather than false, so the UI can tell "open" from "unknown"
+  // and not claim a settled conversation is still live.
+  const state = await exports.listThreadState(repoPath, forge, {
+    number: opts.number,
+    token: opts.token,
+    fetchImpl: opts.stateFetchImpl || opts.fetchImpl,
+  });
+  if (state.ok) {
+    const byRoot = new Map(state.threads.map(t => [t.rootId, t]));
+    threads.forEach(t => {
+      const found = byRoot.get(t.id);
+      if (found) t.resolved = found.resolved;
+    });
+  }
+  return { ok: true, threads, resolutionKnown: Boolean(state.ok) };
 };
 
 // ── Submitting one ──
@@ -391,4 +435,131 @@ exports.submitReview = async (repoPath, forge, review, opts = {}) => {
   });
   if (!result.ok) return result;
   return { ok: true, url: (result.body && result.body.html_url) || '', id: result.body && result.body.id };
+};
+
+// ── Which conversations are settled ──
+//
+// REST does not know that threads exist. It returns a flat list of comments
+// with no notion of a conversation, let alone of one having been resolved — so
+// on REST alone a thread somebody closed last week still reads as live, which
+// is worse than not showing it at all.
+//
+// GraphQL knows. It is a second API and Keep does not want two of them, so this
+// is deliberately narrow: it asks one question, it is only used to annotate
+// what REST already returned, and if it fails for any reason the comments are
+// still there without the annotation.
+//
+// It also always needs a token — GitHub's GraphQL endpoint refuses anonymous
+// requests, where REST serves a public repository to anyone. That asymmetry is
+// why this cannot simply replace the REST call.
+function graphqlUrl(host) {
+  return host === 'github.com' ? 'https://api.github.com/graphql' : `https://${host}/api/graphql`;
+}
+
+const THREADS_QUERY = `query($owner:String!,$name:String!,$number:Int!){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$number){
+      reviewThreads(first:100){
+        nodes{ isResolved isOutdated comments(first:1){ nodes{ databaseId } } }
+      }
+    }
+  }
+}`;
+
+exports.listThreadState = async (repoPath, forge, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  if (!token) return fail('no-token', 'Whether a conversation is resolved is only readable with a token.');
+
+  const result = await request(graphqlUrl(forge.host), {
+    token,
+    host: forge.host,
+    method: 'POST',
+    fetchImpl: opts.fetchImpl,
+    body: {
+      query: THREADS_QUERY,
+      variables: { owner: forge.owner, name: forge.repo, number: opts.number },
+    },
+  });
+  if (!result.ok) return result;
+
+  // GraphQL answers 200 with an errors array rather than an HTTP status, so a
+  // failure here looks like success to the layer above unless it is checked.
+  const body = result.body || {};
+  if (body.errors && body.errors.length) {
+    return fail('http', body.errors.map(e => e.message).filter(Boolean).join('; ') || 'GraphQL refused the query.');
+  }
+  const nodes = (((body.data || {}).repository || {}).pullRequest || {}).reviewThreads;
+  if (!nodes || !Array.isArray(nodes.nodes)) return fail('http', 'GraphQL sent something unexpected.');
+
+  // Keyed by the id of the comment that opened the thread, which is the one
+  // thing both APIs agree on.
+  return {
+    ok: true,
+    threads: nodes.nodes.map(t => ({
+      rootId: (((t.comments || {}).nodes || [])[0] || {}).databaseId || null,
+      resolved: Boolean(t.isResolved),
+      outdated: Boolean(t.isOutdated),
+    })).filter(t => t.rootId),
+  };
+};
+
+// ── Reacting ──
+
+exports.reactToComment = async (repoPath, forge, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  if (!token) return fail('no-token', 'Reacting writes to the pull request, so it needs a token.');
+
+  const base = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/pulls/comments/${opts.commentId}/reactions`;
+  if (opts.remove) {
+    const gone = await request(`${base}/${opts.reactionId}`, {
+      token, host: forge.host, method: 'DELETE', fetchImpl: opts.fetchImpl,
+    });
+    // A DELETE answers 204 with no body, which the JSON parse in request()
+    // treats as malformed. Removing something that is already gone is the
+    // outcome that was wanted either way.
+    return gone.ok || gone.reason === 'http' ? { ok: true } : gone;
+  }
+  return request(base, {
+    token, host: forge.host, method: 'POST', fetchImpl: opts.fetchImpl,
+    body: { content: opts.content },
+  });
+};
+
+// Who reacted to one comment, asked for only when somebody opens the picker —
+// the summary on the comment carries the counts but not the names, and without
+// the names there is no way to know which of them is yours to take back.
+exports.listCommentReactions = async (repoPath, forge, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  const url = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/pulls/comments/${opts.commentId}/reactions?per_page=${PER_PAGE}`;
+  const result = await request(url, { token, host: forge.host, fetchImpl: opts.fetchImpl });
+  if (!result.ok) return result;
+  if (!Array.isArray(result.body)) return fail('http', 'Unexpected answer.');
+  return {
+    ok: true,
+    reactions: result.body.map(r => ({
+      id: r.id,
+      content: r.content,
+      user: (r.user && r.user.login) || '',
+    })),
+  };
+};
+
+// The signed-in account, cached per host: needed to tell your own reaction from
+// everybody else's, and for nothing else.
+const viewerCache = new Map();
+
+exports.viewerLogin = async (repoPath, forge, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return null;
+  if (viewerCache.has(forge.host)) return viewerCache.get(forge.host);
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  if (!token) { viewerCache.set(forge.host, null); return null; }
+  const result = await request(`${apiBase(forge.host)}/user`, {
+    token, host: forge.host, fetchImpl: opts.fetchImpl,
+  });
+  const login = result.ok && result.body ? result.body.login || null : null;
+  viewerCache.set(forge.host, login);
+  return login;
 };

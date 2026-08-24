@@ -279,6 +279,7 @@ test('listReviewComments: reduces a comment to where it hangs in the diff', asyn
     outdated: false,
     author: 'octocat',
     avatar: 'https://avatars.example/u/2',
+    reactions: [],
     diffHunk: '@@ -1,3 +1,4 @@\n const a = 1;\n+const token = findToken(host);',
     body: 'Should this be cached per host?',
     createdAt: '2026-08-24T09:00:00Z',
@@ -453,4 +454,158 @@ test('submitReview: an unreachable host does not throw mid-submit', async () => 
   });
 
   assert.strictEqual(result.reason, 'network');
+});
+
+// ── reactions ──
+//
+// The counts ride along on every comment, so showing them costs no request.
+// Only the ones somebody actually used are worth a chip.
+
+test('reactions: only the ones with a count survive, in GitHub\'s own order', async () => {
+  const reacted = {
+    ...COMMENT,
+    reactions: { '+1': 3, '-1': 0, laugh: 0, hooray: 1, confused: 0, heart: 0, rocket: 0, eyes: 2, total_count: 6 },
+  };
+
+  const result = await api.listReviewComments('/repo', GH, {
+    number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [reacted])),
+  });
+
+  assert.deepStrictEqual(result.threads[0].reactions.map(r => [r.key, r.count]), [['+1', 3], ['hooray', 1], ['eyes', 2]]);
+  assert.ok(result.threads[0].reactions.every(r => r.emoji), 'every chip has something to draw');
+});
+
+test('reactions: a comment with none, or with no summary at all, has no chips', async () => {
+  const bare = { ...COMMENT, reactions: undefined };
+
+  const result = await api.listReviewComments('/repo', GH, {
+    number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [bare])),
+  });
+
+  assert.deepStrictEqual(result.threads[0].reactions, []);
+});
+
+test('reactToComment: adds one, and refuses without a token', async () => {
+  const fetchImpl = fakeFetch(reply(201, { id: 7, content: '+1' }));
+
+  const added = await api.reactToComment('/repo', GH, { commentId: 900, content: '+1', token: 'tok', fetchImpl });
+  assert.strictEqual(added.ok, true);
+  assert.strictEqual(fetchImpl.calls[0].init.method, 'POST');
+  assert.deepStrictEqual(JSON.parse(fetchImpl.calls[0].init.body), { content: '+1' });
+  assert.match(fetchImpl.calls[0].url, /\/pulls\/comments\/900\/reactions$/);
+
+  const refused = await api.reactToComment('/repo', GH, { commentId: 900, content: '+1', token: null, fetchImpl });
+  assert.strictEqual(refused.reason, 'no-token');
+});
+
+// A DELETE answers 204 with an empty body, which is not JSON — taking that as a
+// failure would report a reaction that did come off as one that did not.
+test('reactToComment: removing one treats an empty answer as success', async () => {
+  const noContent = { status: 204, ok: true, headers: { get: () => null }, json: async () => { throw new Error('empty'); } };
+
+  const result = await api.reactToComment('/repo', GH, {
+    commentId: 900, reactionId: 7, remove: true, token: 'tok', fetchImpl: fakeFetch(noContent),
+  });
+
+  assert.strictEqual(result.ok, true);
+});
+
+test('listCommentReactions: reports who left each one, so yours can be taken back', async () => {
+  const body = [{ id: 7, content: '+1', user: { login: 'yarism' } }, { id: 8, content: 'eyes', user: { login: 'octocat' } }];
+
+  const result = await api.listCommentReactions('/repo', GH, { commentId: 900, token: 'tok', fetchImpl: fakeFetch(body && reply(200, body)) });
+
+  assert.deepStrictEqual(result.reactions, [
+    { id: 7, content: '+1', user: 'yarism' },
+    { id: 8, content: 'eyes', user: 'octocat' },
+  ]);
+});
+
+// ── resolved conversations ──
+
+const threadsPayload = (nodes) => ({
+  data: { repository: { pullRequest: { reviewThreads: { nodes } } } },
+});
+
+// Routes by URL, because the resolved state is a second call to a second API
+// and the two answers are nothing alike.
+function routedFetch(routes) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url, init });
+    const match = Object.keys(routes).find(k => url.includes(k));
+    if (!match) throw new Error(`no route for ${url}`);
+    const r = routes[match];
+    if (r instanceof Error) throw r;
+    return r;
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+test('listThreadState: keys resolution on the comment that opened the thread', async () => {
+  const fetchImpl = fakeFetch(reply(200, threadsPayload([
+    { isResolved: true, isOutdated: false, comments: { nodes: [{ databaseId: 900 }] } },
+    { isResolved: false, isOutdated: true, comments: { nodes: [{ databaseId: 901 }] } },
+  ])));
+
+  const result = await api.listThreadState('/repo', GH, { number: 12, token: 'tok', fetchImpl });
+
+  assert.deepStrictEqual(result.threads, [
+    { rootId: 900, resolved: true, outdated: false },
+    { rootId: 901, resolved: false, outdated: true },
+  ]);
+  assert.strictEqual(fetchImpl.calls[0].url, 'https://api.github.com/graphql');
+});
+
+// GraphQL refuses anonymous requests where REST serves a public repository to
+// anyone, which is the whole reason this cannot replace the REST call.
+test('listThreadState: without a token it declines rather than asking', async () => {
+  const fetchImpl = fakeFetch(reply(200, {}));
+
+  const result = await api.listThreadState('/repo', GH, { number: 12, token: null, fetchImpl });
+
+  assert.strictEqual(result.reason, 'no-token');
+  assert.strictEqual(fetchImpl.calls.length, 0);
+});
+
+// GraphQL answers 200 with an errors array rather than an HTTP status, so a
+// failure looks like success unless it is checked for.
+test('listThreadState: an errors array is a failure, not an empty result', async () => {
+  const fetchImpl = fakeFetch(reply(200, { errors: [{ message: 'Bad credentials' }] }));
+
+  const result = await api.listThreadState('/repo', GH, { number: 12, token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, false);
+  assert.match(result.message, /Bad credentials/);
+});
+
+test('listReviewComments: marks the threads GraphQL says are resolved', async () => {
+  const fetchImpl = routedFetch({
+    '/pulls/12/comments': reply(200, [COMMENT]),
+    '/graphql': reply(200, threadsPayload([
+      { isResolved: true, isOutdated: false, comments: { nodes: [{ databaseId: 900 }] } },
+    ])),
+  });
+
+  const result = await api.listReviewComments('/repo', GH, { number: 12, token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.threads[0].resolved, true);
+  assert.strictEqual(result.resolutionKnown, true);
+});
+
+// The comments are the point; their resolution state is an annotation. Losing
+// the annotation must not lose the conversation.
+test('listReviewComments: still returns the comments when GraphQL will not answer', async () => {
+  const fetchImpl = routedFetch({
+    '/pulls/12/comments': reply(200, [COMMENT]),
+    '/graphql': reply(401, {}),
+  });
+
+  const result = await api.listReviewComments('/repo', GH, { number: 12, token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.threads.length, 1);
+  assert.strictEqual(result.resolutionKnown, false);
+  assert.strictEqual(result.threads[0].resolved, undefined, 'unknown is not the same as open');
 });
