@@ -88,6 +88,7 @@ is remembered between launches.
 |---|---|
 | **Graphite Light** | the default — neutral greys, blue accent |
 | **Graphite Dark** | the same palette after dark |
+| **Claude** | Claude Code's own palette — warm near-black, clay, bright diffs |
 | **Ivory** | warm paper, espresso ink, bronze — the restrained one |
 | **Sage** | cool light greys with a green cast, deep teal accent |
 | **Ember** | warm charcoal with amber — the dark one that isn't blue |
