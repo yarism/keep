@@ -910,3 +910,36 @@ test('a git failure rejects with git\'s stderr', async () => {
     },
   );
 });
+
+// ── the index lock ──
+
+// `git status` refreshes the index as a side effect, and to write it back it
+// takes .git/index.lock. Keep polls status every few seconds, so without
+// GIT_OPTIONAL_LOCKS=0 a poll can land on a `git commit` typed in a terminal and
+// break it with "Unable to create '.../index.lock': File exists". The env var is
+// the whole fix, so the test is that it reaches git — checked with a stand-in
+// `git` on PATH that reports the environment it was handed.
+test('git runs with optional locks off, so a terminal can commit alongside Keep', async () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keep-test-bin-'));
+  const record = path.join(binDir, 'env.txt');
+  fs.writeFileSync(path.join(binDir, 'git'),
+    `#!/bin/sh\nprintf '%s' "$GIT_OPTIONAL_LOCKS" > ${JSON.stringify(record)}\n`);
+  fs.chmodSync(path.join(binDir, 'git'), 0o755);
+
+  const realPath = process.env.PATH;
+  process.env.PATH = `${binDir}:${realPath}`;
+  let handed;
+  try {
+    await git.status(binDir);
+    handed = fs.readFileSync(record, 'utf-8');
+  } finally {
+    process.env.PATH = realPath;
+    fs.rmSync(binDir, { recursive: true, force: true });
+  }
+
+  assert.strictEqual(handed, '0', 'GIT_OPTIONAL_LOCKS reaches git');
+});
