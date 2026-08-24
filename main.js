@@ -20,8 +20,13 @@ function saveRepos(repos) {
 
 app.setName('Keep');
 
-// Override the dock tooltip and icon in dev mode on macOS
-if (process.platform === 'darwin') {
+// Override the dock tooltip and icon in dev mode on macOS. Only in dev: the
+// bundle being patched is whichever one is running, and when that is the real
+// Keep.app the patch points its icon at a keep.icns that packaging never puts
+// there — assets/icon.icns is not in the build's file list, so the copy below
+// is skipped while the rewritten plist survives, and macOS falls back to the
+// generic app icon.
+if (process.platform === 'darwin' && !app.isPackaged) {
   const plistPath = path.join(path.dirname(process.execPath), '..', 'Info.plist');
   const resourcesDir = path.join(path.dirname(process.execPath), '..', 'Resources');
   try {
