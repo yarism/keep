@@ -38,8 +38,9 @@ const PR = {
   number: 12,
   title: 'Add pull request support',
   user: { login: 'yarism' },
+  body: 'Adds a Pull Requests view.',
   draft: false,
-  head: { ref: 'pr-support', repo: { full_name: 'yarism/keep' } },
+  head: { ref: 'pr-support', sha: 'deadbee', repo: { full_name: 'yarism/keep' } },
   base: { ref: 'main', repo: { full_name: 'yarism/keep' } },
   html_url: 'https://github.com/yarism/keep/pull/12',
   updated_at: '2026-08-24T10:00:00Z',
@@ -58,7 +59,9 @@ test('listPullRequests: reduces GitHub\'s response to the fields the UI shows', 
   assert.deepStrictEqual(result.pulls, [{
     number: 12,
     title: 'Add pull request support',
+    body: 'Adds a Pull Requests view.',
     author: 'yarism',
+    headSha: 'deadbee',
     draft: false,
     head: 'pr-support',
     base: 'main',
@@ -126,9 +129,9 @@ test('listPullRequests: says when the first page is full rather than implying it
 test('listPullRequests: sends the token as a bearer credential when there is one', async () => {
   const fetchImpl = fakeFetch(reply(200, []));
 
-  await api.listPullRequests('/repo', GH, { token: 'ghp_x', fetchImpl });
+  await api.listPullRequests('/repo', GH, { token: 'fake-token', fetchImpl });
 
-  assert.strictEqual(fetchImpl.calls[0].init.headers.Authorization, 'Bearer ghp_x');
+  assert.strictEqual(fetchImpl.calls[0].init.headers.Authorization, 'Bearer fake-token');
 });
 
 // Public repositories are readable without one, which is the case that needs no
@@ -224,15 +227,180 @@ test('listPullRequests: a non-GitHub forge is declined before any request is mad
 
 // ── the credential protocol ──
 
+// The value below is deliberately not shaped like a real token. A fixture that
+// mimics one — a `ghp_` prefix, a plausible username — is a credential as far
+// as a secret scanner is concerned, and an alert that is always a false alarm
+// trains everyone to ignore the next one. What the test is actually about is
+// the "=" inside the value, which a naive split on "=" would truncate.
 test('parseCredential: reads git\'s key=value answer, including a password with an "=" in it', () => {
-  const out = 'protocol=https\nhost=github.com\nusername=yarism\npassword=ghp_a=b=c\n';
+  const out = 'protocol=https\nhost=github.com\nusername=example\npassword=fake-value-a=b=c\n';
 
   assert.deepStrictEqual(api.parseCredential(out), {
-    protocol: 'https', host: 'github.com', username: 'yarism', password: 'ghp_a=b=c',
+    protocol: 'https', host: 'github.com', username: 'example', password: 'fake-value-a=b=c',
   });
 });
 
 test('parseCredential: an empty or malformed answer yields no fields rather than junk', () => {
   assert.deepStrictEqual(api.parseCredential(''), {});
   assert.deepStrictEqual(api.parseCredential('no-equals-sign\n=leading\n'), {});
+});
+
+// ── reading a review ──
+
+const COMMENT = {
+  id: 900,
+  in_reply_to_id: null,
+  path: 'forge-api.js',
+  side: 'RIGHT',
+  line: 42,
+  original_line: 40,
+  user: { login: 'octocat' },
+  body: 'Should this be cached per host?',
+  created_at: '2026-08-24T09:00:00Z',
+  html_url: 'https://github.com/yarism/keep/pull/12#discussion_r900',
+};
+
+test('listReviewComments: reduces a comment to where it hangs in the diff', async () => {
+  const fetchImpl = fakeFetch(reply(200, [COMMENT]));
+
+  const result = await api.listReviewComments('/repo', GH, { number: 12, token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.comments, [{
+    id: 900,
+    replyTo: null,
+    path: 'forge-api.js',
+    side: 'RIGHT',
+    line: 42,
+    originalLine: 40,
+    outdated: false,
+    author: 'octocat',
+    body: 'Should this be cached per host?',
+    createdAt: '2026-08-24T09:00:00Z',
+    url: 'https://github.com/yarism/keep/pull/12#discussion_r900',
+  }]);
+});
+
+// A comment whose line has moved out of the diff comes back with line: null.
+// It is still worth reading — it is just no longer a row in the file.
+test('listReviewComments: a comment on a line that no longer exists is marked outdated', async () => {
+  const stale = { ...COMMENT, line: null, original_line: 40 };
+
+  const result = await api.listReviewComments('/repo', GH, {
+    number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [stale])),
+  });
+
+  assert.strictEqual(result.comments[0].outdated, true);
+  assert.strictEqual(result.comments[0].line, null);
+  assert.strictEqual(result.comments[0].originalLine, 40);
+});
+
+test('listReviewComments: a reply keeps the id of the comment it answers', async () => {
+  const replyComment = { ...COMMENT, id: 901, in_reply_to_id: 900 };
+
+  const result = await api.listReviewComments('/repo', GH, {
+    number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [COMMENT, replyComment])),
+  });
+
+  assert.strictEqual(result.comments[1].replyTo, 900);
+});
+
+// ── submitting one ──
+
+const REVIEW = {
+  number: 12,
+  headSha: 'abc123',
+  event: 'APPROVE',
+  body: 'Looks good.',
+  comments: [{ path: 'git.js', side: 'RIGHT', line: 10, body: 'nice' }],
+};
+
+test('submitReview: posts the verdict, the message and the comments in one request', async () => {
+  const fetchImpl = fakeFetch(reply(200, { html_url: 'https://github.com/yarism/keep/pull/12#pullrequestreview-1', id: 1 }));
+
+  const result = await api.submitReview('/repo', GH, REVIEW, { token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  const { url, init } = fetchImpl.calls[0];
+  assert.strictEqual(url, 'https://api.github.com/repos/yarism/keep/pulls/12/reviews');
+  assert.strictEqual(init.method, 'POST');
+  assert.deepStrictEqual(JSON.parse(init.body), {
+    commit_id: 'abc123',
+    body: 'Looks good.',
+    event: 'APPROVE',
+    comments: [{ path: 'git.js', line: 10, side: 'RIGHT', body: 'nice' }],
+  });
+});
+
+// Reading a public repository needs no token; writing to one always does, and
+// finding that out from a 401 after typing a review is the wrong moment.
+test('submitReview: refuses before sending anything when there is no token', async () => {
+  const fetchImpl = fakeFetch(reply(200, {}));
+
+  const result = await api.submitReview('/repo', GH, REVIEW, { token: null, fetchImpl });
+
+  assert.strictEqual(result.reason, 'no-token');
+  assert.match(result.message, /needs a token/);
+  assert.strictEqual(fetchImpl.calls.length, 0);
+});
+
+test('submitReview: an approval may be wordless, but a rejection may not', async () => {
+  const fetchImpl = fakeFetch(reply(200, {}));
+
+  const bare = { number: 12, headSha: 'abc', event: 'APPROVE', body: '', comments: [] };
+  assert.strictEqual((await api.submitReview('/repo', GH, bare, { token: 't', fetchImpl })).ok, true);
+
+  const silent = { ...bare, event: 'REQUEST_CHANGES' };
+  const result = await api.submitReview('/repo', GH, silent, { token: 't', fetchImpl });
+  assert.strictEqual(result.reason, 'rejected');
+  assert.match(result.message, /needs a message/);
+});
+
+test('submitReview: a comment carries the review even with no message of its own', async () => {
+  const fetchImpl = fakeFetch(reply(200, {}));
+  const onlyComments = {
+    number: 12, headSha: 'abc', event: 'COMMENT', body: '',
+    comments: [{ path: 'a.js', side: 'RIGHT', line: 3, body: 'here' }],
+  };
+
+  assert.strictEqual((await api.submitReview('/repo', GH, onlyComments, { token: 't', fetchImpl })).ok, true);
+});
+
+test('submitReview: an unknown verdict never reaches GitHub', async () => {
+  const fetchImpl = fakeFetch(reply(200, {}));
+
+  const result = await api.submitReview('/repo', GH, { ...REVIEW, event: 'MERGE' }, { token: 't', fetchImpl });
+
+  assert.strictEqual(result.reason, 'rejected');
+  assert.strictEqual(fetchImpl.calls.length, 0);
+});
+
+// 422 is how a comment on a line outside the diff comes back, and GitHub's own
+// wording names the field — which is the only clue to which comment it was.
+test('submitReview: a rejected anchor is reported in GitHub\'s own words', async () => {
+  const body = { message: 'Validation Failed', errors: [{ message: 'line must be part of the diff' }] };
+
+  const result = await api.submitReview('/repo', GH, REVIEW, {
+    token: 't', fetchImpl: fakeFetch(reply(422, body)),
+  });
+
+  assert.strictEqual(result.reason, 'rejected');
+  assert.match(result.message, /Validation Failed — line must be part of the diff/);
+});
+
+test('submitReview: a token that cannot write says so rather than blaming the review', async () => {
+  const result = await api.submitReview('/repo', GH, REVIEW, {
+    token: 'readonly', fetchImpl: fakeFetch(reply(403, {}, { 'x-ratelimit-remaining': '55' })),
+  });
+
+  assert.strictEqual(result.reason, 'auth');
+  assert.match(result.message, /not be allowed/);
+});
+
+test('submitReview: an unreachable host does not throw mid-submit', async () => {
+  const result = await api.submitReview('/repo', GH, REVIEW, {
+    token: 't', fetchImpl: fakeFetch(new Error('ECONNRESET')),
+  });
+
+  assert.strictEqual(result.reason, 'network');
 });
