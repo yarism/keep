@@ -13,6 +13,33 @@ function highlightBranch(name) {
   });
 }
 
+export function setupPanelResize(handleId, panelId, settingsKey, { minWidth = 160, maxWidth = 800 } = {}) {
+  const handle = $(`#${handleId}`);
+  const panel = $(`#${panelId}`);
+  let startX, startWidth;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    startX = e.clientX;
+    startWidth = panel.offsetWidth;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', onDragEnd);
+  });
+
+  function onDrag(e) {
+    const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + (e.clientX - startX)));
+    panel.style.width = newWidth + 'px';
+  }
+
+  function onDragEnd() {
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', onDragEnd);
+    window.git.saveSettings({ [settingsKey]: panel.offsetWidth });
+  }
+}
+
 export function setupSidebarResize() {
   const handle = $('#sidebar-resize');
   const sidebar = $('#sidebar');

@@ -329,6 +329,19 @@ button .icon-svg { pointer-events: none; }
 }
 #sidebar-resize:hover, #sidebar-resize.dragging { background: var(--tint-accent-strong); }
 
+#wc-resize, #history-resize {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  margin-left: -3px;
+  margin-right: -2px;
+}
+#wc-resize:hover, #wc-resize.dragging,
+#history-resize:hover, #history-resize.dragging { background: var(--tint-accent-strong); }
+
 /* Every section header is the same height whether or not it carries a button.
  * The height is fixed rather than left to the content because the "+" on
  * Repositories is taller than the label, and a header that grows around it puts
