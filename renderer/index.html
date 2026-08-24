@@ -63,6 +63,13 @@
           <span>Rebase</span>
         </button>
       </div>
+      <div class="toolbar-sep"></div>
+      <div class="toolbar-group">
+        <button id="btn-release" title="Release" disabled>
+          <span class="icon" data-icon="package" data-size="17"></span>
+          <span>Release</span>
+        </button>
+      </div>
 
       <div class="toolbar-right">
         <div id="history-search-bar" hidden>
@@ -341,6 +348,37 @@
       <div class="modal-actions">
         <button id="modal-cancel">Cancel</button>
         <button id="modal-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="release-overlay" class="modal-overlay" hidden>
+    <div class="modal release-modal">
+      <div class="modal-title" id="release-title">Release</div>
+
+      <div id="release-setup">
+        <div class="release-current" id="release-current"></div>
+        <div class="release-bumps" id="release-bumps"></div>
+        <label class="release-label" for="release-command">Command</label>
+        <input type="text" id="release-command" class="modal-input release-command"
+               spellcheck="false" autocomplete="off" autocapitalize="off">
+        <div class="release-reason" id="release-reason"></div>
+        <div class="release-steps" id="release-steps" hidden></div>
+        <div class="release-block" id="release-block" hidden></div>
+      </div>
+
+      <div id="release-run" hidden>
+        <div class="release-run-head">
+          <span class="spinner" id="release-spinner"></span>
+          <code id="release-run-label"></code>
+        </div>
+        <pre class="release-output" id="release-output"></pre>
+        <div class="release-result" id="release-result" hidden></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="release-close">Cancel</button>
+        <button id="release-go">Release</button>
       </div>
     </div>
   </div>

@@ -40,6 +40,11 @@ const PATHS = {
   rebase: '<circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><path d="M6.5 15.5V4"/><path d="M17.5 8.5v3.5a4 4 0 0 1-4 4h-2.5"/><path d="m13.25 13.75-2.5 2.25 2.5 2.25"/>',
   tag: '<path d="M11.6 3.75H5.25a1.5 1.5 0 0 0-1.5 1.5v6.35c0 .4.16.78.44 1.06l7.6 7.6a1.5 1.5 0 0 0 2.12 0l6.35-6.35a1.5 1.5 0 0 0 0-2.12l-7.6-7.6a1.5 1.5 0 0 0-1.06-.44Z"/><circle cx="8" cy="8" r="1.15"/>',
 
+  // Cutting a release. A sealed box rather than another tag: the sidebar's tag
+  // glyph already means "a ref called v1.0.16", and this means the act of
+  // making one.
+  package: '<path d="M20.25 8.55v6.9a1.6 1.6 0 0 1-.84 1.41l-6.6 3.6a1.6 1.6 0 0 1-1.52 0l-6.6-3.6a1.6 1.6 0 0 1-.84-1.41v-6.9a1.6 1.6 0 0 1 .84-1.41l6.6-3.6a1.6 1.6 0 0 1 1.52 0l6.6 3.6a1.6 1.6 0 0 1 .84 1.41Z"/><path d="m3.9 7.7 8.1 4.45 8.1-4.45"/><path d="M12 12.15v8.2"/>',
+
   // ── Chrome ──
   // The app updating itself. An arrow into a tray, not `pull`'s arrow onto a
   // line — that one already means fetching commits, and one glyph cannot mean

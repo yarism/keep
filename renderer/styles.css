@@ -1438,6 +1438,131 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-weight: 600;
 }
 .modal-actions button:last-child:hover { background: var(--accent-hover); }
+.modal-actions button:disabled { opacity: .45; cursor: default; }
+.modal-actions button:disabled:hover { background: var(--accent); }
+
+/* Release panel ----------------------------------------------------------- */
+
+/* Wider than the other modals: it holds a command line and, once running, a
+   console. Both look wrong wrapped. */
+.release-modal { min-width: 560px; max-width: 620px; }
+.release-current { font-size: var(--fs-md); color: var(--text-dim); margin-bottom: 14px; }
+
+.release-bumps { display: flex; gap: 8px; margin-bottom: 16px; }
+.release-bump {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.release-bump:hover { background: var(--bg-hover); }
+.release-bump.selected {
+  border-color: var(--accent);
+  background: var(--tint-accent);
+}
+.release-bump-version { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 600; }
+.release-bump-name { font-size: var(--fs-2xs); color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+.release-nonsemver { font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55; }
+
+.release-label {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+.release-command { font-family: var(--font-mono); font-size: var(--fs-base); margin-bottom: 6px; }
+.release-reason { font-size: var(--fs-sm); color: var(--text-mute); margin-bottom: 14px; }
+
+.release-steps { margin-bottom: 14px; }
+.release-steps-title {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+.release-step { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: var(--fs-sm); }
+.release-step-name { color: var(--text-dim); min-width: 82px; }
+.release-step code { font-family: var(--font-mono); font-size: var(--fs-code); color: var(--text); }
+
+.release-block {
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--text);
+  background: color-mix(in srgb, var(--yellow) 14%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--yellow) 40%, transparent);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  margin-bottom: 14px;
+}
+
+.release-run-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.release-run-head code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.release-output {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.6;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.release-result {
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  margin-bottom: 14px;
+  white-space: pre-line;
+}
+.release-result.ok {
+  color: var(--text);
+  background: color-mix(in srgb, var(--green) 13%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--green) 38%, transparent);
+}
+.release-result.bad {
+  color: var(--text);
+  background: color-mix(in srgb, var(--red) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+}
+.release-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.release-link:hover { background: var(--bg-hover); }
 
 /* Stash view -------------------------------------------------------------- */
 
