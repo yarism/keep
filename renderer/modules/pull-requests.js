@@ -12,6 +12,10 @@ import { $, escapeHtml, state, switchView } from './state.js';
 import { renderChangeset } from './changeset.js';
 import { forgeForBranch, forgeLabel, pullRequestsNoun, pullRequestsUrl } from './forge.js';
 import { icon } from '../icons.js';
+import {
+  setPullRequest, loadThreads, annotateFor, fileBadge, fileNote,
+  reviewBarEl, onReviewChange, resetReview,
+} from './review.js';
 import { busyToast } from './toast.js';
 
 // A pull request list costs a network round trip and counts against a rate
@@ -85,6 +89,7 @@ export async function loadPullRequests({ force = false } = {}) {
 
 export function resetPullRequests() {
   _loadedAt = 0;
+  resetReview();
   state.pullRequests = [];
   state.selectedPr = null;
   const list = $('#pr-list');
@@ -162,8 +167,18 @@ function shortDate(iso) {
 
 // Fetching the head ref is the only network work here, and it is why this shows
 // a toast: on a large pull request it is the one part that takes a moment.
+// Adding or dropping a draft changes the review bar and the file badges, both
+// of which sit outside the row that changed — so the pane is rebuilt rather
+// than patched in three places. Expanded diffs collapse, which is the price; a
+// review has only a handful of these moments.
+let _rerenderChangeset = () => {};
+onReviewChange(() => { if (state.currentView === 'pull-requests') _rerenderChangeset(); });
+
 async function selectPullRequest(pr) {
   if (!pr) return;
+  // Until the new pull request has loaded there is nothing to repaint, and the
+  // closure still standing here belongs to the last one.
+  _rerenderChangeset = () => {};
   state.selectedPr = pr.number;
   renderList();
   renderInfo(pr);
@@ -173,7 +188,13 @@ async function selectPullRequest(pr) {
   const remote = remoteName();
   const status = busyToast(`Fetching pull request #${pr.number}…`);
   try {
-    const head = await window.git.fetchPullRequest(state.repoPath, remote, pr.number);
+    // Three things at once, and only the first is required: the branch itself,
+    // the comments already on it, and the drafts this machine has for it.
+    await setPullRequest(forgeForRepo(), pr);
+    const [head] = await Promise.all([
+      window.git.fetchPullRequest(state.repoPath, remote, pr.number),
+      loadThreads(),
+    ]);
     // The base as this repository last saw it. Comparing against the local
     // remote-tracking ref rather than the local branch is what makes the
     // changeset match GitHub's: a stale or checked-out `main` of your own is
@@ -186,13 +207,19 @@ async function selectPullRequest(pr) {
     status.done(`Pull request #${pr.number} ready`);
     renderInfo(pr, commits);
     if (state.selectedPr !== pr.number) return;   // clicked away while fetching
-    renderChangeset(changeset, files,
-      (f) => window.git.rangeFileDiff(state.repoPath, base, head, f.filePath));
+    _rerenderChangeset = () => {
+      renderChangeset(changeset, files,
+        (f) => window.git.rangeFileDiff(state.repoPath, base, head, f.filePath),
+        { annotate: annotateFor, fileBadge, fileNote });
+      changeset.prepend(reviewBarEl());
+    };
+    _rerenderChangeset();
   } catch (e) {
     status.fail(e.message.trim() || `Could not fetch pull request #${pr.number}`);
     changeset.innerHTML = `<div class="pr-message">${escapeHtml(e.message)}</div>`;
   }
 }
+
 
 // Which remote to fetch the pull ref from — the one the forge was recognised
 // from, so a repo with both an origin and a fork remote asks the right server.
@@ -222,6 +249,7 @@ function renderInfo(pr, commits) {
         <button class="pr-web-link" type="button">${icon('cloud', 13)}Review on ${escapeHtml(forgeLabel(forge))}</button>
       </div>
     </div>
+    ${pr.body ? `<div class="pr-body"></div>` : ''}
     ${commits && commits.length ? `<div class="pr-commits">${commits.map(c => `
       <div class="pr-commit">
         <span class="commit-hash">${c.hash.substring(0, 7)}</span>
@@ -229,6 +257,9 @@ function renderInfo(pr, commits) {
         <span class="pr-commit-author">${escapeHtml(c.author)}</span>
       </div>`).join('')}</div>` : ''}
   `;
+  // The description is the author's own prose — set as text, never as markup.
+  const bodyEl = info.querySelector('.pr-body');
+  if (bodyEl) bodyEl.textContent = pr.body;
   const link = info.querySelector('.pr-web-link');
   // Reviewing still happens on the web: Keep can show the change but has no
   // way to approve it, and pretending otherwise would be the wrong kind of

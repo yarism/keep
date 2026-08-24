@@ -54,8 +54,12 @@ warning appears.
 - Multi-repository support
 - Detached HEAD state handling
 - Context menus throughout (right-click on branches, commits, files)
-- Open pull requests from GitHub, listed and reviewable in place — each one's
-  commits and full diff, read from the local repository rather than the API
+- Open pull requests from GitHub, listed and reviewed in place — each one's
+  description, commits and full diff, read from the local repository rather
+  than the API
+- Review comments shown inline on the diff line they were left on; draft your
+  own on any line and submit them together as Approve, Request changes or
+  Comment. Drafts survive a quit and nothing reaches GitHub until you submit
 - Links out to GitHub, GitLab and Bitbucket — open a pull request from a
   branch, or view a branch or commit on the web, straight from the context menu
 - Six colour themes, switchable from the toolbar

@@ -266,9 +266,10 @@ test('listReviewComments: reduces a comment to where it hangs in the diff', asyn
   const result = await api.listReviewComments('/repo', GH, { number: 12, token: 'tok', fetchImpl });
 
   assert.strictEqual(result.ok, true);
-  assert.deepStrictEqual(result.comments, [{
+  assert.deepStrictEqual(result.threads, [{
     id: 900,
     replyTo: null,
+    replies: [],
     path: 'forge-api.js',
     side: 'RIGHT',
     line: 42,
@@ -290,19 +291,64 @@ test('listReviewComments: a comment on a line that no longer exists is marked ou
     number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [stale])),
   });
 
-  assert.strictEqual(result.comments[0].outdated, true);
-  assert.strictEqual(result.comments[0].line, null);
-  assert.strictEqual(result.comments[0].originalLine, 40);
+  assert.strictEqual(result.threads[0].outdated, true);
+  assert.strictEqual(result.threads[0].line, null);
+  assert.strictEqual(result.threads[0].originalLine, 40);
 });
 
-test('listReviewComments: a reply keeps the id of the comment it answers', async () => {
-  const replyComment = { ...COMMENT, id: 901, in_reply_to_id: 900 };
+test('listReviewComments: a reply is folded into the comment it answers', async () => {
+  const replyComment = { ...COMMENT, id: 901, in_reply_to_id: 900, user: { login: 'yarism' } };
 
   const result = await api.listReviewComments('/repo', GH, {
     number: 12, token: 'tok', fetchImpl: fakeFetch(reply(200, [COMMENT, replyComment])),
   });
 
-  assert.strictEqual(result.comments[1].replyTo, 900);
+  assert.strictEqual(result.threads.length, 1, 'a reply is not a thread of its own');
+  assert.strictEqual(result.threads[0].id, 900);
+  assert.deepStrictEqual(result.threads[0].replies.map(r => r.author), ['yarism']);
+});
+
+// ── grouping, on its own ──
+
+const c = (id, replyTo = null) => ({ id, replyTo, path: 'a.js', side: 'RIGHT', line: 1, author: 'x', body: '', replies: undefined });
+
+// A reply names its immediate parent, so a three-deep chain would leave the
+// last one dangling if grouping only looked one level up.
+test('groupThreads: a reply to a reply still lands in the thread that started it', () => {
+  const threads = api.groupThreads([c(1), c(2, 1), c(3, 2)]);
+
+  assert.strictEqual(threads.length, 1);
+  assert.deepStrictEqual(threads[0].replies.map(r => r.id), [2, 3]);
+});
+
+test('groupThreads: separate roots stay separate threads, in the order given', () => {
+  const threads = api.groupThreads([c(1), c(2), c(3, 1)]);
+
+  assert.deepStrictEqual(threads.map(t => t.id), [1, 2]);
+  assert.deepStrictEqual(threads[0].replies.map(r => r.id), [3]);
+  assert.deepStrictEqual(threads[1].replies, []);
+});
+
+// The page holds a hundred comments; the parent of one of them may be on the
+// next page. Showing it alone beats dropping it.
+test('groupThreads: a reply whose parent is missing becomes a thread rather than vanishing', () => {
+  const threads = api.groupThreads([c(5, 999)]);
+
+  assert.deepStrictEqual(threads.map(t => t.id), [5]);
+});
+
+// Nothing on GitHub produces this, but a cycle would hang the walk — and the
+// first version of the fix for that dropped both comments on the floor, which
+// is the quieter half of the same bug.
+test('groupThreads: a cycle terminates, and loses nobody\'s comment doing it', () => {
+  const threads = api.groupThreads([c(1, 2), c(2, 1)]);
+
+  const seen = threads.flatMap(t => [t.id, ...t.replies.map(r => r.id)]);
+  assert.deepStrictEqual(seen.sort(), [1, 2]);
+});
+
+test('groupThreads: no comments, no threads', () => {
+  assert.deepStrictEqual(api.groupThreads([]), []);
 });
 
 // ── submitting one ──

@@ -239,6 +239,8 @@ ipcMain.handle('git-fetch-pr', (_, repoPath, remote, number) => git.fetchPullReq
 // The token stays in the main process: the renderer sends the repository and
 // the forge it parsed out of the remote, and gets back pull requests.
 ipcMain.handle('forge-pulls', (_, repoPath, forge) => forgeApi.listPullRequests(repoPath, forge));
+ipcMain.handle('forge-review-comments', (_, repoPath, forge, number) => forgeApi.listReviewComments(repoPath, forge, { number }));
+ipcMain.handle('forge-submit-review', (_, repoPath, forge, review) => forgeApi.submitReview(repoPath, forge, review));
 ipcMain.handle('git-search-log', (_, repoPath, query, field, branch, limit, opts) => git.searchLog(repoPath, query, field, branch, limit, opts));
 ipcMain.handle('git-stage', (_, repoPath, filePath) => git.stage(repoPath, filePath));
 ipcMain.handle('git-unstage', (_, repoPath, filePath, oldPath) => git.unstage(repoPath, filePath, oldPath));

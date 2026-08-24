@@ -1623,3 +1623,185 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .pr-commit { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: var(--fs-sm); }
 .pr-commit-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pr-commit-author { color: var(--text-dim); font-size: var(--fs-xs); }
+
+/* Reviewing ---------------------------------------------------------------
+ * Comments hang under the diff row they belong to, in a strip that is made
+ * only for rows that have something to say. The diff itself keeps its own
+ * type and rhythm; the comments deliberately do not, so prose never reads as
+ * part of the code. */
+.review-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.review-bar-count { font-size: var(--fs-sm); color: var(--text-dim); }
+.review-submit-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--tint-accent);
+  color: var(--text);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.review-submit-btn:hover { background: var(--tint-accent-strong); }
+
+/* The + only appears on the row under the pointer: a column of them down a
+ * diff would compete with the code for attention. */
+.diff-line.commentable { position: relative; }
+.review-add-btn {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  line-height: 1;
+  border: none;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--bg);
+  cursor: pointer;
+  font-size: var(--fs-code-sm);
+  opacity: 0;
+}
+.diff-line.commentable:hover .review-add-btn,
+.review-add-btn:focus-visible { opacity: 1; }
+
+.review-slot { padding: 4px 0 4px 40px; background: var(--bg); }
+.review-comment {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin: 4px 12px 4px 0;
+  max-width: 720px;
+  background: var(--bg-elevated);
+}
+.review-comment.pending { border-color: var(--accent); }
+.review-comment.outdated { opacity: 0.75; }
+.review-reply { margin-left: 20px; }
+.review-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+.review-author { color: var(--text); }
+.review-comment-body {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.review-chip {
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: var(--fs-2xs);
+  line-height: 15px;
+}
+.review-chip.pending { color: var(--accent); }
+.review-comment-actions { display: flex; gap: 8px; margin-top: 6px; }
+.review-comment-actions button,
+.review-thread-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+}
+.review-comment-actions button:hover, .review-thread-link:hover { color: var(--text); }
+.review-thread-link { margin: 6px 0 0 10px; }
+
+.review-outdated { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.review-outdated-title { font-size: var(--fs-xs); color: var(--text-dim); margin-bottom: 4px; }
+
+.review-composer { margin: 4px 12px 4px 0; max-width: 720px; }
+.review-composer textarea {
+  width: 100%;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  resize: vertical;
+}
+.review-composer-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.review-composer-where {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code-sm);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-composer-actions button {
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+}
+.review-composer-actions button.primary { border-color: var(--accent); background: var(--tint-accent); }
+
+.changeset-file-badge {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+/* The submit sheet. It names the repository and the number in its title,
+ * because this is the one action in Keep that publishes under your name. */
+.review-submit { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.review-verdict { display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); cursor: pointer; }
+.review-verdict strong { font-weight: 600; }
+.review-submit-body {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  resize: vertical;
+  margin-top: 4px;
+}
+.review-submit-note { font-size: var(--fs-xs); color: var(--text-dim); }
+
+/* The pull request's own description. Rendered as plain text — Keep has no
+ * markdown renderer and inventing one here would be a second, worse diff
+ * viewer — so the newlines the author wrote have to survive, and the box is
+ * bounded: some descriptions are longer than the diff they describe. */
+.pr-body {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
