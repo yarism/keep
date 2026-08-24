@@ -64,8 +64,8 @@ function createWindow() {
   const chrome = loadSettings().themeChrome || { background: '#ffffff', dark: false };
   nativeTheme.themeSource = chrome.dark ? 'dark' : 'light';
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: 1680,
+    height: 1050,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: chrome.background || '#ffffff',
