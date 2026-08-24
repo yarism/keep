@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('git', {
   abortOperation: (p, kind) => ipcRenderer.invoke('git-abort-operation', p, kind),
   repoFingerprint: (p) => ipcRenderer.invoke('git-repo-fingerprint', p),
   isRepo: (p) => ipcRenderer.invoke('git-is-repo', p),
+  accessProblem: (p) => ipcRenderer.invoke('git-access-problem', p),
   tags: (p) => ipcRenderer.invoke('git-tags', p),
   remotes: (p) => ipcRenderer.invoke('git-remotes', p),
   stashes: (p) => ipcRenderer.invoke('git-stashes', p),

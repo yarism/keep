@@ -63,6 +63,44 @@ function explainNetworkError(action, message, { timedOut = false } = {}) {
   return text.trim() || `${lead}.`;
 }
 
+// macOS gates ~/Desktop, ~/Documents and ~/Downloads per app. An app that has
+// not been granted the folder gets EPERM on everything inside it, and git
+// reports that as "Unable to read current working directory" — which reads like
+// a broken repository rather than a permission that was never asked for.
+//
+// Worth naming precisely, because every symptom points the wrong way: the repo
+// opens, the folder plainly exists, and every list in the window is simply
+// empty. The only clue is a word in git's stderr.
+//
+// Pure, so it can be tested without revoking anything.
+function explainAccessError(repoPath, message) {
+  const text = String(message || '');
+
+  if (!/Operation not permitted|EPERM|Permission denied|Unable to read current working directory/i.test(text)) {
+    return null;
+  }
+  // "Permission denied" is also what a genuinely unreadable file says, so keep
+  // the ordinary filesystem case out of the macOS-privacy explanation.
+  if (/Permission denied \(publickey/i.test(text)) return null;
+
+  const folder = protectedFolder(repoPath);
+  const where = folder ? `your ${folder} folder` : 'this folder';
+  return `macOS is blocking Keep from reading ${where}, so none of this repository can be loaded.\n` +
+    'Give Keep access in System Settings → Privacy & Security → Files and Folders ' +
+    '(or Full Disk Access), then reopen the repository.';
+}
+
+// The three folders macOS protects by default. Named in the message because
+// "grant access to the folder" is useless without knowing which one to look for
+// in a settings list.
+function protectedFolder(repoPath) {
+  const home = process.env.HOME || '';
+  for (const name of ['Desktop', 'Documents', 'Downloads']) {
+    if (home && String(repoPath || '').startsWith(`${home}/${name}/`)) return name;
+  }
+  return null;
+}
+
 function run(repoPath, args) {
   return new Promise((resolve, reject) => {
     execFile('git', args, { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -414,6 +452,19 @@ exports.isRepo = async (repoPath) => {
   } catch { return false; }
 };
 
+// Null when the repository is readable. Otherwise the sentence to put on screen.
+// Separate from isRepo because the two questions have different answers: a
+// folder Keep cannot read is still a repository, and saying "not a repository"
+// sends you looking for the wrong problem.
+exports.accessProblem = async (repoPath) => {
+  try {
+    await run(repoPath, ['rev-parse', '--git-dir']);
+    return null;
+  } catch (e) {
+    return explainAccessError(repoPath, e.message);
+  }
+};
+
 exports.repoFingerprint = async (repoPath) => {
   const [head, refs] = await Promise.all([
     // `rev-parse HEAD --abbrev-ref HEAD` prints the sha, then the branch name
@@ -692,4 +743,5 @@ exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {
 };
 
 exports.explainNetworkError = explainNetworkError;
+exports.explainAccessError = explainAccessError;
 exports.NETWORK_TIMEOUT_MS = NETWORK_TIMEOUT_MS;

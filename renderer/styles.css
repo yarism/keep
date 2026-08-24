@@ -305,6 +305,26 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .breadcrumb-current .icon { color: var(--accent); }
 
 
+/* Access banner ----------------------------------------------------------- */
+
+/* The same red as the in-progress-operation banner, for the same reason: it is
+ * the one thing on screen worth reading before anything else. Two lines, since
+ * the second one is the way out. */
+.access-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 14px;
+  flex-shrink: 0;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  white-space: pre-line;
+  background: color-mix(in srgb, var(--red) 12%, var(--bg-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+}
+.access-banner-icon { color: var(--red); margin-top: 1px; }
+.access-banner-text { color: var(--text); min-width: 0; }
+
 /* Update banner ----------------------------------------------------------- */
 
 /* A strip in the accent's wash rather than a modal: an available update is
