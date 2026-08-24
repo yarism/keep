@@ -301,6 +301,28 @@ test('stashDrop: rejects an index that does not exist', async () => {
   await assert.rejects(() => git.stashDrop(repo, 3));
 });
 
+// ── cherry-pick / revert / tag ──
+
+test('cherryPick: copies a commit from another branch onto the current one', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'a good idea\n');
+  const picked = h.commitAll(repo, 'add a good idea');
+  h.git(repo, 'checkout', '-q', 'main');
+
+  await git.cherryPick(repo, picked);
+
+  assert.ok(h.exists(repo, 'feature.txt'), 'the change came along');
+  const [head] = await git.log(repo, 'main', 1);
+  assert.strictEqual(head.subject, 'add a good idea', 'and kept its message');
+  assert.notStrictEqual(head.hash, picked, 'as a new commit, not the original');
+});
+
+test('cherryPick: rejects a hash that is not a commit', async () => {
+  const repo = h.makeRepo();
+  await assert.rejects(() => git.cherryPick(repo, 'nosuchcommit'));
+});
+
 // ── revert / tag ──
 
 test('revert: adds an inverse commit without prompting for a message', async () => {
@@ -560,6 +582,41 @@ test('continueOperation: replays the rest of a resolved rebase', async () => {
   await git.continueOperation(repo, 'rebase');
 
   assert.strictEqual((await git.repoState(repo)).kind, null);
+});
+
+test('cherryPick: a conflicting pick is left for the banner to resolve', async () => {
+  const repo = conflictingRepo();
+
+  await assert.rejects(() => git.cherryPick(repo, 'theirs'));
+
+  const s = await git.repoState(repo);
+  assert.strictEqual(s.kind, 'cherry-pick');
+  assert.deepStrictEqual(s.conflicts, ['shared.txt']);
+});
+
+test('continueOperation: finishes a resolved cherry-pick without opening an editor', async () => {
+  const repo = conflictingRepo();
+  await assert.rejects(() => git.cherryPick(repo, 'theirs'));
+  await git.useTheirs(repo, 'shared.txt');
+
+  await git.continueOperation(repo, 'cherry-pick');
+
+  assert.strictEqual((await git.repoState(repo)).kind, null, 'the pick is over');
+  const [head] = await git.log(repo, 'main', 1);
+  assert.strictEqual(head.subject, 'their change');
+  assert.strictEqual(head.parents.length, 1, 'a plain commit, not a merge');
+});
+
+test('abortOperation: undoes a cherry-pick that stopped on a conflict', async () => {
+  const repo = conflictingRepo();
+  const before = await git.log(repo, 'main');
+  await assert.rejects(() => git.cherryPick(repo, 'theirs'));
+
+  await git.abortOperation(repo, 'cherry-pick');
+
+  assert.strictEqual((await git.repoState(repo)).kind, null);
+  assert.strictEqual(h.read(repo, 'shared.txt'), 'our version\n');
+  assert.deepStrictEqual((await git.log(repo, 'main')).map(c => c.hash), before.map(c => c.hash));
 });
 
 test('abortOperation: puts the working copy back the way it was', async () => {
