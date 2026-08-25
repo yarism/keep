@@ -249,6 +249,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 
 .theme-item {
   display: flex;
+  user-select: none;
   align-items: center;
   gap: 9px;
   padding: 6px 9px;
@@ -272,6 +273,28 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 
 .theme-name { flex: 1; }
 .theme-check { color: var(--accent); display: inline-flex; width: 14px; }
+
+.theme-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
+/* The row that opens the gallery. It is not a theme, so it does not carry the
+   tick column's weight — its swatch is a hint of what is behind it and its
+   chevron says the click goes somewhere. */
+/* The swatch keeps the width of a real one, or the row's label steps out of
+   line with the ones above it. The colours are the theme in force's own — four
+   that were drawn to sit together, run into each other so the chip reads as a
+   spectrum rather than as a fifth theme's stripes. */
+.theme-more .theme-swatch {
+  width: 38px;
+  height: 16px;
+  background: linear-gradient(100deg, var(--red), var(--yellow), var(--green), var(--blue));
+}
+.theme-more .theme-name { color: var(--text-dim); }
+.theme-more .theme-check { color: var(--text-mute); }
+.theme-more:hover .theme-name, .theme-more:focus-visible .theme-name { color: var(--text); }
 
 /* Breadcrumb -------------------------------------------------------------- */
 
@@ -1471,6 +1494,122 @@ body.decode-unicode .uni-dec { display: inline; }
 .modal-actions button:last-child:hover { background: var(--accent-hover); }
 .modal-actions button:disabled { opacity: .45; cursor: default; }
 .modal-actions button:disabled:hover { background: var(--accent); }
+
+/* Theme gallery ----------------------------------------------------------- */
+
+.theme-gallery {
+  width: min(760px, 92vw);
+  max-width: none;
+  padding: 18px 18px 20px;
+}
+.theme-gallery-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.theme-gallery-head .modal-title { margin-bottom: 0; }
+/* .icon-button only carries styling inside the toolbar, so out here the button
+   would keep the platform's own grey box. */
+#theme-gallery-close {
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-mute);
+  cursor: pointer;
+  padding: 5px;
+  line-height: 0;
+  flex-shrink: 0;
+  margin: -3px -3px 0 0;
+}
+#theme-gallery-close:hover { background: var(--bg-hover); color: var(--text); }
+.theme-gallery-body {
+  margin-top: 14px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.theme-gallery-group + .theme-gallery-group { margin-top: 16px; }
+.theme-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.theme-card {
+  padding: 6px;
+  user-select: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  outline: none;
+}
+.theme-card:hover, .theme-card:focus-visible { background: var(--bg-hover); }
+.theme-card.active { background: var(--tint-accent); border-color: var(--accent); }
+.theme-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 3px 1px;
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+
+/* A small mock of the window rather than a strip of colours: what a theme
+   looks like depends on which colour lands on which surface. Every colour in
+   here is set inline from the theme being previewed, not from the theme in
+   force, which is why none of it is written below. */
+.theme-mini {
+  border: 1px solid;
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* Kept to the proportions of a window rather than a fixed height, so a card
+     stretched by a wide grid still looks like the thing it is previewing. */
+  aspect-ratio: 16 / 10;
+  display: flex;
+  flex-direction: column;
+}
+.theme-mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  height: 18px;
+  border-bottom: 1px solid;
+  flex-shrink: 0;
+}
+.theme-mini-pill {
+  width: 16px;
+  height: 6px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+.theme-mini-body { display: flex; flex: 1; min-height: 0; }
+.theme-mini-side {
+  width: 34%;
+  border-right: 1px solid;
+  padding: 6px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.theme-mini-main {
+  flex: 1;
+  padding: 6px 6px 6px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.theme-mini-line {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+}
+.theme-mini-diff {
+  margin: 0 -6px 0 -7px;
+  padding: 3px 6px 3px 7px;
+}
 
 /* The build card ---------------------------------------------------------- */
 

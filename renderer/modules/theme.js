@@ -6,16 +6,19 @@
 // alongside and read first to paint the right theme immediately.
 
 import { $, escapeHtml, suspendTitlebarDrag } from './state.js';
-import { SELECTIONS, DEFAULT_THEME_ID, isSystemTheme, resolveTheme, swatchFor } from '../themes.js';
+import {
+  DEFAULT_THEME_ID, isSystemTheme, resolveTheme, swatchFor,
+  quickSelections, restThemes, themeGroups,
+} from '../themes.js';
 import { icon } from '../icons.js';
 
 const STORAGE_KEY = 'keep.theme';
 
-// What is on screen, and what the user actually chose. Hovering the picker
-// moves the first without touching the second — otherwise the tick would follow
-// the pointer and every preview would look like a decision already made.
-// Both are selections, which means either can be 'system'.
-let currentId = DEFAULT_THEME_ID;
+// The selection in force. A selection rather than a theme, which means it can
+// be 'system'. There used to be a second one alongside it, because hovering the
+// picker painted a theme without choosing it and the tick had to stay behind;
+// now that nothing changes under a moving pointer, what is on screen and what
+// was chosen are the same thing.
 let savedId = DEFAULT_THEME_ID;
 
 // What the OS appearance is set to, which only the system selection cares
@@ -33,24 +36,20 @@ function readSystemDark() {
 function setSystemDark(dark) {
   if (typeof dark !== 'boolean' || dark === systemDark) return;
   systemDark = dark;
-  if (isSystemTheme(currentId)) applyTheme(currentId);
+  if (isSystemTheme(savedId)) applyTheme(savedId);
 }
 
 export function currentThemeId() {
-  return currentId;
-}
-
-export function savedThemeId() {
   return savedId;
 }
 
-// Paints a theme. Nothing else — no persistence, no menu redraw — so it is
-// cheap enough to call on every hover.
+// Paints a selection. Nothing else — no persistence, no menu redraw — so the
+// OS flipping appearance under the system theme costs a repaint and no more.
 export function applyTheme(id) {
   const theme = resolveTheme(id, systemDark);
   // Both halves matter: the same selection can resolve to the other theme when
   // the OS flips underneath it.
-  if (id === currentId && document.documentElement.dataset.theme === theme.id) return;
+  if (id === savedId && document.documentElement.dataset.theme === theme.id) return;
   const root = document.documentElement;
   for (const [token, value] of Object.entries(theme.tokens)) {
     root.style.setProperty(`--${token}`, value);
@@ -59,7 +58,7 @@ export function applyTheme(id) {
   // chrome behind the traffic lights) to match.
   root.style.colorScheme = theme.dark ? 'dark' : 'light';
   root.dataset.theme = theme.id;
-  currentId = id;
+  savedId = id;
   // The window frame is macOS's, not ours, so it has to be told separately —
   // otherwise a light theme sits inside a dark outline. Sent on preview too:
   // the frame is part of what the theme looks like.
@@ -95,7 +94,6 @@ function windowChrome(id) {
 // Paints a theme and records it as the choice.
 function selectTheme(id, { persist = true } = {}) {
   applyTheme(id);
-  savedId = currentId;
   if (persist) {
     try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
     // The chrome goes to disk alongside the id so the next launch can colour
@@ -120,7 +118,7 @@ export function initTheme() {
 function watchSystemAppearance() {
   try {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (isSystemTheme(currentId)) setSystemDark(e.matches);
+      if (isSystemTheme(savedId)) setSystemDark(e.matches);
     });
   } catch {}
   try { window.git.onSystemTheme((s) => setSystemDark(s && s.dark)); } catch {}
@@ -131,26 +129,49 @@ export function syncThemeFromSettings(settings) {
   const id = settings && settings.theme;
   if (!id || id === savedId) return;
   applyTheme(id);
-  savedId = currentId;
   try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
   window.git.saveSettings({ themeChrome: chromeOf(savedId) });
   renderThemeMenu();
 }
 
-// ── Picker ──
+
+// ── The popover ──
+//
+// A short list, not a catalogue: the system entry, a fixed handful of themes,
+// the one in force if it is not among them, and a row that opens the gallery.
+// Adding a theme to themes.js therefore adds nothing to the toolbar — it lands
+// in the gallery, and only ever appears up here while it is the chosen one.
+
+// The gallery row keeps the swatch's shape so the labels line up. What it does
+// not keep is a set of borrowed accents: four colours taken from four unrelated
+// themes are four colours nobody chose to put together, and it showed. It gets
+// a spectrum of the current theme's own semantic colours instead — a palette by
+// construction, and painted from tokens in the stylesheet rather than here.
+function themeRow(id, name, swatchColours, { checked = false, more = false } = {}) {
+  const swatch = more ? '' : swatchColours.map(c => `<i style="background:${c}"></i>`).join('');
+  return `
+    <div class="theme-item${checked ? ' active' : ''}${more ? ' theme-more' : ''}"
+         ${more ? 'data-theme-more' : `data-theme-id="${id}"`}
+         role="${more ? 'menuitem' : 'menuitemradio'}"${more ? '' : ` aria-checked="${checked}"`} tabindex="0">
+      <span class="theme-swatch" aria-hidden="true">${swatch}</span>
+      <span class="theme-name">${escapeHtml(name)}</span>
+      <span class="theme-check">${checked ? icon('check', 14) : ''}${more ? icon('chevron', 13) : ''}</span>
+    </div>`;
+}
 
 function renderThemeMenu() {
   const list = $('#theme-menu-items');
   if (!list) return;
-  list.innerHTML = SELECTIONS.map(t => `
-    <div class="theme-item${t.id === savedId ? ' active' : ''}" data-theme-id="${t.id}" role="menuitemradio" aria-checked="${t.id === savedId}" tabindex="0">
-      <span class="theme-swatch" aria-hidden="true">
-        ${swatchFor(t.id).map(c => `<i style="background:${c}"></i>`).join('')}
-      </span>
-      <span class="theme-name">${escapeHtml(t.name)}</span>
-      <span class="theme-check">${t.id === savedId ? icon('check', 14) : ''}</span>
-    </div>
-  `).join('');
+  const rows = quickSelections(savedId)
+    .map(t => themeRow(t.id, t.name, swatchFor(t.id), { checked: t.id === savedId }));
+  // The row that hands over to the gallery, counting what it holds. Left out
+  // entirely when there is nothing more to show.
+  const rest = restThemes(savedId);
+  if (rest.length) {
+    rows.push('<div class="theme-menu-sep"></div>');
+    rows.push(themeRow(null, `More themes (${rest.length})`, null, { more: true }));
+  }
+  list.innerHTML = rows.join('');
 }
 
 function openThemeMenu() {
@@ -160,15 +181,101 @@ function openThemeMenu() {
   suspendTitlebarDrag('theme-menu', true);
 }
 
-// Anything that closes the menu without a click on a row is a cancelled
-// preview, so the saved theme goes back up.
+// Nothing to undo on the way out: a row only ever changes the theme when it is
+// clicked, so closing the menu leaves whatever is on screen alone.
 function closeThemeMenu() {
   const menu = $('#theme-menu');
   if (!menu || menu.hidden) return;
-  applyTheme(savedId);
   menu.hidden = true;
   $('#btn-theme').classList.remove('active');
   suspendTitlebarDrag('theme-menu', false);
+}
+
+// ── The gallery ──
+//
+// Every theme at once, split into light and dark because that is the half of
+// the decision you have already made when you open it. Each card is a small
+// mock of the window rather than a strip of colours: a palette only tells you
+// what a theme looks like once the colours are in the places they will be in.
+//
+// Clicking is the try, here as in the popover: nothing repaints under a moving
+// pointer, and a click puts the theme on for real. The gallery then stays open
+// rather than closing, because picking here is usually picking twice.
+
+function galleryCard(theme) {
+  const t = theme.tokens;
+  const active = theme.id === savedId;
+  const line = (colour, width) => `<i class="theme-mini-line" style="background:${colour};width:${width}"></i>`;
+  return `
+    <div class="theme-card${active ? ' active' : ''}" data-theme-id="${theme.id}"
+         role="menuitemradio" aria-checked="${active}" tabindex="0">
+      <div class="theme-mini" style="background:${t['bg']};border-color:${t['border-strong']}" aria-hidden="true">
+        <div class="theme-mini-bar" style="background:${t['bg-surface']};border-color:${t['border']}">
+          ${line(t['text-dim'], '18px')}
+          <i class="theme-mini-pill" style="background:${t['accent']}"></i>
+        </div>
+        <div class="theme-mini-body">
+          <div class="theme-mini-side" style="background:${t['bg-surface']};border-color:${t['border']}">
+            ${line(t['text-mute'], '70%')}
+            ${line(t['accent'], '55%')}
+            ${line(t['text-mute'], '80%')}
+            ${line(t['text-mute'], '45%')}
+          </div>
+          <div class="theme-mini-main">
+            ${line(t['text-dim'], '72%')}
+            ${line(t['text-mute'], '48%')}
+            <div class="theme-mini-diff" style="background:${t['diff-add-bg']}">${line(t['diff-add-text'], '60%')}</div>
+            <div class="theme-mini-diff" style="background:${t['diff-del-bg']}">${line(t['diff-del-text'], '44%')}</div>
+          </div>
+        </div>
+      </div>
+      <div class="theme-card-label">
+        <span class="theme-name">${escapeHtml(theme.name)}</span>
+        <span class="theme-check">${active ? icon('check', 14) : ''}</span>
+      </div>
+    </div>`;
+}
+
+// `focusId` puts the keyboard back where it was: picking a theme redraws the
+// grid, which throws away the card the user was standing on.
+function renderThemeGallery(focusId = null) {
+  const body = $('#theme-gallery-body');
+  if (!body) return;
+  body.innerHTML = themeGroups().map(group => `
+    <div class="theme-gallery-group">
+      <div class="popover-header">${escapeHtml(group.label)}</div>
+      <div class="theme-gallery-grid">${group.themes.map(galleryCard).join('')}</div>
+    </div>
+  `).join('');
+  if (focusId) {
+    const card = body.querySelector(`.theme-card[data-theme-id="${focusId}"]`);
+    if (card) card.focus();
+  }
+}
+
+function openThemeGallery() {
+  const overlay = $('#theme-gallery');
+  if (!overlay) return;
+  renderThemeGallery();
+  overlay.hidden = false;
+  suspendTitlebarDrag('theme-gallery', true);
+}
+
+// Nothing to undo on the way out: every theme in here was put on by a click,
+// which is a choice rather than a preview. Note the gallery holds no system
+// entry — following the OS is a mode, not a palette, so it stays pinned to the
+// top of the popover where it is one click away rather than sitting in here
+// pretending to be an eighth theme.
+function closeThemeGallery() {
+  const overlay = $('#theme-gallery');
+  if (!overlay || overlay.hidden) return;
+  overlay.hidden = true;
+  suspendTitlebarDrag('theme-gallery', false);
+}
+
+function galleryIsOpen() {
+  const overlay = $('#theme-gallery');
+  return !!overlay && !overlay.hidden;
 }
 
 export function setupThemePicker() {
@@ -181,40 +288,60 @@ export function setupThemePicker() {
     if (menu.hidden) openThemeMenu(); else closeThemeMenu();
   });
 
+  // A row is either a theme, or the one that hands over to the gallery.
+  function chooseFromMenu(item) {
+    if (item.hasAttribute('data-theme-more')) {
+      closeThemeMenu();
+      openThemeGallery();
+      return;
+    }
+    selectTheme(item.dataset.themeId);
+    closeThemeMenu();
+  }
+
   menu.addEventListener('click', (e) => {
     e.stopPropagation();
     const item = e.target.closest('.theme-item');
-    if (!item) return;
-    selectTheme(item.dataset.themeId);
-    menu.hidden = true;
-    btn.classList.remove('active');
-    suspendTitlebarDrag('theme-menu', false);
+    if (item) chooseFromMenu(item);
   });
-
-  menu.addEventListener('mouseover', (e) => {
-    const item = e.target.closest('.theme-item');
-    if (item) applyTheme(item.dataset.themeId);
-  });
-
-  // Leaving the list is not a choice, so the saved theme comes back.
-  menu.addEventListener('mouseleave', () => applyTheme(savedId));
 
   menu.addEventListener('keydown', (e) => {
     const item = e.target.closest('.theme-item');
     if (!item) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      selectTheme(item.dataset.themeId);
-      menu.hidden = true;
-      btn.classList.remove('active');
-      suspendTitlebarDrag('theme-menu', false);
+      chooseFromMenu(item);
     }
   });
-  menu.addEventListener('focusin', (e) => {
-    const item = e.target.closest('.theme-item');
-    if (item) applyTheme(item.dataset.themeId);
-  });
+
+  const overlay = $('#theme-gallery');
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const card = e.target.closest('.theme-card');
+      if (card) {
+        // Redrawn rather than closed: picking here is usually picking twice,
+        // and the tick has to move to show the first one landed.
+        selectTheme(card.dataset.themeId);
+        renderThemeGallery();
+        return;
+      }
+      // A click on the backdrop, or on the close button, is a way out.
+      if (e.target === overlay || e.target.closest('#theme-gallery-close')) closeThemeGallery();
+    });
+    overlay.addEventListener('keydown', (e) => {
+      const card = e.target.closest('.theme-card');
+      if (!card || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      selectTheme(card.dataset.themeId);
+      renderThemeGallery(card.dataset.themeId);
+    });
+  }
 
   document.addEventListener('click', closeThemeMenu);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeThemeMenu(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    // The gallery sits on top of the menu, so it is what Escape means first.
+    if (galleryIsOpen()) closeThemeGallery(); else closeThemeMenu();
+  });
 }

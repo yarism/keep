@@ -345,3 +345,49 @@ export function validateTheme(theme) {
     extra: defined.filter(t => !TOKENS.includes(t)),
   };
 }
+
+// ── What the picker shows ──
+
+// The themes the popover lists. A fixed set, in this order: the two Graphite
+// themes the system entry switches between, then one dark and one light with a
+// character of their own. Fixed rather than ordered by what was picked lately,
+// which sounds helpful and is not: the rows move as you use them, and a theme
+// you like gets pushed off the list by one you were only trying. The popover is
+// a place you reach for without looking, so it stays put.
+//
+// Ordering THEMES itself would do the same job, but that order is the
+// gallery's, and the gallery is grouped by light and dark — the two lists want
+// different things.
+export const FEATURED = ['graphite-light', 'graphite-dark', 'claude', 'sage'];
+
+// The rows the popover shows: the featured themes, plus the one in force when
+// it is not among them, so the tick is always on screen without opening the
+// gallery. That extra row sits in its declared position rather than on the end,
+// which keeps the featured four where they always are. Unknown ids are dropped
+// rather than rendered as a hole.
+export function quickSelections(savedId = DEFAULT_THEME_ID) {
+  const ids = FEATURED.filter(id => getTheme(id));
+  if (getTheme(savedId) && !ids.includes(savedId)) ids.push(savedId);
+  const order = THEMES.map(t => t.id);
+  ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  // The system entry is pinned above them: it is the default, and a mode rather
+  // than a palette anyone browses to.
+  return [SYSTEM_THEME_ID, ...ids].map(id => SELECTIONS.find(s => s.id === id));
+}
+
+// The gallery, split the way you actually choose: you know whether you want a
+// light one or a dark one before you know which. A group with nothing in it is
+// left out rather than rendered as an empty heading.
+export function themeGroups() {
+  return [
+    { label: 'Light', themes: THEMES.filter(t => !t.dark) },
+    { label: 'Dark', themes: THEMES.filter(t => t.dark) },
+  ].filter(g => g.themes.length > 0);
+}
+
+// The themes the popover is not showing — what is behind the row that opens the
+// gallery, and the number on it.
+export function restThemes(savedId = DEFAULT_THEME_ID) {
+  const shown = new Set(quickSelections(savedId).map(s => s.id));
+  return THEMES.filter(t => !shown.has(t.id));
+}
