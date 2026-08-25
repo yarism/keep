@@ -5,10 +5,23 @@
 // removed again by cleanup(), and the git environment is pinned (no global
 // config, fixed identity, fixed default branch) so results don't depend on
 // whatever is in the developer's ~/.gitconfig.
+//
+// That has to cover the git the code under test runs, too. git.js spawns its own
+// git and inherits this process's environment — which is right in the app, where
+// reading the user's config is what makes it behave like their git, and wrong
+// here, where it means a test passes or fails depending on whose machine it is
+// running on. `push.autoSetupRemote = true` in a ~/.gitconfig turns the refusal
+// the push tests are about into a successful publish, and it cannot be undone
+// per-repo: a local `false`, and even `-c push.autoSetupRemote=false`, leaves a
+// global `true` in force. Taking the config files off the environment is the
+// only thing that works, so it is done here, once, for the whole test process.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+
+process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+process.env.GIT_CONFIG_SYSTEM = '/dev/null';
 
 const created = [];
 
