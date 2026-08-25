@@ -15,6 +15,7 @@ const read = (p) => readFile(new URL(p, ROOT), 'utf-8');
 const {
   THEMES, TOKENS, DEFAULT_THEME_ID, SYSTEM_THEME_ID, SYSTEM_PAIR, SELECTIONS,
   isSystemTheme, getTheme, resolveTheme, swatch, swatchFor, validateTheme,
+  quickSelections, restThemes, themeGroups, FEATURED,
 } = await loadEsm('renderer/themes.js');
 
 const { icon, iconNames, hasIcon, STROKE_WIDTH } = await loadEsm('renderer/icons.js');
@@ -93,6 +94,80 @@ test('themes: every picker row has a four-colour swatch, the system one drawn fr
   const system = swatchFor(SYSTEM_THEME_ID);
   assert.ok(system.includes(getTheme(SYSTEM_PAIR.light).tokens['bg']));
   assert.ok(system.includes(getTheme(SYSTEM_PAIR.dark).tokens['bg']));
+});
+
+// ── What the picker shows ──
+
+test('picker: the popover lists the featured themes and nothing else', () => {
+  FEATURED.forEach(id => assert.ok(getTheme(id), `featured theme ${id} does not exist`));
+  const ids = quickSelections(SYSTEM_THEME_ID).map(s => s.id);
+  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...FEATURED]);
+});
+
+test('picker: the popover does not grow when a theme is added', () => {
+  // The whole point of the gallery. A new theme lands there, not on the toolbar.
+  assert.ok(THEMES.length > FEATURED.length, 'this stops proving anything otherwise');
+  for (const id of FEATURED.concat(SYSTEM_THEME_ID)) {
+    assert.strictEqual(quickSelections(id).length, FEATURED.length + 1);
+  }
+});
+
+test('picker: choosing a theme never moves the rows', () => {
+  // This is why the list is fixed rather than ordered by what was picked
+  // lately: a menu whose rows rearrange as you use it puts something else under
+  // the pointer each time, and a theme you like can be pushed off it by one you
+  // were only trying.
+  const before = quickSelections(SYSTEM_THEME_ID).map(s => s.id);
+  for (const selection of SELECTIONS) {
+    const after = quickSelections(selection.id).map(s => s.id);
+    assert.deepStrictEqual(after.filter(id => before.includes(id)), before,
+      `choosing ${selection.id} disturbed the fixed rows`);
+  }
+});
+
+test('picker: a theme chosen from the gallery joins the rows, in its declared place', () => {
+  // Otherwise the tick would be nowhere to be seen while it is in force.
+  const outsider = THEMES.find(t => !FEATURED.includes(t.id));
+  const ids = quickSelections(outsider.id).map(s => s.id);
+  assert.ok(ids.includes(outsider.id));
+  const order = [SYSTEM_THEME_ID, ...THEMES.map(t => t.id)];
+  const ranks = ids.map(id => order.indexOf(id));
+  assert.deepStrictEqual(ranks, [...ranks].sort((a, b) => a - b), 'listed out of order');
+});
+
+test('picker: every selection has a visible tick without opening the gallery', () => {
+  for (const selection of SELECTIONS) {
+    assert.ok(quickSelections(selection.id).some(s => s.id === selection.id), selection.id);
+  }
+});
+
+test('picker: an unknown selection leaves the rows alone rather than a hole', () => {
+  const ids = quickSelections('no-such-theme').map(s => s.id);
+  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...FEATURED]);
+});
+
+test('picker: the gallery row offers exactly what the popover left out', () => {
+  for (const selection of SELECTIONS) {
+    const shown = quickSelections(selection.id).map(s => s.id);
+    const rest = restThemes(selection.id).map(t => t.id);
+    assert.strictEqual(shown.length + rest.length, SELECTIONS.length);
+    rest.forEach(id => assert.ok(!shown.includes(id), `${id} is offered twice`));
+  }
+});
+
+test('picker: the gallery holds every theme, split into light and dark', () => {
+  const groups = themeGroups();
+  const listed = groups.flatMap(g => g.themes.map(t => t.id));
+  assert.deepStrictEqual([...listed].sort(), THEMES.map(t => t.id).sort());
+  assert.strictEqual(new Set(listed).size, listed.length);
+  for (const group of groups) {
+    assert.ok(group.themes.length > 0, 'an empty heading is not a group');
+    const dark = group.label === 'Dark';
+    group.themes.forEach(t => assert.strictEqual(t.dark, dark, `${t.id} is in the wrong group`));
+  }
+  // Following the OS is a mode, not a palette — it is pinned in the popover
+  // instead, so it must not turn up in here as an extra theme.
+  assert.ok(!listed.includes(SYSTEM_THEME_ID));
 });
 
 // ── Icons ──

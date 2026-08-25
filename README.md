@@ -62,7 +62,7 @@ warning appears.
   Comment. Drafts survive a quit and nothing reaches GitHub until you submit
 - Links out to GitHub, GitLab and Bitbucket — open a pull request from a
   branch, or view a branch or commit on the web, straight from the context menu
-- Six colour themes, switchable from the toolbar
+- Seven colour themes, switchable from the toolbar
 - Progress and results reported for every toolbar command
 
 ## Fetching
@@ -79,10 +79,15 @@ directory — `~/Library/Application Support/Keep` on macOS.
 
 ## Themes
 
-Click the palette button at the right of the toolbar to switch themes. Hovering
-a theme previews it live without committing to it — the tick stays on the one
-you actually chose — and the preview is undone if you leave the list. The choice
-is remembered between launches.
+Click the palette button at the right of the toolbar to switch themes. The
+popover is a short, fixed list — following the system appearance, then four
+themes, plus whichever one is in force if it is not among them — with **More
+themes** at the bottom opening a gallery of all of them, each shown as a small
+mock of the window rather than a strip of colours. Nothing changes as the
+pointer passes over a theme: clicking is what tries it, in both places, and it
+applies straight away. The gallery stays open when you click so you can try the
+next one; the popover closes, having only the one row to give. The choice is
+remembered between launches.
 
 | Theme | |
 |---|---|
@@ -96,7 +101,8 @@ is remembered between launches.
 
 A theme is just a map of CSS custom properties in `renderer/themes.js` — no
 colour is written literally in `styles.css`, so adding one means adding an entry
-to that file and nothing else. `test/theme.test.mjs` enforces both halves of
+to that file and nothing else. It lands in the gallery, not the popover, so the
+toolbar menu stays the same length however many themes there are. `test/theme.test.mjs` enforces both halves of
 that rule.
 
 ## Requirements
