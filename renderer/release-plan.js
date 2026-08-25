@@ -149,8 +149,21 @@ export function blockedByWorkingCopy(status) {
 // The version a finished run landed on, read back from what it printed rather
 // than assumed: the command is the user's, and it may not have bumped what we
 // expected — or anything at all.
+//
+// npm ends a good many runs with a notice that a new npm is available, and that
+// notice is full of version numbers — npm's, not this project's. Left in, they
+// are the last thing printed, and the release gets announced under npm's
+// version. So the notice goes, and the version we asked for wins if the output
+// confirms it anywhere; the last match is only for a command that bumped to
+// something we did not predict.
 export function versionFromOutput(output, fallback) {
-  const matches = String(output || '').match(/v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/g);
+  const text = String(output || '')
+    .split('\n')
+    .filter(line => !/^\s*npm notice\b/.test(line))
+    .join('\n');
+  const matches = text.match(/v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/g);
   if (!matches || matches.length === 0) return fallback || null;
-  return matches[matches.length - 1].replace(/^v/, '');
+  const found = matches.map(m => m.replace(/^v/, ''));
+  if (fallback && found.includes(fallback)) return fallback;
+  return found[found.length - 1];
 }
