@@ -5,7 +5,7 @@
 // only difference between the two is where the diff for a file comes from, so
 // that is the one thing the caller supplies.
 import { escapeHtml } from './state.js';
-import { renderDiff } from './diff.js';
+import { renderDiff, createUnicodeToggle } from './diff.js';
 import { icon } from '../icons.js';
 
 // A changeset in one line: how many files, and what happened to them.
@@ -36,7 +36,8 @@ export function renderChangeset(container, files, loadDiff, opts = {}) {
   if (opts.summary !== false) {
     const summary = document.createElement('div');
     summary.className = 'changeset-summary';
-    summary.textContent = summarize(files);
+    summary.innerHTML = `<span>${escapeHtml(summarize(files))}</span>`;
+    summary.appendChild(createUnicodeToggle(container));
     container.appendChild(summary);
   }
 

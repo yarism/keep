@@ -1,4 +1,77 @@
 import { $, escapeHtml, state } from './state.js';
+import { icon } from '../icons.js';
+
+// Escaped text, made readable.
+//
+// Localization files keep every non-ASCII string as \uXXXX escapes, so a diff of
+// one is a wall of hex that says nothing about what the translation now reads.
+// Each run of escapes is therefore rendered twice — raw and decoded — and CSS
+// shows one or the other, which means a toggle flips every open diff at once
+// without re-rendering any of them.
+const ESCAPE_RUN = /(?:\\u[0-9a-fA-F]{4})+/g;
+const STORAGE_KEY = 'keep.decodeUnicode';
+let decodeUnicode = localStorage.getItem(STORAGE_KEY) === '1';
+const toggles = [];
+
+// Decoded as a run rather than one escape at a time, so a surrogate pair
+// (\uD83D\uDE00) comes back out as the single character it encodes.
+const decodeEscapes = (s) =>
+  s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+function diffContent(text) {
+  ESCAPE_RUN.lastIndex = 0;
+  let html = '', last = 0, m;
+  while ((m = ESCAPE_RUN.exec(text)) !== null) {
+    const raw = m[0], dec = decodeEscapes(raw);
+    html += escapeHtml(text.slice(last, m.index))
+      + '<span class="uni">'
+      + `<span class="uni-raw">${escapeHtml(raw)}</span>`
+      + `<span class="uni-dec">${escapeHtml(dec)}</span>`
+      + '</span>';
+    last = m.index + raw.length;
+  }
+  // The overwhelmingly common case: no escapes, no extra markup.
+  if (last === 0) return escapeHtml(text);
+  return html + escapeHtml(text.slice(last));
+}
+
+// A toggle button, for a panel that shows diffs. Scoped rather than global: the
+// button belongs next to the diff it decodes, and there is one such place per
+// view, so each button asks its own container whether it has anything to do.
+export function createUnicodeToggle(scopeEl) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'unicode-toggle';
+  btn.innerHTML = `${icon('translate', 13)}<span>Translate</span>`;
+  btn.title = 'Show \\uXXXX escapes as readable text';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    decodeUnicode = !decodeUnicode;
+    localStorage.setItem(STORAGE_KEY, decodeUnicode ? '1' : '0');
+    refreshUnicodeToggles();
+  });
+  toggles.push({ btn, scopeEl, mounted: false });
+  btn.classList.toggle('active', decodeUnicode);
+  btn.hidden = true;
+  return btn;
+}
+
+// Offering the toggle in front of a diff that holds no escapes would be a
+// button that visibly does nothing, so each one appears only once its own panel
+// has something to decode.
+function refreshUnicodeToggles() {
+  document.body.classList.toggle('decode-unicode', decodeUnicode);
+  for (let i = toggles.length - 1; i >= 0; i--) {
+    const t = toggles[i];
+    // Drop buttons a re-render has replaced, but leave freshly created ones
+    // alone until whoever asked for one has appended it.
+    if (t.btn.isConnected) t.mounted = true;
+    else if (t.mounted) { toggles.splice(i, 1); continue; }
+    t.btn.classList.toggle('active', decodeUnicode);
+    t.btn.setAttribute('aria-pressed', String(decodeUnicode));
+    t.btn.hidden = !t.scopeEl.querySelector('.uni');
+  }
+}
 
 // opts.annotate, when given, is called for every rendered line with the row
 // element and where that row sits in the file — which side of the diff, and
@@ -9,6 +82,7 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
   container.innerHTML = '';
   if (!diffText || !diffText.trim()) {
     container.innerHTML = '<div style="padding:20px;color:var(--text-dim)">No diff available (new or binary file)</div>';
+    refreshUnicodeToggles();
     return;
   }
   const lines = diffText.split('\n');
@@ -70,7 +144,7 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
     else if (line.startsWith('-')) { cls = 'del'; oldNum = oldLine++; }
     else { oldNum = oldLine++; newNum = newLine++; }
     if (cls) div.classList.add(cls);
-    div.innerHTML = `<span class="diff-line-num">${oldNum}</span><span class="diff-line-num">${newNum}</span><span class="diff-line-content">${escapeHtml(line.substring(1))}</span>`;
+    div.innerHTML = `<span class="diff-line-num">${oldNum}</span><span class="diff-line-num">${newNum}</span><span class="diff-line-content">${diffContent(line.substring(1))}</span>`;
     // Where this row is, in the terms a review comment is anchored by: a
     // deleted line only exists on the left, everything else — added *and*
     // unchanged — is addressed on the right.
@@ -82,6 +156,8 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
     container.appendChild(div);
     if (opts.annotate) opts.annotate(div, anchor, container);
   });
+
+  refreshUnicodeToggles();
 }
 
 // A conflicted file, shown as the file itself rather than as a diff.
@@ -109,7 +185,7 @@ export function renderConflict(text, containerOrId) {
     else if (side) cls += ' ' + side;
     div.className = cls;
     div.innerHTML = `<span class="diff-line-num">${i + 1}</span>`
-      + `<span class="diff-line-content">${escapeHtml(line)}</span>`;
+      + `<span class="diff-line-content">${diffContent(line)}</span>`;
     frag.appendChild(div);
   });
 
@@ -120,4 +196,5 @@ export function renderConflict(text, containerOrId) {
     : 'No conflict markers in the file — resolve it by choosing a side, or mark it resolved';
   container.appendChild(summary);
   container.appendChild(frag);
+  refreshUnicodeToggles();
 }
