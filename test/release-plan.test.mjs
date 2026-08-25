@@ -184,3 +184,29 @@ test('versionFromOutput: silence falls back to what was asked for', () => {
   assert.strictEqual(P.versionFromOutput('', '1.0.17'), '1.0.17');
   assert.strictEqual(P.versionFromOutput('done\n', null), null);
 });
+
+// The run that named the release after npm: `npm version` prints v1.0.22 near
+// the top, and npm's own upgrade notice trails it with four numbers of its own.
+test('versionFromOutput: npm’s upgrade notice is not the release', () => {
+  const output = [
+    '> postversion', '> git push --follow-tags', '',
+    'To https://github.com/yarism/keep.git',
+    '   c4fd899..254906e  main -> main',
+    ' * [new tag]         v1.0.22 -> v1.0.22',
+    'v1.0.22',
+    'npm notice',
+    'npm notice New minor version of npm available! 11.6.2 -> 11.19.0',
+    'npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.19.0',
+    'npm notice To update run: npm install -g npm@11.19.0',
+    'npm notice', '',
+  ].join('\n');
+  assert.strictEqual(P.versionFromOutput(output, '1.0.22'), '1.0.22');
+  // And with nothing to confirm against, the notice still does not win.
+  assert.strictEqual(P.versionFromOutput(output, null), '1.0.22');
+});
+
+// A command that bumped to something other than what the panel predicted is
+// still read back honestly rather than reported as the guess.
+test('versionFromOutput: an unexpected bump beats the expectation', () => {
+  assert.strictEqual(P.versionFromOutput('v2.0.0\n', '1.0.17'), '2.0.0');
+});
