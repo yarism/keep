@@ -10,6 +10,7 @@
 // Read-only. Nothing here approves, comments or merges.
 import { $, escapeHtml, state, switchView } from './state.js';
 import { renderChangeset, summarize } from './changeset.js';
+import { createUnicodeToggle } from './diff.js';
 import { forgeForBranch, forgeLabel, pullRequestsNoun, pullRequestsUrl } from './forge.js';
 import { icon } from '../icons.js';
 import { commentCard } from './comment.js';
@@ -213,7 +214,7 @@ async function selectPullRequest(pr) {
       renderChangeset(changeset, files,
         (f) => window.git.rangeFileDiff(state.repoPath, base, head, f.filePath),
         { annotate: annotateFor, fileBadge, fileNote, summary: false });
-      changeset.prepend(reviewBarEl(summarize(files)));
+      changeset.prepend(reviewBarEl(summarize(files), createUnicodeToggle(changeset)));
     };
     _rerenderChangeset();
   } catch (e) {

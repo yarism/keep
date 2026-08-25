@@ -395,7 +395,7 @@ export async function submitReview({ onSubmitted } = {}) {
 // drafted against it, and the way to send that — three things that were three
 // separate full-width strips before, stacked between the title and the first
 // line of code.
-export function reviewBarEl(summary) {
+export function reviewBarEl(summary, extra) {
   const el = document.createElement('div');
   el.className = 'review-bar';
   const count = _pending.length;
@@ -411,6 +411,9 @@ export function reviewBarEl(summary) {
     ? `${count} pending comment${count !== 1 ? 's' : ''}`
     : 'Click + on any line to comment';
   el.appendChild(label);
+
+  // Before the submit button, which pushes itself to the right edge.
+  if (extra) el.appendChild(extra);
 
   const submit = document.createElement('button');
   submit.type = 'button';

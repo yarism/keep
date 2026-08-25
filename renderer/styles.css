@@ -1009,6 +1009,32 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .diff-line.del { background: var(--diff-del-bg); color: var(--diff-del-text); }
 .diff-line.hunk { background: var(--diff-hunk-bg); color: var(--diff-hunk-text); }
 
+/* \uXXXX escapes. Both forms are always in the DOM; the body class picks which
+   one is shown, so the toggle costs no re-render. */
+.uni-dec { display: none; }
+body.decode-unicode .uni-raw { display: none; }
+body.decode-unicode .uni-dec { display: inline; }
+
+.unicode-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+}
+.unicode-toggle:hover { background: var(--bg-hover); color: var(--text); }
+.unicode-toggle.active {
+  border-color: var(--accent);
+  background: var(--tint-accent);
+  color: var(--text);
+}
+
 /* History ----------------------------------------------------------------- */
 
 #history-container { display: flex; width: 100%; height: 100%; }
@@ -1322,6 +1348,11 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-size: var(--fs-sm);
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 33px;
 }
 .changeset-file { border-bottom: 1px solid var(--border); }
 .changeset-file-header {
