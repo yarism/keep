@@ -348,30 +348,79 @@ export function validateTheme(theme) {
 
 // ── What the picker shows ──
 
-// The themes the popover lists. A fixed set, in this order: the two Graphite
+// The themes the popover lists when nothing has been pinned: the two Graphite
 // themes the system entry switches between, then one dark and one light with a
-// character of their own. Fixed rather than ordered by what was picked lately,
-// which sounds helpful and is not: the rows move as you use them, and a theme
-// you like gets pushed off the list by one you were only trying. The popover is
-// a place you reach for without looking, so it stays put.
+// character of their own.
 //
-// Ordering THEMES itself would do the same job, but that order is the
-// gallery's, and the gallery is grouped by light and dark — the two lists want
-// different things.
-export const FEATURED = ['graphite-light', 'graphite-dark', 'claude', 'sage'];
+// A default rather than a fixed set, because which four you want up there is
+// exactly the sort of thing only you know. What it is not is a most-recently-
+// used list: rows that reorder as you use them put something else under the
+// pointer each time, and a theme you like gets pushed off by one you were only
+// trying. The popover is a place you reach for without looking, so it only
+// moves when you move it.
+//
+// Ordering THEMES itself would do the same job for the default, but that order
+// is the gallery's, and the gallery is grouped by light and dark — the two
+// lists want different things.
+export const DEFAULT_PINS = ['graphite-light', 'graphite-dark', 'claude', 'sage'];
 
-// The rows the popover shows: the featured themes, plus the one in force when
-// it is not among them, so the tick is always on screen without opening the
+// How many will fit up there. A limit rather than a scrolling list, because the
+// popover's whole job is to be shorter than the gallery — pin everything and
+// you have built a second gallery on the toolbar, one you have to read rather
+// than aim at. Four, which is five rows with the system entry above them: a
+// menu you can take in without moving your eyes.
+//
+// It is also exactly what a fresh install has pinned, so the popover never
+// grows: pinning a fifth theme means giving up one of the four, which is the
+// trade the toolbar is making anyway.
+export const MAX_PINS = 4;
+
+// Pins are stored as a list of ids, which can arrive from settings.json stale,
+// duplicated or in any order. This is the only door into the rest of the
+// module: unknown ids are dropped rather than rendered as a hole, duplicates
+// collapse, and the order becomes the declared one so the popover reads the
+// same way whichever order they were pinned in.
+export function normalizePins(pins) {
+  if (!Array.isArray(pins)) return [...DEFAULT_PINS];
+  const wanted = new Set(pins.filter(id => getTheme(id)));
+  // Trimmed as well as cleaned: a hand-edited settings file can name more than
+  // fit, and the popover has to stay the length it promises.
+  return THEMES.filter(t => wanted.has(t.id)).map(t => t.id).slice(0, MAX_PINS);
+}
+
+export function pinsAreFull(pins) {
+  return normalizePins(pins).length >= MAX_PINS;
+}
+
+export function isPinned(pins, id) {
+  return normalizePins(pins).includes(id);
+}
+
+// Pinning and unpinning are the same gesture, so they are the same function.
+// Returns a new list; the caller decides whether it is worth persisting.
+export function togglePin(pins, id) {
+  const current = normalizePins(pins);
+  if (!getTheme(id)) return current;
+  if (current.includes(id)) return current.filter(x => x !== id);
+  // At the limit the pin does nothing rather than quietly dropping somebody
+  // else's: which one it would have been is not a decision to make on your
+  // behalf, so the gallery greys the rest out and says so instead.
+  if (current.length >= MAX_PINS) return current;
+  return normalizePins([...current, id]);
+}
+
+// The rows the popover shows: the pinned themes, plus the one in force when it
+// is not among them, so the tick is always on screen without opening the
 // gallery. That extra row sits in its declared position rather than on the end,
-// which keeps the featured four where they always are. Unknown ids are dropped
-// rather than rendered as a hole.
-export function quickSelections(savedId = DEFAULT_THEME_ID) {
-  const ids = FEATURED.filter(id => getTheme(id));
+// which keeps the pinned ones where they always are.
+export function quickSelections(savedId = DEFAULT_THEME_ID, pins = DEFAULT_PINS) {
+  const ids = normalizePins(pins);
   if (getTheme(savedId) && !ids.includes(savedId)) ids.push(savedId);
   const order = THEMES.map(t => t.id);
   ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
   // The system entry is pinned above them: it is the default, and a mode rather
-  // than a palette anyone browses to.
+  // than a palette anyone browses to. It is also the reason unpinning
+  // everything is allowed — the popover still has something in it.
   return [SYSTEM_THEME_ID, ...ids].map(id => SELECTIONS.find(s => s.id === id));
 }
 
@@ -387,7 +436,7 @@ export function themeGroups() {
 
 // The themes the popover is not showing — what is behind the row that opens the
 // gallery, and the number on it.
-export function restThemes(savedId = DEFAULT_THEME_ID) {
-  const shown = new Set(quickSelections(savedId).map(s => s.id));
+export function restThemes(savedId = DEFAULT_THEME_ID, pins = DEFAULT_PINS) {
+  const shown = new Set(quickSelections(savedId, pins).map(s => s.id));
   return THEMES.filter(t => !shown.has(t.id));
 }

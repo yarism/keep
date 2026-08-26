@@ -7,12 +7,14 @@
 
 import { $, escapeHtml, suspendTitlebarDrag } from './state.js';
 import {
-  DEFAULT_THEME_ID, isSystemTheme, resolveTheme, swatchFor,
-  quickSelections, restThemes, themeGroups,
+  DEFAULT_THEME_ID, DEFAULT_PINS, isSystemTheme, resolveTheme, swatchFor,
+  quickSelections, restThemes, themeGroups, normalizePins, togglePin, isPinned,
+  pinsAreFull, MAX_PINS,
 } from '../themes.js';
 import { icon } from '../icons.js';
 
 const STORAGE_KEY = 'keep.theme';
+const PINS_KEY = 'keep.themePins';
 
 // The selection in force. A selection rather than a theme, which means it can
 // be 'system'. There used to be a second one alongside it, because hovering the
@@ -20,6 +22,13 @@ const STORAGE_KEY = 'keep.theme';
 // now that nothing changes under a moving pointer, what is on screen and what
 // was chosen are the same thing.
 let savedId = DEFAULT_THEME_ID;
+
+// Which themes the popover lists. Stored the same way as the selection above
+// and for the same reason: settings.json is the record, localStorage is the
+// copy that can be read before the first frame. Nothing paints from it that
+// early — the popover is closed at launch — but keeping the pair together means
+// there is one story about where appearance is kept, not two.
+let pins = [...DEFAULT_PINS];
 
 // What the OS appearance is set to, which only the system selection cares
 // about. The media query is the answer at first paint, but it is not always
@@ -103,10 +112,39 @@ function selectTheme(id, { persist = true } = {}) {
   renderThemeMenu();
 }
 
+// ── Pins ──
+//
+// Which themes the popover lists is a preference like the theme itself, so it
+// travels the same road: read from localStorage before the first frame, written
+// to both stores when it changes.
+
+// An absent list is a fresh install, which gets the default four. An empty one
+// is a deliberate act — someone unpinned everything — so it is left empty; the
+// popover still has the system entry and the row into the gallery.
+function readPins() {
+  let raw = null;
+  try { raw = localStorage.getItem(PINS_KEY); } catch {}
+  if (raw === null) return [...DEFAULT_PINS];
+  try { return normalizePins(JSON.parse(raw)); } catch { return [...DEFAULT_PINS]; }
+}
+
+function setPins(next, { persist = true } = {}) {
+  pins = normalizePins(next);
+  if (persist) {
+    try { localStorage.setItem(PINS_KEY, JSON.stringify(pins)); } catch {}
+    window.git.saveSettings({ themePins: pins });
+  }
+  // The popover is what pins are for, so it is redrawn even while it is closed:
+  // it is a handful of rows, and the alternative is remembering to do it on the
+  // way in.
+  renderThemeMenu();
+}
+
 // Called before first paint, from the synchronously-available cache.
 export function initTheme() {
   let stored = null;
   try { stored = localStorage.getItem(STORAGE_KEY); } catch {}
+  pins = readPins();
   selectTheme(stored || DEFAULT_THEME_ID, { persist: false });
   watchSystemAppearance();
 }
@@ -124,13 +162,28 @@ function watchSystemAppearance() {
   try { window.git.onSystemTheme((s) => setSystemDark(s && s.dark)); } catch {}
 }
 
-// Called once settings.json has been read; only does work if the two disagree.
+// Called once settings.json has been read. Both halves only do work if the two
+// stores disagree, which they normally don't — this is here for the launch
+// after settings were edited by hand, or written by another window.
 export function syncThemeFromSettings(settings) {
+  syncPinsFromSettings(settings);
   const id = settings && settings.theme;
   if (!id || id === savedId) return;
   applyTheme(id);
   try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
   window.git.saveSettings({ themeChrome: chromeOf(savedId) });
+  renderThemeMenu();
+}
+
+function syncPinsFromSettings(settings) {
+  const stored = settings && settings.themePins;
+  if (!Array.isArray(stored)) return;
+  const next = normalizePins(stored);
+  if (next.join() === pins.join()) return;
+  // Written back to localStorage rather than to settings, which is where this
+  // just came from.
+  pins = next;
+  try { localStorage.setItem(PINS_KEY, JSON.stringify(pins)); } catch {}
   renderThemeMenu();
 }
 
@@ -162,11 +215,11 @@ function themeRow(id, name, swatchColours, { checked = false, more = false } = {
 function renderThemeMenu() {
   const list = $('#theme-menu-items');
   if (!list) return;
-  const rows = quickSelections(savedId)
+  const rows = quickSelections(savedId, pins)
     .map(t => themeRow(t.id, t.name, swatchFor(t.id), { checked: t.id === savedId }));
   // The row that hands over to the gallery, counting what it holds. Left out
   // entirely when there is nothing more to show.
-  const rest = restThemes(savedId);
+  const rest = restThemes(savedId, pins);
   if (rest.length) {
     rows.push('<div class="theme-menu-sep"></div>');
     rows.push(themeRow(null, `More themes (${rest.length})`, null, { more: true }));
@@ -201,14 +254,55 @@ function closeThemeMenu() {
 // Clicking is the try, here as in the popover: nothing repaints under a moving
 // pointer, and a click puts the theme on for real. The gallery then stays open
 // rather than closing, because picking here is usually picking twice.
+//
+// The one in force wears no tick. The popover needs one because its rows are a
+// list and every row looks alike; a card is already ringed and tinted in the
+// accent when it is the chosen one, and a tick on top of that is the same thing
+// said twice. `aria-checked` still says it for anyone not looking at it.
+
+// The control that decides whether a theme is in the popover. It sits in the
+// card's bottom corner, on the label's line, where a pin goes — and it is a
+// bare glyph, because that line belongs to the card rather than to the preview
+// above it. Nothing has to be built under it to keep it legible, so nothing is:
+// it is the quietest thing on a card that is otherwise all colour.
+function pinButton(id, pinned) {
+  const full = !pinned && pinsAreFull(pins);
+  const label = pinLabel(pinned, full);
+  return `
+    <button type="button" class="theme-pin${pinned ? ' pinned' : ''}${full ? ' full' : ''}"
+            data-pin="${id}" tabindex="-1"
+            aria-pressed="${pinned}" aria-disabled="${full}"
+            title="${label}" aria-label="${label}"
+      >${icon(pinned ? 'pin-filled' : 'pin', 13)}</button>`;
+}
+
+function pinLabel(pinned, full) {
+  if (pinned) return 'Unpin from the theme menu';
+  return full ? `The menu holds ${MAX_PINS} — unpin one first` : 'Pin to the theme menu';
+}
+
+// The line under the gallery's title. It says what the pin is for until the
+// pins run out, and then says that instead — which is the only warning there
+// needs to be, because the buttons it is talking about have gone grey at the
+// same moment.
+function renderPinHint() {
+  const hint = $('#theme-gallery-hint');
+  if (!hint) return;
+  const count = normalizePins(pins).length;
+  hint.textContent = count >= MAX_PINS
+    ? `All ${MAX_PINS} pins are used — unpin one to make room for another`
+    : `Pin the ones you switch between and they'll be in the toolbar menu (${count} of ${MAX_PINS})`;
+}
 
 function galleryCard(theme) {
   const t = theme.tokens;
   const active = theme.id === savedId;
+  const pinned = isPinned(pins, theme.id);
   const line = (colour, width) => `<i class="theme-mini-line" style="background:${colour};width:${width}"></i>`;
   return `
     <div class="theme-card${active ? ' active' : ''}" data-theme-id="${theme.id}"
          role="menuitemradio" aria-checked="${active}" tabindex="0">
+      ${pinButton(theme.id, pinned)}
       <div class="theme-mini" style="background:${t['bg']};border-color:${t['border-strong']}" aria-hidden="true">
         <div class="theme-mini-bar" style="background:${t['bg-surface']};border-color:${t['border']}">
           ${line(t['text-dim'], '18px')}
@@ -231,7 +325,6 @@ function galleryCard(theme) {
       </div>
       <div class="theme-card-label">
         <span class="theme-name">${escapeHtml(theme.name)}</span>
-        <span class="theme-check">${active ? icon('check', 14) : ''}</span>
       </div>
     </div>`;
 }
@@ -247,6 +340,7 @@ function renderThemeGallery(focusId = null) {
       <div class="theme-gallery-grid">${group.themes.map(galleryCard).join('')}</div>
     </div>
   `).join('');
+  renderPinHint();
   if (focusId) {
     const card = body.querySelector(`.theme-card[data-theme-id="${focusId}"]`);
     if (card) card.focus();
@@ -276,6 +370,52 @@ function closeThemeGallery() {
 function galleryIsOpen() {
   const overlay = $('#theme-gallery');
   return !!overlay && !overlay.hidden;
+}
+
+// Pinning redraws the popover and the one button that changed, rather than the
+// gallery: a full redraw here would throw away the card the pointer is over
+// halfway through a run of pinning, and scroll the grid back to the top.
+function togglePinned(id) {
+  const before = normalizePins(pins);
+  setPins(togglePin(pins, id));
+  // Nothing moved: the pins are full and this one is not among them. Said out
+  // loud rather than ignored, because the click was aimed at a button that is
+  // already grey and the pointer may have missed it.
+  if (normalizePins(pins).join() === before.join()) {
+    if (!isPinned(pins, id)) nudgePinHint();
+    return;
+  }
+  // Every pin is redrawn, not just the one clicked: crossing the limit greys
+  // out the others, and coming back under it wakes them up again.
+  refreshPinButtons();
+}
+
+function refreshPinButtons() {
+  renderPinHint();
+  document.querySelectorAll('#theme-gallery .theme-pin').forEach(button => {
+    const id = button.dataset.pin;
+    const pinned = isPinned(pins, id);
+    const full = !pinned && pinsAreFull(pins);
+    const label = pinLabel(pinned, full);
+    button.classList.toggle('pinned', pinned);
+    button.classList.toggle('full', full);
+    button.setAttribute('aria-pressed', String(pinned));
+    button.setAttribute('aria-disabled', String(full));
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.innerHTML = icon(pinned ? 'pin-filled' : 'pin', 13);
+  });
+}
+
+// A one-shot flash of the hint, for the click that could not do anything.
+function nudgePinHint() {
+  const hint = $('#theme-gallery-hint');
+  if (!hint) return;
+  hint.classList.remove('nudge');
+  // Reading a layout property between the two is what makes the animation run
+  // again rather than being treated as never having stopped.
+  void hint.offsetWidth;
+  hint.classList.add('nudge');
 }
 
 export function setupThemePicker() {
@@ -318,6 +458,13 @@ export function setupThemePicker() {
   if (overlay) {
     overlay.addEventListener('click', (e) => {
       e.stopPropagation();
+      // The pin sits inside a card, so it has to be answered before the card
+      // is, or pinning a theme would also put it on.
+      const pin = e.target.closest('.theme-pin');
+      if (pin) {
+        togglePinned(pin.dataset.pin);
+        return;
+      }
       const card = e.target.closest('.theme-card');
       if (card) {
         // Redrawn rather than closed: picking here is usually picking twice,
@@ -331,7 +478,16 @@ export function setupThemePicker() {
     });
     overlay.addEventListener('keydown', (e) => {
       const card = e.target.closest('.theme-card');
-      if (!card || (e.key !== 'Enter' && e.key !== ' ')) return;
+      if (!card) return;
+      // P for pin, from the card itself. The pin is not its own tab stop —
+      // that would double the number of stops in a grid of cards, and the
+      // second one in every pair does the rarer thing.
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        togglePinned(card.dataset.themeId);
+        return;
+      }
+      if (e.key !== 'Enter' && e.key !== ' ') return;
       e.preventDefault();
       selectTheme(card.dataset.themeId);
       renderThemeGallery(card.dataset.themeId);

@@ -56,6 +56,13 @@ const PATHS = {
   // ways, which is what decoding \uXXXX escapes amounts to.
   translate: '<path d="M3.75 6.5h8"/><path d="M7.75 4.75V6.5"/><path d="M10.25 6.5c0 4-2.2 7.3-6 8.9"/><path d="M5.9 10.6c.85 2.15 2.6 3.9 5 4.7"/><path d="m13.1 20.25 3.7-8.5 3.7 8.5"/><path d="M14.5 17.1h4.6"/>',
   palette: '<path d="M12 3.75a8.25 8.25 0 1 0 0 16.5 1.7 1.7 0 0 0 1.7-1.7c0-.44-.17-.84-.44-1.14a1.7 1.7 0 0 1 1.25-2.85h2A3.75 3.75 0 0 0 20.25 10.8C19.8 6.8 16.3 3.75 12 3.75Z"/><circle cx="8" cy="11.75" r="1.05" fill="currentColor" stroke="none"/><circle cx="11" cy="7.9" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.5" cy="9.4" r="1.05" fill="currentColor" stroke="none"/>',
+  // Keeping a theme in the toolbar menu. A pushpin seen head-on: cap, collar,
+  // needle. Drawn wide and short rather than to scale — at 14px a realistic pin
+  // is a downward arrow. The filled variant is the same pin pressed in; colour
+  // alone would carry the state, but it would be the only control in the app
+  // where it does.
+  pin: '<path d="M7.75 3.5h8.5"/><path d="M9.5 3.5v6.2a3.2 3.2 0 0 1-1.2 2.5l-2.4 1.9a1 1 0 0 0 .62 1.78h11a1 1 0 0 0 .62-1.78l-2.4-1.9a3.2 3.2 0 0 1-1.2-2.5V3.5"/><path d="M12 15.88v4.37"/>',
+  'pin-filled': '<path d="M7.75 3.5h8.5"/><path d="M9.5 3.5v6.2a3.2 3.2 0 0 1-1.2 2.5l-2.4 1.9a1 1 0 0 0 .62 1.78h11a1 1 0 0 0 .62-1.78l-2.4-1.9a3.2 3.2 0 0 1-1.2-2.5V3.5" fill="currentColor"/><path d="M12 15.88v4.37"/>',
   check: '<path d="m5.25 12.5 4.5 4.5 9-10"/>',
   chevron: '<path d="m9.75 5.75 6.25 6.25-6.25 6.25"/>',
   plus: '<path d="M12 5.25v13.5"/><path d="M5.25 12h13.5"/>',
