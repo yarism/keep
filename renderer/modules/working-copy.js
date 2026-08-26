@@ -24,6 +24,7 @@ export async function refreshStatus() {
   renderOpBanner();
   syncAmendAvailability();
   renderFileList();
+  await refreshSelectedDiff();
 }
 
 // Amending is a rewrite. That is fine on work that has never left the machine
@@ -141,7 +142,6 @@ function renderFileList() {
 
   state.statusFiles.forEach((f, idx) => {
     const item = document.createElement('div');
-    const key = fileKey(f);
     const isSelected = _selectedIndices.has(idx);
     item.className = 'file-item' + (isSelected ? ' selected' : '') + (f.conflicted ? ' conflicted' : '');
     item.tabIndex = 0;
@@ -162,7 +162,6 @@ function renderFileList() {
       if (e.target.classList.contains('file-checkbox')) return;
       handleFileClick(idx, e);
       // Show diff for the clicked file
-      state.selectedFile = key;
       selectFile(f);
     });
     item.addEventListener('keydown', (e) => {
@@ -231,30 +230,83 @@ function handleFileClick(idx, e) {
 }
 
 async function selectFile(f) {
+  state.selectedFile = fileKey(f);
   $('#diff-filename').textContent = f.filePath;
   renderConflictActions(f);
-  if (f.conflicted) {
-    // `git diff` on an unmerged path prints a combined diff that reads as noise.
-    // What you actually need to look at is the file with its markers in place.
-    try {
-      const text = await window.git.fileContents(state.repoPath, f.filePath);
-      renderConflict(text, $('#diff-content'), f);
-    } catch (e) {
-      $('#diff-content').innerHTML = `<div style="padding:20px;color:var(--red)">${escapeHtml(e.message)}</div>`;
-    }
-    return;
-  }
+  // A click means "show me this", so it draws even if the text is unchanged —
+  // the pane may have been emptied by something else since.
+  await renderFileDiff(f, { force: true });
+}
+
+// What the diff pane is currently showing, so a poll can tell a file that has
+// actually changed from the same file read again.
+let _shown = null;
+
+async function renderFileDiff(f, { force = false } = {}) {
+  const pane = $('#diff-content');
+  const key = fileKey(f);
+  let sig, draw;
   try {
-    const diff = await window.git.diff(state.repoPath, f.filePath, f.staged);
-    if (!diff || !diff.trim()) {
-      const fallback = await window.git.diff(state.repoPath, f.filePath, !f.staged);
-      renderDiff(fallback, 'diff-content', !f.staged ? f.filePath : null);
+    if (f.conflicted) {
+      // `git diff` on an unmerged path prints a combined diff that reads as
+      // noise. What you actually need to look at is the file with its markers
+      // in place.
+      const text = await window.git.fileContents(state.repoPath, f.filePath);
+      sig = 'conflict\0' + text;
+      draw = () => renderConflict(text, pane, f);
     } else {
-      renderDiff(diff, 'diff-content', !f.staged ? f.filePath : null);
+      const own = await window.git.diff(state.repoPath, f.filePath, f.staged);
+      // A change that sits entirely on the other side shows up as nothing here;
+      // the other side beats an empty pane.
+      const text = own && own.trim()
+        ? own
+        : await window.git.diff(state.repoPath, f.filePath, !f.staged);
+      sig = 'diff\0' + text;
+      draw = () => renderDiff(text, pane, f.staged ? null : f.filePath);
     }
   } catch (e) {
-    $('#diff-content').innerHTML = `<div style="padding:20px;color:var(--red)">${escapeHtml(e.message)}</div>`;
+    sig = 'error\0' + e.message;
+    draw = () => { pane.innerHTML = `<div style="padding:20px;color:var(--red)">${escapeHtml(e.message)}</div>`; };
   }
+  // Redrawing identical text every few seconds would throw away the scroll
+  // position, any text selection, and the focus ring for nothing.
+  if (!force && _shown && _shown.key === key && _shown.sig === sig) return;
+  const top = pane.scrollTop;
+  const sameFile = _shown && _shown.key === key;
+  draw();
+  // The file moved on under the user, but they were reading a particular part
+  // of it, so stay where they were.
+  if (sameFile && !force) pane.scrollTop = top;
+  _shown = { key, sig };
+}
+
+// The file on screen keeps changing after it was clicked — edited in an editor,
+// staged from a context menu, committed away. The poll that refreshes the file
+// list refreshes what the diff pane is showing too, instead of leaving it on a
+// picture of the file as it was when it was clicked.
+async function refreshSelectedDiff() {
+  const selected = state.selectedFile;
+  if (!selected) { _shown = null; return; }
+  const path = selected.slice(0, selected.lastIndexOf(':'));
+  const f = state.statusFiles.find(x => fileKey(x) === selected)
+    // Staging a file moves its row to the other half of the list. The pane
+    // follows it there rather than sitting on a diff that no longer exists.
+    || state.statusFiles.find(x => x.filePath === path);
+  if (!f) {
+    // Committed, discarded, or reverted by hand: there is no longer a change to
+    // show, and a stale diff claims there is.
+    state.selectedFile = null;
+    _shown = null;
+    $('#diff-filename').textContent = 'No file selected';
+    $('#diff-content').innerHTML = '';
+    const bar = $('#conflict-actions');
+    if (bar) bar.hidden = true;
+    return;
+  }
+  state.selectedFile = fileKey(f);
+  $('#diff-filename').textContent = f.filePath;
+  renderConflictActions(f);
+  await renderFileDiff(f);
 }
 
 // Take Ours / Take Theirs / Mark Resolved, above the file they apply to. Ours
@@ -289,6 +341,9 @@ function setupConflictActions() {
     if (!btn) return;
     try {
       await window.git[RESOLVERS[btn.dataset.resolve]](state.repoPath, bar.dataset.file);
+      // Nothing is selected any more, or the refresh below would pull the file
+      // straight back into the pane as a now-resolved diff.
+      state.selectedFile = null;
       $('#diff-content').innerHTML = '';
       $('#diff-filename').textContent = 'No file selected';
       bar.hidden = true;
