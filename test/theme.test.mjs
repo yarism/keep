@@ -15,7 +15,8 @@ const read = (p) => readFile(new URL(p, ROOT), 'utf-8');
 const {
   THEMES, TOKENS, DEFAULT_THEME_ID, SYSTEM_THEME_ID, SYSTEM_PAIR, SELECTIONS,
   isSystemTheme, getTheme, resolveTheme, swatch, swatchFor, validateTheme,
-  quickSelections, restThemes, themeGroups, FEATURED,
+  quickSelections, restThemes, themeGroups,
+  DEFAULT_PINS, MAX_PINS, normalizePins, togglePin, isPinned, pinsAreFull,
 } = await loadEsm('renderer/themes.js');
 
 const { icon, iconNames, hasIcon, STROKE_WIDTH } = await loadEsm('renderer/icons.js');
@@ -98,22 +99,27 @@ test('themes: every picker row has a four-colour swatch, the system one drawn fr
 
 // ── What the picker shows ──
 
-test('picker: the popover lists the featured themes and nothing else', () => {
-  FEATURED.forEach(id => assert.ok(getTheme(id), `featured theme ${id} does not exist`));
+test('picker: the popover lists the pinned themes and nothing else', () => {
+  DEFAULT_PINS.forEach(id => assert.ok(getTheme(id), `pinned theme ${id} does not exist`));
   const ids = quickSelections(SYSTEM_THEME_ID).map(s => s.id);
-  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...FEATURED]);
+  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...DEFAULT_PINS]);
+  const pins = ['ember', 'ivory'];
+  assert.deepStrictEqual(
+    quickSelections(SYSTEM_THEME_ID, pins).map(s => s.id),
+    [SYSTEM_THEME_ID, 'ember', 'ivory'],
+  );
 });
 
 test('picker: the popover does not grow when a theme is added', () => {
   // The whole point of the gallery. A new theme lands there, not on the toolbar.
-  assert.ok(THEMES.length > FEATURED.length, 'this stops proving anything otherwise');
-  for (const id of FEATURED.concat(SYSTEM_THEME_ID)) {
-    assert.strictEqual(quickSelections(id).length, FEATURED.length + 1);
+  assert.ok(THEMES.length > DEFAULT_PINS.length, 'this stops proving anything otherwise');
+  for (const id of DEFAULT_PINS.concat(SYSTEM_THEME_ID)) {
+    assert.strictEqual(quickSelections(id).length, DEFAULT_PINS.length + 1);
   }
 });
 
 test('picker: choosing a theme never moves the rows', () => {
-  // This is why the list is fixed rather than ordered by what was picked
+  // This is why the list is pinned rather than ordered by what was picked
   // lately: a menu whose rows rearrange as you use it puts something else under
   // the pointer each time, and a theme you like can be pushed off it by one you
   // were only trying.
@@ -121,13 +127,13 @@ test('picker: choosing a theme never moves the rows', () => {
   for (const selection of SELECTIONS) {
     const after = quickSelections(selection.id).map(s => s.id);
     assert.deepStrictEqual(after.filter(id => before.includes(id)), before,
-      `choosing ${selection.id} disturbed the fixed rows`);
+      `choosing ${selection.id} disturbed the pinned rows`);
   }
 });
 
 test('picker: a theme chosen from the gallery joins the rows, in its declared place', () => {
   // Otherwise the tick would be nowhere to be seen while it is in force.
-  const outsider = THEMES.find(t => !FEATURED.includes(t.id));
+  const outsider = THEMES.find(t => !DEFAULT_PINS.includes(t.id));
   const ids = quickSelections(outsider.id).map(s => s.id);
   assert.ok(ids.includes(outsider.id));
   const order = [SYSTEM_THEME_ID, ...THEMES.map(t => t.id)];
@@ -138,20 +144,23 @@ test('picker: a theme chosen from the gallery joins the rows, in its declared pl
 test('picker: every selection has a visible tick without opening the gallery', () => {
   for (const selection of SELECTIONS) {
     assert.ok(quickSelections(selection.id).some(s => s.id === selection.id), selection.id);
+    assert.ok(quickSelections(selection.id, []).some(s => s.id === selection.id), selection.id);
   }
 });
 
 test('picker: an unknown selection leaves the rows alone rather than a hole', () => {
   const ids = quickSelections('no-such-theme').map(s => s.id);
-  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...FEATURED]);
+  assert.deepStrictEqual(ids, [SYSTEM_THEME_ID, ...DEFAULT_PINS]);
 });
 
 test('picker: the gallery row offers exactly what the popover left out', () => {
-  for (const selection of SELECTIONS) {
-    const shown = quickSelections(selection.id).map(s => s.id);
-    const rest = restThemes(selection.id).map(t => t.id);
-    assert.strictEqual(shown.length + rest.length, SELECTIONS.length);
-    rest.forEach(id => assert.ok(!shown.includes(id), `${id} is offered twice`));
+  for (const pins of [undefined, [], DEFAULT_PINS, THEMES.map(t => t.id)]) {
+    for (const selection of SELECTIONS) {
+      const shown = quickSelections(selection.id, pins).map(s => s.id);
+      const rest = restThemes(selection.id, pins).map(t => t.id);
+      assert.strictEqual(shown.length + rest.length, SELECTIONS.length);
+      rest.forEach(id => assert.ok(!shown.includes(id), `${id} is offered twice`));
+    }
   }
 });
 
@@ -168,6 +177,102 @@ test('picker: the gallery holds every theme, split into light and dark', () => {
   // Following the OS is a mode, not a palette — it is pinned in the popover
   // instead, so it must not turn up in here as an extra theme.
   assert.ok(!listed.includes(SYSTEM_THEME_ID));
+});
+
+// ── Pins ──
+
+test('pins: a stored list is cleaned up rather than trusted', () => {
+  // settings.json can name a theme that has since been removed, or the same one
+  // twice; neither should reach the popover.
+  assert.deepStrictEqual(normalizePins(['ember', 'no-such-theme', 'ember']), ['ember']);
+  assert.deepStrictEqual(normalizePins([]), []);
+  assert.deepStrictEqual(normalizePins(['no-such-theme']), []);
+  // The system entry is a mode, not a theme, so it cannot be pinned or unpinned.
+  assert.deepStrictEqual(normalizePins([SYSTEM_THEME_ID]), []);
+});
+
+test('pins: an absent list means a fresh install, not an empty menu', () => {
+  for (const absent of [undefined, null, 'ember', 42]) {
+    assert.deepStrictEqual(normalizePins(absent), DEFAULT_PINS);
+  }
+  // ...but an empty one was somebody unpinning everything, and is left alone.
+  assert.deepStrictEqual(quickSelections(SYSTEM_THEME_ID, []).map(s => s.id), [SYSTEM_THEME_ID]);
+  assert.strictEqual(restThemes(SYSTEM_THEME_ID, []).length, THEMES.length);
+});
+
+test('pins: the order is the declared one, whatever order they were pinned in', () => {
+  // Otherwise the rows would sit in the order they were clicked, and the
+  // popover would read differently on two machines with the same four pins.
+  const order = THEMES.map(t => t.id);
+  const pinned = ['synthwave', 'graphite-light', 'ivory'];
+  const ids = normalizePins(pinned);
+  assert.deepStrictEqual(ids, [...ids].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+  assert.deepStrictEqual(normalizePins([...pinned].reverse()), ids);
+});
+
+test('pins: pinning and unpinning are the same gesture, and it round-trips', () => {
+  // One short of the limit, so there is somewhere for the next pin to go.
+  const pins = DEFAULT_PINS.slice(0, MAX_PINS - 1);
+  const outsider = THEMES.find(t => !pins.includes(t.id)).id;
+  assert.strictEqual(isPinned(pins, outsider), false);
+
+  const added = togglePin(pins, outsider);
+  assert.ok(isPinned(added, outsider));
+  assert.ok(quickSelections(SYSTEM_THEME_ID, added).some(s => s.id === outsider));
+
+  const removed = togglePin(added, outsider);
+  assert.deepStrictEqual(removed, normalizePins(pins));
+  // The list handed in is never modified — the caller decides what to keep.
+  assert.deepStrictEqual(pins, DEFAULT_PINS.slice(0, MAX_PINS - 1));
+});
+
+test('pins: unpinning the theme in force keeps it on the menu while it is on', () => {
+  // The tick has to be somewhere, so the row survives its own unpinning — and
+  // is gone the next time something else is chosen.
+  const pins = togglePin(DEFAULT_PINS, 'claude');
+  assert.ok(!isPinned(pins, 'claude'));
+  assert.ok(quickSelections('claude', pins).some(s => s.id === 'claude'));
+  assert.ok(!quickSelections('sage', pins).some(s => s.id === 'claude'));
+});
+
+test('pins: an unknown id cannot be pinned', () => {
+  assert.deepStrictEqual(togglePin(DEFAULT_PINS, 'no-such-theme'), normalizePins(DEFAULT_PINS));
+});
+
+test('pins: the popover cannot be turned back into the gallery', () => {
+  // The limit is the point of the popover: pin everything and it is a second
+  // gallery on the toolbar, one you have to read rather than aim at.
+  assert.ok(THEMES.length > MAX_PINS, 'this stops proving anything otherwise');
+  assert.ok(DEFAULT_PINS.length <= MAX_PINS, 'a fresh install starts over the limit');
+  // Five rows, counting the system entry pinned above them.
+  assert.strictEqual(quickSelections(SYSTEM_THEME_ID).length, MAX_PINS + 1);
+  const all = normalizePins(THEMES.map(t => t.id));
+  assert.strictEqual(all.length, MAX_PINS);
+  assert.strictEqual(quickSelections(SYSTEM_THEME_ID, all).length, MAX_PINS + 1);
+  assert.ok(restThemes(SYSTEM_THEME_ID, all).length > 0, 'the gallery row must survive');
+});
+
+test('pins: a full set refuses the next one rather than dropping one of its own', () => {
+  // Which one it would have dropped is not a decision to make for somebody.
+  const full = normalizePins(THEMES.map(t => t.id));
+  assert.ok(pinsAreFull(full));
+  const outsider = THEMES.find(t => !full.includes(t.id)).id;
+  assert.deepStrictEqual(togglePin(full, outsider), full);
+  // Unpinning still works at the limit, and makes room for exactly one.
+  const room = togglePin(full, full[0]);
+  assert.ok(!pinsAreFull(room));
+  assert.ok(isPinned(togglePin(room, outsider), outsider));
+});
+
+test('pins: a fresh install is already full, so pinning a fifth is a swap', () => {
+  // The popover ships at the size it stays: five rows with the system entry.
+  assert.strictEqual(DEFAULT_PINS.length, MAX_PINS);
+  assert.ok(pinsAreFull(DEFAULT_PINS));
+  const outsider = THEMES.find(t => !DEFAULT_PINS.includes(t.id)).id;
+  const swapped = togglePin(togglePin(DEFAULT_PINS, DEFAULT_PINS[3]), outsider);
+  assert.ok(isPinned(swapped, outsider));
+  assert.ok(!isPinned(swapped, DEFAULT_PINS[3]));
+  assert.strictEqual(swapped.length, MAX_PINS);
 });
 
 // ── Icons ──

@@ -1509,6 +1509,21 @@ body.decode-unicode .uni-dec { display: inline; }
   gap: 12px;
 }
 .theme-gallery-head .modal-title { margin-bottom: 0; }
+/* What the pin is for, said once. The gesture is discoverable without it — the
+   pins on the themes already in the menu are showing — but nothing on a card
+   says where a pinned theme ends up. */
+.theme-gallery-hint {
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--text-mute);
+}
+/* The click that could do nothing. One beat of the accent, no movement: the
+   line is telling you the rule, not complaining. */
+.theme-gallery-hint.nudge { animation: hint-nudge 900ms ease-out; }
+@keyframes hint-nudge {
+  0%, 60% { color: var(--accent); }
+  100% { color: var(--text-mute); }
+}
 /* .icon-button only carries styling inside the toolbar, so out here the button
    would keep the platform's own grey box. */
 #theme-gallery-close {
@@ -1538,6 +1553,7 @@ body.decode-unicode .uni-dec { display: inline; }
 }
 
 .theme-card {
+  position: relative;
   padding: 6px;
   user-select: none;
   border: 1px solid transparent;
@@ -1546,15 +1562,68 @@ body.decode-unicode .uni-dec { display: inline; }
   outline: none;
 }
 .theme-card:hover, .theme-card:focus-visible { background: var(--bg-hover); }
+/* No tick on the card: the ring and the tint are the answer to "which one is
+   on", and a tick inside them is the same sentence twice. */
 .theme-card.active { background: var(--tint-accent); border-color: var(--accent); }
 .theme-card-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 3px 1px;
+  /* The right side is the pin's, so the name stops short of it rather than
+     running underneath. */
+  padding: 7px 24px 1px 3px;
   font-size: var(--fs-md);
   color: var(--text);
 }
+.theme-card-label .theme-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Off until the card is under the pointer or the keyboard — a grid of cards
+   each wearing an unlit pin is a grid of buttons, not a grid of themes. The
+   ones already pinned stay lit, which is both the state and the only teaching
+   the gesture needs.
+
+   In the bottom corner, on the label's line, which is where a pin goes. That
+   line is card, not preview — the picture stops above it — so the glyph needs
+   nothing under it: no chip, no ring, no plate. Colour carries the state and
+   the card carries the pin. */
+.theme-pin {
+  position: absolute;
+  bottom: 4px;
+  right: 3px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-mute);
+  line-height: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease;
+}
+.theme-card:hover .theme-pin,
+.theme-card:focus-visible .theme-pin { opacity: .75; }
+.theme-pin.pinned { opacity: 1; color: var(--accent); }
+.theme-pin:hover { opacity: 1; color: var(--text); }
+.theme-pin.pinned:hover { color: var(--accent-hover); }
+/* At the limit an unpinned theme still shows its pin on hover — fainter still,
+   and refusing rather than absent, so the answer to "why can't I pin this one"
+   is on the card rather than only in the tooltip. Not the native `disabled`
+   attribute: that swallows the click, and the card underneath would take it and
+   change the theme instead. */
+.theme-pin.full { cursor: default; }
+.theme-card:hover .theme-pin.full,
+.theme-card:focus-visible .theme-pin.full { opacity: .35; }
+.theme-pin.full:hover { opacity: .35; color: var(--text-mute); }
 
 /* A small mock of the window rather than a strip of colours: what a theme
    looks like depends on which colour lands on which surface. Every colour in
