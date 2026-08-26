@@ -988,6 +988,8 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   background: var(--bg);
 }
 
+/* Bounded by its .diff-hunk wrapper: sticky at the top of the hunk it heads,
+ * and out of the way once that hunk has scrolled past. */
 .diff-hunk-header {
   background: var(--diff-hunk-bg);
   color: var(--diff-hunk-text);
