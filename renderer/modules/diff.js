@@ -90,6 +90,9 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
   // Which hunk of this file we are on. Sent along with the header so applying
   // one cannot land on a different hunk if the file moved on underneath.
   let hunkIndex = -1;
+  // The box the rows of the current hunk go into, so that hunk's header has
+  // something to stick inside of. See below.
+  let hunkEl = null;
 
   lines.forEach(line => {
     if (line.startsWith('@@')) {
@@ -130,7 +133,15 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
         btnGroup.appendChild(stageBtn);
         hunkDiv.appendChild(btnGroup);
       }
-      container.appendChild(hunkDiv);
+      // Each hunk is wrapped, because a sticky header only stops sticking when
+      // the box it lives in has scrolled past. Left as flat siblings, every
+      // header in the file would pin itself to the same top edge and the
+      // stack would grow as you scrolled; bounded by its own hunk, each one
+      // is pushed out of the way by the next.
+      hunkEl = document.createElement('div');
+      hunkEl.className = 'diff-hunk';
+      hunkEl.appendChild(hunkDiv);
+      container.appendChild(hunkEl);
       return;
     }
     if (line.startsWith('diff --git') || line.startsWith('index ') ||
@@ -153,7 +164,7 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
       : { side: 'RIGHT', line: newNum };
     div.dataset.side = anchor.side;
     div.dataset.line = String(anchor.line);
-    container.appendChild(div);
+    (hunkEl || container).appendChild(div);
     if (opts.annotate) opts.annotate(div, anchor, container);
   });
 
