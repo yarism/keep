@@ -549,8 +549,11 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-xs);
-  line-height: 1.5;
-  padding: 1px 7px;
+  /* Kept shorter than the row's line box, like .repo-item-badge below: the
+     counts fill in async, and a badge taller than the text would grow the row
+     and nudge everything under it when it appeared. */
+  line-height: 1;
+  padding: 2px 7px;
   border-radius: 10px;
   margin-left: auto;
   font-weight: 700;
