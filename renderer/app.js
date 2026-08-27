@@ -3,9 +3,9 @@ import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
-import { refreshHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
+import { refreshHistory, resetHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
-import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes } from './modules/sidebar.js';
+import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
@@ -55,11 +55,13 @@ async function enterWorkspace(path) {
   _lastFingerprint = null;
   state.selectedFile = null;
   state.selectedCommit = null;
-  state.unpushed = new Set();
+  // History is the first thing on screen now, so the previous repository's
+  // commits must be gone before this one's have loaded.
+  resetHistory();
+  resetSidebar();
   // Stale remotes would put the previous repo's forge in this one's menus.
   state.remotes = [];
   resetPullRequests();
-  state.searching = false;
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;
@@ -69,13 +71,22 @@ async function enterWorkspace(path) {
   $('#diff-filename').textContent = 'No file selected';
   $('#diff-content').innerHTML = '';
   $('#commit-subject').value = '';
+  // The old repository's changed-file count means nothing here, and status
+  // hasn't been read yet.
+  $('#wc-badge').hidden = true;
   $$('#toolbar .toolbar-group button').forEach(b => b.disabled = false);
-  switchView('working-copy');
+  switchView('history');
   // So the next launch can come straight back here
   window.git.saveSettings({ lastRepo: path });
   // Before the refresh, so an unreadable folder explains itself rather than
   // rendering four empty panes and leaving the reason to guesswork.
   await checkAccess(path);
+  // Whether the Pull Requests nav item exists depends only on the remotes —
+  // one cheap read, not the full refresh, whose branch pass is what takes the
+  // time. Deciding it now keeps the item from popping in seconds later and
+  // shoving the sections beneath it around.
+  try { state.remotes = await window.git.remotes(path); } catch { state.remotes = []; }
+  syncPullRequestNav();
   await refresh();
   startPolling();
   startAutoFetch();

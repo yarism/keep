@@ -67,6 +67,26 @@ export function setupSidebarResize() {
   }
 }
 
+// Switching repositories leaves the previous one's branches, tags and remotes
+// on screen until each list has re-fetched. Ghost rows instead, matching the
+// history skeleton on the other side of the window.
+export function resetSidebar() {
+  const sections = [['#branches-list', 4], ['#tags-list', 2], ['#remotes-list', 2]];
+  for (const [sel, count] of sections) {
+    const list = $(sel);
+    if (!list) continue;
+    let html = '';
+    for (let i = 0; i < count; i++) {
+      const w = 40 + ((i * 23) % 35);
+      html += `<div class="skeleton-side-row">
+        <div class="skeleton-line skeleton-dot"></div>
+        <div class="skeleton-line" style="width:${w}%"></div>
+      </div>`;
+    }
+    list.innerHTML = html;
+  }
+}
+
 export async function refreshBranches(refresh) {
   try { state.branchList = await window.git.branches(state.repoPath); } catch { state.branchList = []; }
   const list = $('#branches-list');
@@ -127,7 +147,13 @@ export async function refreshTags(refresh) {
       list.appendChild(item);
     });
     if (state.selectedBranch) highlightBranch(state.selectedBranch);
-  } catch {}
+  } catch {
+    // A failed read must still take the skeleton (or the previous repo's
+    // tags) off screen — an empty section is the honest answer.
+    state.tagList = [];
+    const list = $('#tags-list');
+    if (list) list.innerHTML = '';
+  }
 }
 
 export async function refreshRemotes(refresh) {
@@ -186,7 +212,11 @@ export async function refreshRemotes(refresh) {
       list.appendChild(remoteEl);
     });
     if (state.selectedBranch) highlightBranch(state.selectedBranch);
-  } catch {}
+  } catch {
+    state.remotes = [];
+    const list = $('#remotes-list');
+    if (list) list.innerHTML = '';
+  }
 }
 
 export async function refreshStashes() {

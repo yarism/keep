@@ -2534,3 +2534,48 @@ body.decode-unicode .uni-dec { display: inline; }
 }
 .review-thread-resolved::before { content: '\2713'; color: var(--green); }
 .review-thread-resolved:hover { color: var(--text); }
+
+/* ── Loading skeletons ──
+ * Shown while a freshly opened repository loads its history: ghost rows in the
+ * commit list, ghost lines in the detail pane. Sized off the same tokens as
+ * the real content so the swap to real rows doesn't shift anything. */
+.skeleton-row {
+  height: var(--commit-row-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.skeleton-line {
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--bg-active) 50%, var(--bg-hover) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-detail { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line { animation: none; background: var(--bg-hover); }
+}
+
+/* Sidebar variant: an icon-sized stub and a name-length line, in the same
+ * pill geometry as the real rows so nothing jumps when they land. */
+.skeleton-side-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 1px var(--row-inset);
+  padding: 6px 8px;
+}
+.skeleton-side-row .skeleton-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}

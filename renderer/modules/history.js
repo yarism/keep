@@ -168,6 +168,62 @@ export function historyRef() {
   return { branch: null, all: false };
 }
 
+// Switching repositories reuses the same list, the same paging depth and the
+// same search box. None of it means anything in the next repository, and the
+// old rows would sit on screen until its history finished loading.
+export function resetHistory() {
+  clearTimeout(_searchTimeout);
+  state.commits = [];
+  state.unpushed = new Set();
+  state.searching = false;
+  _depth = PAGE_SIZE;
+  _atEnd = false;
+  _loadingMore = false;
+  _pagedRef = null;
+  const input = $('#search-input');
+  if (input) input.value = '';
+  const clearBtn = $('#search-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  const list = $('#history-list');
+  if (list) { list.innerHTML = skeletonRows(list); list.scrollTop = 0; }
+  const label = $('#history-branch-label');
+  if (label) label.textContent = 'History';
+  const tracking = $('#history-tracking');
+  if (tracking) { tracking.hidden = true; tracking.innerHTML = ''; }
+  const info = $('#commit-info');
+  if (info) info.innerHTML = skeletonDetail();
+  const changeset = $('#commit-changeset');
+  if (changeset) changeset.innerHTML = '';
+}
+
+// Ghost rows to stand in for the commit list while it loads. Widths vary in a
+// fixed pattern rather than randomly so the shimmer doesn't reshuffle on every
+// repository switch.
+function skeletonRows(list) {
+  // The reset runs before the History view becomes the active one, so the
+  // hidden list measures 0 — the window height is close enough, and a row or
+  // two extra just scrolls out of sight.
+  const count = Math.max(6, Math.ceil((list.clientHeight || window.innerHeight) / ROW_H));
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const top = 30 + ((i * 17) % 25);
+    const bottom = 55 + ((i * 29) % 35);
+    html += `<div class="skeleton-row">
+      <div class="skeleton-line" style="width:${top}%"></div>
+      <div class="skeleton-line" style="width:${bottom}%"></div>
+    </div>`;
+  }
+  return html;
+}
+
+// ...and the same for the detail pane, roughly the shape of the metadata table.
+function skeletonDetail() {
+  const widths = [45, 30, 45, 30, 25, 60, 60, 60];
+  return `<div class="skeleton-detail">${
+    widths.map(w => `<div class="skeleton-line" style="width:${w}%"></div>`).join('')
+  }</div>`;
+}
+
 export async function refreshHistory(refresh, branchOverride) {
   _refresh = refresh;
   if ($('#search-input').value.trim()) return;
@@ -363,8 +419,14 @@ function ensureSelection(refresh) {
 async function selectCommit(c, refresh) {
   state.selectedCommit = c.hash;
   renderCommitList(refresh);
+  // Everything below arrives later. By then the user may have opened another
+  // repository or clicked another commit, and this answer must not paint over
+  // that one's.
+  const repoPath = state.repoPath;
+  const stale = () => state.repoPath !== repoPath || state.selectedCommit !== c.hash;
   try {
-    const d = await window.git.commitDetail(state.repoPath, c.hash);
+    const d = await window.git.commitDetail(repoPath, c.hash);
+    if (stale()) return;
     const refsHtml = d.refs ? d.refs.split(',').map(r => {
       r = r.trim(); if (!r) return '';
       if (r.includes('HEAD')) return `<span class="commit-ref head">HEAD</span>`;
@@ -389,10 +451,12 @@ async function selectCommit(c, refresh) {
     `;
 
     // Render changeset with expandable files
-    const files = await window.git.commitFiles(state.repoPath, c.hash);
+    const files = await window.git.commitFiles(repoPath, c.hash);
+    if (stale()) return;
     renderChangeset($('#commit-changeset'), files,
-      (f) => window.git.commitFileDiff(state.repoPath, c.hash, f.filePath));
+      (f) => window.git.commitFileDiff(repoPath, c.hash, f.filePath));
   } catch (e) {
+    if (stale()) return;
     $('#commit-info').innerHTML = `<div style="padding:16px;color:var(--red)">${escapeHtml(e.message)}</div>`;
   }
 }
