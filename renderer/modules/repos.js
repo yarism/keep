@@ -45,9 +45,11 @@ function renderRepoList() {
     item.tabIndex = 0;
     item.innerHTML = `
       ${icon('folder', 14)}
-      <span>${escapeHtml(r.name)}</span>
+      <span class="repo-item-name">${escapeHtml(r.name)}</span>
+      <span class="repo-item-badge" hidden></span>
       <button class="repo-item-remove" title="Remove" tabindex="-1">${icon('close', 12)}</button>
     `;
+    fillDirtyBadge(item, r.path);
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('repo-item-remove')) return;
       if (_onSelectRepo) _onSelectRepo(r.path);
@@ -78,6 +80,22 @@ function renderRepoList() {
     });
     list.appendChild(item);
   });
+}
+
+// The list should not wait on a dozen `git status` calls, so the rows render
+// with their badges hidden and each one fills in when its repository answers.
+// A repository that cannot answer (moved, no access) just keeps a bare row —
+// the access story belongs to opening it, not to the list.
+async function fillDirtyBadge(item, path) {
+  let count;
+  try { count = (await window.git.status(path)).length; }
+  catch { return; }
+  if (count === 0) return;
+  // If the list re-rendered meanwhile this writes to a detached row: harmless.
+  const badge = item.querySelector('.repo-item-badge');
+  badge.textContent = count;
+  badge.title = `${count} uncommitted ${count === 1 ? 'change' : 'changes'}`;
+  badge.hidden = false;
 }
 
 async function openRepo() {
