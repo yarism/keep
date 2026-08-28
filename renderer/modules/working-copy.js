@@ -27,6 +27,26 @@ export async function refreshStatus() {
   await refreshSelectedDiff();
 }
 
+// Switching repositories leaves the previous one's changed files on screen
+// until status has been read. Ghost rows instead, in the same geometry as the
+// real ones, matching the history and sidebar skeletons.
+export function resetWorkingCopy() {
+  state.statusFiles = [];
+  _selectedIndices.clear();
+  _lastClickedIndex = null;
+  const list = $('#wc-file-list');
+  if (!list) return;
+  let html = '';
+  for (let i = 0; i < 5; i++) {
+    const w = 45 + ((i * 29) % 40);
+    html += `<div class="skeleton-side-row">
+      <div class="skeleton-line skeleton-dot"></div>
+      <div class="skeleton-line" style="width:${w}%"></div>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
 // Amending is a rewrite. That is fine on work that has never left the machine
 // and a nuisance for everyone else once it has, so the box says which case this
 // is rather than refusing or staying quiet.

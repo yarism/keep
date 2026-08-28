@@ -2,7 +2,7 @@ import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, rese
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
-import { refreshStatus, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
+import { refreshStatus, resetWorkingCopy, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, resetHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
 import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
@@ -55,10 +55,12 @@ async function enterWorkspace(path) {
   _lastFingerprint = null;
   state.selectedFile = null;
   state.selectedCommit = null;
-  // History is the first thing on screen now, so the previous repository's
-  // commits must be gone before this one's have loaded.
+  // One of these views is on screen the moment the workspace opens, so the
+  // previous repository's commits, refs and changed files must be gone before
+  // this one's have loaded.
   resetHistory();
   resetSidebar();
+  resetWorkingCopy();
   // Stale remotes would put the previous repo's forge in this one's menus.
   state.remotes = [];
   resetPullRequests();
@@ -71,11 +73,20 @@ async function enterWorkspace(path) {
   $('#diff-filename').textContent = 'No file selected';
   $('#diff-content').innerHTML = '';
   $('#commit-subject').value = '';
-  // The old repository's changed-file count means nothing here, and status
-  // hasn't been read yet.
-  $('#wc-badge').hidden = true;
   $$('#toolbar .toolbar-group button').forEach(b => b.disabled = false);
-  switchView('history');
+  // Uncommitted work is usually what you came back for, so a dirty repository
+  // opens on the Working Copy; a clean one has nothing to show there and opens
+  // on History. One cheap status read decides it up front — taking the answer
+  // off the full refresh instead would mean opening on History and then pulling
+  // the view out from under you a second later. It also settles the changed-file
+  // count now rather than popping it into the nav once the refresh lands.
+  let changed = [];
+  try { changed = await window.git.status(path); } catch {}
+  const badge = $('#wc-badge');
+  if (changed.length > 0) { badge.textContent = changed.length; badge.hidden = false; }
+  else { badge.hidden = true; }
+  badge.classList.toggle('conflict', changed.some(f => f.conflicted));
+  switchView(changed.length > 0 ? 'working-copy' : 'history');
   // So the next launch can come straight back here
   window.git.saveSettings({ lastRepo: path });
   // Before the refresh, so an unreadable folder explains itself rather than
