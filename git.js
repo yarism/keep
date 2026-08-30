@@ -544,6 +544,32 @@ exports.diff = async (repoPath, filePath, staged) => {
   return result;
 };
 
+// An untracked file has no diff: `git diff` compares against the index, and
+// the index has never heard of it. Diffing the file against /dev/null instead
+// renders it as what a new file is — one hunk in which every line is an
+// addition. Two things make this its own function rather than a branch in
+// diff():
+//
+//  - `--no-index` exits 1 whenever the two sides differ, which here is the
+//    expected outcome, not a failure, so run() (which rejects on any nonzero
+//    exit) cannot be used.
+//  - A binary or empty file produces headers with no hunk, which the diff
+//    pane would render as garbage rows. Returning '' instead lands on the
+//    pane's existing "new or binary file" message.
+exports.untrackedDiff = (repoPath, filePath) => {
+  return new Promise((resolve, reject) => {
+    execFile('git', ['diff', '--no-index', '--', '/dev/null', filePath],
+      { cwd: repoPath, env: gitEnv(), maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        // Exit 1 also covers "Could not access": a file it cannot read. Only
+        // the expected case prints anything to stdout, and an unreadable file
+        // deserves git's error, not a claim that it is binary.
+        if (err && (err.code !== 1 || !stdout)) return reject(new Error(stderr || err.message));
+        resolve(/^@@/m.test(stdout) ? stdout : '');
+      });
+  });
+};
+
 // -s keeps the diff and the stat out of it: the body is everything after the
 // subject line, and anything git appends below would land in it. The file list
 // comes from commitFiles() anyway.

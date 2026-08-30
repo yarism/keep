@@ -274,6 +274,15 @@ async function renderFileDiff(f, { force = false } = {}) {
       const text = await window.git.fileContents(state.repoPath, f.filePath);
       sig = 'conflict\0' + text;
       draw = () => renderConflict(text, pane, f);
+    } else if (f.status === 'untracked') {
+      // `git diff` has nothing to say about an untracked file, so the pane sat
+      // on "No diff available" until the file was staged. Diffed against
+      // nothing instead, the file reads as one all-added hunk. No per-hunk
+      // buttons: there is no tracked baseline to cut a hunk from, and the
+      // row's checkbox already stages the whole file.
+      const text = await window.git.untrackedDiff(state.repoPath, f.filePath);
+      sig = 'diff\0' + text;
+      draw = () => renderDiff(text, pane, null);
     } else {
       const own = await window.git.diff(state.repoPath, f.filePath, f.staged);
       // A change that sits entirely on the other side shows up as nothing here;

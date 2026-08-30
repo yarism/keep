@@ -86,6 +86,10 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
     return;
   }
   const lines = diffText.split('\n');
+  // Git ends its output with a newline, which split() turns into a final empty
+  // string. Rendered, that is a phantom context row after the last real line —
+  // numbered "0" on a new file, where the hunk starts counting at zero.
+  if (lines[lines.length - 1] === '') lines.pop();
   let oldLine = 0, newLine = 0;
   // Which hunk of this file we are on. Sent along with the header so applying
   // one cannot land on a different hunk if the file moved on underneath.

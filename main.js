@@ -229,6 +229,7 @@ ipcMain.handle('git-diff', async (_, repoPath, filePath, staged) => {
     throw e;
   }
 });
+ipcMain.handle('git-untracked-diff', (_, repoPath, filePath) => git.untrackedDiff(repoPath, filePath));
 ipcMain.handle('git-commit-detail', (_, repoPath, hash) => git.commitDetail(repoPath, hash));
 ipcMain.handle('git-commit-diff', (_, repoPath, hash) => git.commitDiff(repoPath, hash));
 ipcMain.handle('git-commit-files', (_, repoPath, hash) => git.commitFiles(repoPath, hash));

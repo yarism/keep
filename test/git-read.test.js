@@ -570,6 +570,39 @@ test('diff: with no file path diffs the whole working tree', async () => {
   assert.match(out, /b\.txt/);
 });
 
+test('untrackedDiff: renders a new file as one all-added hunk', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'docs/plan.md', '# Plan\n\nStep one\n');
+
+  const out = await git.untrackedDiff(repo, 'docs/plan.md');
+
+  assert.match(out, /^@@ -0,0 \+1,3 @@$/m);
+  assert.match(out, /^\+# Plan$/m);
+  assert.match(out, /^\+Step one$/m);
+  // Plain `git diff` still knows nothing about it — the whole point.
+  assert.strictEqual((await git.diff(repo, 'docs/plan.md', false)).trim(), '');
+});
+
+test('untrackedDiff: a binary file yields no hunk, so the UI gets nothing to draw', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'img.bin', Buffer.from([0, 1, 2, 255]));
+
+  assert.strictEqual(await git.untrackedDiff(repo, 'img.bin'), '');
+});
+
+test('untrackedDiff: an empty file yields no hunk either', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'empty.txt', '');
+
+  assert.strictEqual(await git.untrackedDiff(repo, 'empty.txt'), '');
+});
+
+test('untrackedDiff: a missing file rejects instead of resolving nonsense', async () => {
+  const repo = h.makeRepo();
+
+  await assert.rejects(git.untrackedDiff(repo, 'never-existed.txt'));
+});
+
 // ── commit detail / diff / files ──
 
 test('commitDetail: splits the fixed-format header into fields', async () => {
