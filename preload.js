@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('git', {
   remotes: (p) => ipcRenderer.invoke('git-remotes', p),
   stashes: (p) => ipcRenderer.invoke('git-stashes', p),
   diff: (p, file, staged) => ipcRenderer.invoke('git-diff', p, file, staged),
+  untrackedDiff: (p, file) => ipcRenderer.invoke('git-untracked-diff', p, file),
   commitDetail: (p, hash) => ipcRenderer.invoke('git-commit-detail', p, hash),
   commitDiff: (p, hash) => ipcRenderer.invoke('git-commit-diff', p, hash),
   commitFiles: (p, hash) => ipcRenderer.invoke('git-commit-files', p, hash),
