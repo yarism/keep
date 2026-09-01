@@ -179,6 +179,11 @@ export const THEMES = [
     // The cool light one: grey with a green cast, like paper in a room full of
     // plants. Deep teal does the pointing, which keeps it out of the way of the
     // green a diff needs.
+    //
+    // The diff inks run darker here than in the other light themes, because
+    // this theme's added text sits on a tint of its own hue: green on green
+    // washes out at a lightness that would read fine on neutral paper, and a
+    // long all-added file is a page of exactly that.
     id: 'sage',
     name: 'Sage',
     dark: false,
@@ -190,7 +195,7 @@ export const THEMES = [
       'bg-active': '#d5ddd2',
       'border': '#e0e6de',
       'border-strong': '#c2ccbf',
-      'text': '#1e2721',
+      'text': '#121a14',
       'text-dim': '#5e6b62',
       'text-mute': '#8b978f',
       'accent': '#2f7d6a',
@@ -202,9 +207,9 @@ export const THEMES = [
       'blue': '#33648f',
       'on-status': '#ffffff',
       'diff-add-bg': '#e8f2e6',
-      'diff-add-text': '#2c5c2f',
+      'diff-add-text': '#0d240f',
       'diff-del-bg': '#f8eae8',
-      'diff-del-text': '#8f3330',
+      'diff-del-text': '#3a100e',
       'diff-hunk-bg': '#e7f0ee',
       'diff-hunk-text': '#26685a',
       'shadow-menu': '0 10px 28px rgba(32, 45, 38, 0.14)',
