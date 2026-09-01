@@ -9,7 +9,7 @@ import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, ref
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
-import { setupRelease } from './modules/release.js';
+import { setupRelease, releaseRunning } from './modules/release.js';
 import { setupBuildWatch } from './modules/build-watch.js';
 import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
@@ -120,9 +120,12 @@ function startPolling() {
     // Don't refresh while user is typing a commit message or a modal is open
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     if (!$('#modal-overlay').hidden) return;
-    // The release panel holds a command being edited, and then a command being
-    // run. Neither wants the window redrawn underneath it.
-    if (!$('#release-overlay').hidden) return;
+    // The release modal holds a command being edited, which does not want the
+    // window redrawn underneath it. A running release is busy committing,
+    // tagging and pushing; refreshing under that would read the repository
+    // mid-mutation. The finished panel, sitting there with its output, blocks
+    // nothing.
+    if (!$('#release-overlay').hidden || releaseRunning()) return;
     // A slow refresh must not stack up behind the next tick
     if (_polling) return;
     _polling = true;

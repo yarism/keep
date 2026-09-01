@@ -219,6 +219,7 @@
     <div id="sidebar-resize"></div>
 
     <!-- Main content -->
+    <div id="content-col">
     <main id="content">
       <!-- Welcome / repo detail -->
       <div id="welcome-view" class="view active">
@@ -330,6 +331,27 @@
         <div id="stash-list" class="commit-list"></div>
       </div>
     </main>
+
+    <!-- Where a started release runs: a terminal docked under the content the
+         way an IDE raises one, so the half minute of npm test is something the
+         window shows rather than something it is locked behind. The sidebar
+         keeps its full height beside it. -->
+    <div id="release-panel" class="release-panel">
+      <div id="release-resize" class="release-resize"></div>
+      <div class="release-head">
+        <span class="release-title" id="release-panel-title">Release</span>
+        <span class="spinner" id="release-spinner" hidden></span>
+        <code class="release-run-command" id="release-run-label"></code>
+        <div class="modal-actions release-actions">
+          <button id="release-panel-close">Stop</button>
+        </div>
+      </div>
+      <div class="release-body">
+        <pre class="release-output" id="release-output"></pre>
+        <div class="release-result" id="release-result" hidden></div>
+      </div>
+    </div>
+    </div>
   </div>
 
   <!-- Transient status for long-running git commands -->
@@ -385,32 +407,23 @@
     </button>
   </div>
 
+  <!-- Setting up a release stays a modal: three choices and a command line are
+       a question, and a question is fine to answer before anything else moves.
+       Only the running of it, below in #release-panel, refuses to block the
+       window. -->
   <div id="release-overlay" class="modal-overlay" hidden>
     <div class="modal release-modal">
       <div class="modal-title" id="release-title">Release</div>
-
-      <div id="release-setup">
-        <div class="release-current" id="release-current"></div>
-        <div class="release-bumps" id="release-bumps"></div>
-        <label class="release-label" for="release-command">Command</label>
-        <input type="text" id="release-command" class="modal-input release-command"
-               spellcheck="false" autocomplete="off" autocapitalize="off">
-        <div class="release-reason" id="release-reason"></div>
-        <div class="release-steps" id="release-steps" hidden></div>
-        <div class="release-block" id="release-block" hidden></div>
-      </div>
-
-      <div id="release-run" hidden>
-        <div class="release-run-head">
-          <span class="spinner" id="release-spinner"></span>
-          <code id="release-run-label"></code>
-        </div>
-        <pre class="release-output" id="release-output"></pre>
-        <div class="release-result" id="release-result" hidden></div>
-      </div>
-
+      <div class="release-current" id="release-current"></div>
+      <div class="release-bumps" id="release-bumps"></div>
+      <label class="release-label" for="release-command">Command</label>
+      <input type="text" id="release-command" class="modal-input release-command"
+             spellcheck="false" autocomplete="off" autocapitalize="off">
+      <div class="release-reason" id="release-reason"></div>
+      <div class="release-steps" id="release-steps" hidden></div>
+      <div class="release-block" id="release-block" hidden></div>
       <div class="modal-actions">
-        <button id="release-close">Cancel</button>
+        <button id="release-cancel">Cancel</button>
         <button id="release-go">Release</button>
       </div>
     </div>
