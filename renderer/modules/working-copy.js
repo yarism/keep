@@ -34,6 +34,9 @@ export function resetWorkingCopy() {
   state.statusFiles = [];
   _selectedIndices.clear();
   _lastClickedIndex = null;
+  // The skeletons below bypass renderFileList, so its notion of what is on
+  // screen must not survive into the next repository.
+  _listSig = null;
   const list = $('#wc-file-list');
   if (!list) return;
   let html = '';
@@ -149,16 +152,45 @@ function fileKey(f) {
   return f.filePath + (f.staged ? ':staged' : ':unstaged');
 }
 
+// What rows the list is currently showing, same idea as the diff pane's guard
+// below: the poll redraws every few seconds, and tearing rows down just to
+// build identical ones back makes the row under the cursor drop its hover for
+// a frame, a visible blink. Selection is deliberately not part of this: it
+// changes on every click and arrow key, and repainting it on the rows that
+// already exist keeps the hover (and focus) where they were.
+let _listSig = null;
+
 function renderFileList() {
   const list = $('#wc-file-list');
+  // Clean up indices that are out of range
+  _selectedIndices.forEach(i => { if (i >= state.statusFiles.length) _selectedIndices.delete(i); });
+
+  const sig = state.statusFiles.map(f =>
+    `${f.filePath}\0${f.status}\0${f.staged ? 1 : 0}\0${f.conflicted ? 1 : 0}\0${f.conflictKind || ''}\0${f.oldPath || ''}`
+  ).join('\n');
+  if (sig === _listSig) {
+    list.querySelectorAll('.file-item').forEach((item, i) => {
+      item.classList.toggle('selected', _selectedIndices.has(i));
+      // A click flips a checkbox before git has agreed to the stage. When the
+      // command fails, the full rebuild used to put the box right on the next
+      // poll; without this line the in-place path would leave it lying.
+      const box = item.querySelector('.file-checkbox');
+      if (box) box.checked = state.statusFiles[i].staged;
+    });
+    return;
+  }
+  _listSig = sig;
+
+  // Rebuilding takes focus with it. Remember whether it was in the list, so it
+  // can be put back on the selected row afterwards; when it was elsewhere (the
+  // commit message, say), it stays there instead of being yanked into the list.
+  const hadFocus = list.contains(document.activeElement);
+
   list.innerHTML = '';
   if (state.statusFiles.length === 0) {
     list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">No changes</div>';
-    _selectedIndices.clear();
     return;
   }
-  // Clean up indices that are out of range
-  _selectedIndices.forEach(i => { if (i >= state.statusFiles.length) _selectedIndices.delete(i); });
 
   state.statusFiles.forEach((f, idx) => {
     const item = document.createElement('div');
@@ -225,7 +257,9 @@ function renderFileList() {
     });
     list.appendChild(item);
 
-    if (isSelected && _selectedIndices.size === 1) requestAnimationFrame(() => item.focus());
+    // preventScroll: pulling the selected row into view here would scroll the
+    // list under a resting cursor, which reads as the hover jumping rows.
+    if (hadFocus && isSelected && _selectedIndices.size === 1) requestAnimationFrame(() => item.focus({ preventScroll: true }));
   });
 }
 
