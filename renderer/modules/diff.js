@@ -112,8 +112,8 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
         btnGroup.style.cssText = 'display:flex;gap:4px';
 
         const discardBtn = document.createElement('button');
+        discardBtn.className = 'hunk-discard';
         discardBtn.textContent = 'Discard Chunk';
-        discardBtn.style.background = 'var(--red)';
         discardBtn.addEventListener('click', async () => {
           if (!confirm('Discard this chunk? This cannot be undone.')) return;
           try {
@@ -124,6 +124,7 @@ export function renderDiff(diffText, containerOrId, stageableFile, opts = {}) {
         });
 
         const stageBtn = document.createElement('button');
+        stageBtn.className = 'hunk-stage';
         stageBtn.textContent = 'Stage Chunk';
         stageBtn.addEventListener('click', async () => {
           try {

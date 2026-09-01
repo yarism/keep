@@ -1026,18 +1026,25 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
+/* Quiet until pointed at. These used to be solid red and accent chips, and a
+ * file of many small hunks repeated them into a wall of buttons louder than
+ * the code they act on. At rest they are dim text in the header; the colour
+ * that says what each one does (red for discard, accent for stage) appears
+ * only under the cursor, where it reads as confirmation rather than as a
+ * stripe through the diff. */
 .diff-hunk-header button {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: transparent;
+  color: var(--text-dim);
   border: none;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--fs-xs);
   font-family: var(--font-ui);
-  font-weight: 600;
+  font-weight: 500;
 }
-.diff-hunk-header button:hover { opacity: 0.85; }
+.diff-hunk-header button.hunk-discard:hover { background: var(--red); color: var(--on-status); }
+.diff-hunk-header button.hunk-stage:hover { background: var(--accent); color: var(--on-accent); }
 
 .diff-line { padding: 0 12px 0 0; white-space: pre-wrap; word-break: break-all; display: flex; }
 .diff-line-num {
