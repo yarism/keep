@@ -8,6 +8,13 @@
 // all. So the panel shows the command it is about to run before running it,
 // counts the next version itself, and puts the output on screen as it arrives.
 //
+// It happens in two rooms. Setting a release up is a modal: three bump choices
+// and a command line are a question, and a question is fine to answer before
+// anything else moves. Running it is not. The modal closes and the command
+// runs in a terminal docked under the content, the way an IDE raises one, so
+// the half minute of npm test is something the window shows rather than
+// something it is locked behind.
+//
 // Nothing here decides what a release *is*: release-plan.js suggests, the
 // field below it is editable, and what the user leaves in that field is
 // remembered per repository. Keep's opinion is a starting point, not a rule.
@@ -24,33 +31,92 @@ import {
 
 let refreshAll = null;
 
-// What the panel is currently set up for. Null while it is closed.
+// What the release flow is currently about: set while the setup modal is open
+// and, once Release is pressed, for as long as the run panel stays up. Null
+// after the panel is closed, or the modal cancelled unstarted.
 let session = null;
+
+// How tall the run panel stands, remembered across releases like the sidebar's
+// width. Clamped on every use: a height saved on a big display must not
+// swallow a small one.
+let panelHeight = 280;
+const clampHeight = (h) =>
+  Math.max(160, Math.min(Math.round(window.innerHeight * 0.75), Math.round(h) || 280));
 
 export function setupRelease(refresh) {
   refreshAll = refresh;
   $('#btn-release').addEventListener('click', openRelease);
-  $('#release-close').addEventListener('click', onCloseButton);
+  $('#release-cancel').addEventListener('click', closeModal);
   $('#release-go').addEventListener('click', start);
+  $('#release-panel-close').addEventListener('click', onPanelButton);
   $('#release-command').addEventListener('input', () => {
     if (!session || session.running) return;
     session.command = $('#release-command').value;
     renderChoices();
   });
   document.addEventListener('keydown', (e) => {
-    if (!session || $('#release-overlay').hidden) return;
-    // While something is running there is a process to think about, so Escape
-    // is not a way out — Stop is, and it says so.
-    if (e.key === 'Escape' && !session.running) close();
-    if (e.key === 'Enter' && !session.running && !session.blocked) start();
+    if (!session) return;
+    if (!$('#release-overlay').hidden) {
+      // The setup modal owns the window while it is up, as modals do.
+      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Enter' && !session.blocked) start();
+      return;
+    }
+    // The run panel does not own the window, so Escape only means it when
+    // aimed at it, or at nothing at all. And never mid-run: there is a
+    // process to think about, so Escape is not a way out. Stop is, and it
+    // says so.
+    if (e.key !== 'Escape' || session.running) return;
+    if (e.target === document.body || $('#release-panel').contains(e.target)) closePanel();
   });
+  setupResize();
   window.release.onOutput(append);
+}
+
+// The poller asks before refreshing: a release is running git operations of
+// its own, and a refresh mid-run would report a repository mid-mutation.
+export const releaseRunning = () => Boolean(session && session.running);
+
+// Dragged taller the same way the sidebar is dragged wider, and remembered the
+// same way.
+function setupResize() {
+  const handle = $('#release-resize');
+  const panel = $('#release-panel');
+  let startY, startHeight;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startHeight = panel.offsetHeight;
+    handle.classList.add('dragging');
+    panel.classList.add('dragging');
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', onDragEnd);
+  });
+
+  function onDrag(e) {
+    panelHeight = clampHeight(startHeight + (startY - e.clientY));
+    panel.style.setProperty('--release-h', panelHeight + 'px');
+  }
+
+  function onDragEnd() {
+    handle.classList.remove('dragging');
+    panel.classList.remove('dragging');
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', onDragEnd);
+    window.git.saveSettings({ releasePanelHeight: panelHeight });
+  }
 }
 
 // ── Opening ──
 
 async function openRelease() {
   if (!state.repoPath) return;
+  // A run in flight already has the panel up, and the toolbar button is not a
+  // way to start a second one.
+  if (releaseRunning()) return;
+  // A finished run still on screen makes way for the next setup.
+  if (session) closePanel();
   const repoPath = state.repoPath;
 
   let info, status, settings;
@@ -74,6 +140,7 @@ async function openRelease() {
 
   const detected = detectCommand({ packageJson: pkg, files: info.files, tagPrefix });
   const saved = (settings.releaseCommands || {})[repoPath];
+  panelHeight = clampHeight(settings.releasePanelHeight || panelHeight);
 
   session = {
     repoPath,
@@ -99,12 +166,6 @@ async function openRelease() {
   block.hidden = !session.blocked;
   block.textContent = session.blocked || '';
 
-  $('#release-setup').hidden = false;
-  $('#release-run').hidden = true;
-  $('#release-output').textContent = '';
-  $('#release-result').hidden = true;
-  $('#release-close').textContent = 'Cancel';
-  $('#release-go').hidden = false;
   renderChoices();
 
   $('#release-overlay').hidden = false;
@@ -174,20 +235,24 @@ async function start() {
   session.command = template;
   rememberCommand(template);
 
-  $('#release-setup').hidden = true;
-  $('#release-run').hidden = false;
+  // The question is answered, so the modal goes, and the watching happens in
+  // the docked panel with the window alive above it.
+  $('#release-overlay').hidden = true;
+  $('#release-panel-title').textContent = session.pkg && session.pkg.name
+    ? `Release ${session.pkg.name}` : 'Release';
   $('#release-run-label').textContent = command;
   $('#release-spinner').hidden = false;
-  $('#release-go').hidden = true;
-  $('#release-close').textContent = 'Stop';
+  $('#release-panel-close').textContent = 'Stop';
   $('#release-output').textContent = '';
+  $('#release-result').hidden = true;
+  openPanel();
 
   const result = await window.release.run(session.repoPath, command);
   session.running = false;
   $('#release-spinner').hidden = true;
-  $('#release-close').textContent = 'Close';
+  $('#release-panel-close').textContent = 'Close';
 
-  // The refs moved, or the working copy did — either way the window behind this
+  // The refs moved, or the working copy did — either way the window above this
   // panel is now describing the repository as it was a minute ago.
   if (refreshAll) { try { await refreshAll(); } catch {} }
 
@@ -282,12 +347,25 @@ function append(chunk) {
 
 // ── Closing ──
 
-function onCloseButton() {
-  if (session && session.running) { window.release.cancel(); return; }
-  close();
+function closeModal() {
+  $('#release-overlay').hidden = true;
+  session = null;
 }
 
-function close() {
-  $('#release-overlay').hidden = true;
+function openPanel() {
+  const panel = $('#release-panel');
+  panel.style.setProperty('--release-h', panelHeight + 'px');
+  panel.classList.add('open');
+}
+
+// Stop while the command runs, Close once it is done: the same button, saying
+// which of the two it currently is.
+function onPanelButton() {
+  if (session && session.running) { window.release.cancel(); return; }
+  closePanel();
+}
+
+function closePanel() {
+  $('#release-panel').classList.remove('open');
   session = null;
 }

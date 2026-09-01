@@ -638,7 +638,10 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 
 /* Main content ------------------------------------------------------------ */
 
-#content { flex: 1; overflow: hidden; position: relative; background: var(--bg); }
+/* The content column: the views, and beneath them the release panel when one
+   is running. The sidebar stands beside the whole column, full height. */
+#content-col { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+#content { flex: 1; min-height: 0; overflow: hidden; position: relative; background: var(--bg); }
 .view { display: none; position: absolute; inset: 0; }
 .view.active { display: flex; }
 
@@ -1793,12 +1796,78 @@ body.decode-unicode .uni-dec { display: inline; }
 }
 .build-dismiss:hover { background: var(--bg-hover); color: var(--text); }
 
-/* Release panel ----------------------------------------------------------- */
+/* Release ----------------------------------------------------------------- */
 
-/* Wider than the other modals: it holds a command line and, once running, a
-   console. Both look wrong wrapped. */
+/* The setup modal. Wider than the other modals: it holds a command line,
+   which looks wrong wrapped. */
 .release-modal { min-width: 560px; max-width: 620px; }
 .release-current { font-size: var(--fs-md); color: var(--text-dim); margin-bottom: 14px; }
+
+/* The run panel: docked under the content the way an IDE raises its terminal,
+   with the sidebar keeping its full height beside it. Closed it has no height
+   at all; opening is a height change, so the view above shrinks to make room
+   instead of being covered and greyed out. The visibility delay keeps the
+   closed panel out of the tab order without a display:none that would cut the
+   closing animation short. */
+.release-panel {
+  position: relative;
+  flex-shrink: 0;
+  height: 0;
+  visibility: hidden;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-top: 0 solid var(--border-strong);
+  transition: height 160ms cubic-bezier(.2, .7, .3, 1), visibility 0s linear 160ms;
+}
+.release-panel.open {
+  height: var(--release-h, 280px);
+  visibility: visible;
+  border-top-width: 1px;
+  transition: height 160ms cubic-bezier(.2, .7, .3, 1);
+}
+.release-panel.dragging { transition: none; }
+
+.release-resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: row-resize;
+  z-index: 5;
+}
+.release-resize:hover, .release-resize.dragging { background: var(--tint-accent-strong); }
+
+.release-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.release-title { font-size: var(--fs-lg); font-weight: 600; color: var(--text); flex-shrink: 0; }
+.release-run-command {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.release-actions { flex-shrink: 0; }
+
+.release-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+}
 
 .release-bumps { display: flex; gap: 8px; margin-bottom: 16px; }
 .release-bump {
@@ -1858,15 +1927,8 @@ body.decode-unicode .uni-dec { display: inline; }
   margin-bottom: 14px;
 }
 
-.release-run-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.release-run-head code {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* The output gets every spare pixel of whatever height the panel has been
+   dragged to: it is the thing being watched. */
 .release-output {
   font-family: var(--font-mono);
   font-size: var(--fs-code);
@@ -1876,8 +1938,9 @@ body.decode-unicode .uni-dec { display: inline; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
-  margin: 0 0 14px;
-  height: 240px;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1887,8 +1950,9 @@ body.decode-unicode .uni-dec { display: inline; }
   line-height: 1.55;
   border-radius: var(--radius);
   padding: 9px 11px;
-  margin-bottom: 14px;
+  margin-top: 10px;
   white-space: pre-line;
+  flex-shrink: 0;
 }
 .release-result.ok {
   color: var(--text);
