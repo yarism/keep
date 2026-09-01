@@ -183,7 +183,10 @@ export const THEMES = [
     // The diff inks run darker here than in the other light themes, because
     // this theme's added text sits on a tint of its own hue: green on green
     // washes out at a lightness that would read fine on neutral paper, and a
-    // long all-added file is a page of exactly that.
+    // long all-added file is a page of exactly that. The tints run stronger
+    // for the same reason in reverse: on paper that is already green, a
+    // whisper of green does not read as a change, so the backgrounds have to
+    // say added and deleted loudly enough that the ink does not have to.
     id: 'sage',
     name: 'Sage',
     dark: false,
@@ -206,9 +209,9 @@ export const THEMES = [
       'yellow': '#9a7519',
       'blue': '#33648f',
       'on-status': '#ffffff',
-      'diff-add-bg': '#e8f2e6',
+      'diff-add-bg': '#e0efdb',
       'diff-add-text': '#0d240f',
-      'diff-del-bg': '#f8eae8',
+      'diff-del-bg': '#f8e3e0',
       'diff-del-text': '#3a100e',
       'diff-hunk-bg': '#e7f0ee',
       'diff-hunk-text': '#26685a',
