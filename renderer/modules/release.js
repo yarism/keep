@@ -293,7 +293,7 @@ async function finish(result) {
   });
 
   const next = watching
-    ? ' GitHub is building the installers — the card in the corner says when they are ready.'
+    ? ' GitHub is building the installers. The build card will say when they are ready.'
     : '';
 
   // No link to the releases page while the build is still running: the release

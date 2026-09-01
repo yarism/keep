@@ -142,7 +142,7 @@ export function blockedByWorkingCopy(status) {
   const names = [...new Set(changed.map(f => f.filePath))];
   const list = names.slice(0, 3).join(', ');
   const rest = names.length > 3 ? `, and ${names.length - 3} more` : '';
-  return `Commit or stash first — the working copy has uncommitted changes (${list}${rest}). ` +
+  return `Commit or stash first: the working copy has uncommitted changes (${list}${rest}). ` +
     'Most release commands refuse to run against one.';
 }
 
