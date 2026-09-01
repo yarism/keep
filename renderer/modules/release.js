@@ -11,9 +11,10 @@
 // It happens in two rooms. Setting a release up is a modal: three bump choices
 // and a command line are a question, and a question is fine to answer before
 // anything else moves. Running it is not. The modal closes and the command
-// runs in a terminal docked under the content, the way an IDE raises one, so
-// the half minute of npm test is something the window shows rather than
-// something it is locked behind.
+// runs in a terminal rising over the bottom of the list column, the way an
+// IDE raises one, so the half minute of npm test is something the window
+// shows rather than something it is locked behind. Only that column: the
+// detail pane keeps its full height, and the window never feels taken over.
 //
 // Nothing here decides what a release *is*: release-plan.js suggests, the
 // field below it is editable, and what the user leaves in that field is
@@ -43,6 +44,18 @@ let panelHeight = 280;
 const clampHeight = (h) =>
   Math.max(160, Math.min(Math.round(window.innerHeight * 0.75), Math.round(h) || 280));
 
+// The columns the panel can hang under: whichever of the views' list columns
+// is on screen. The panel follows that column's width, divider drags and view
+// switches included, so it covers the list and nothing else. A view without a
+// list column (the stashes) leaves the last width standing, which reads
+// better than a jump to full bleed.
+const LIST_COLUMNS = ['#wc-files-panel', '#history-list-panel', '#pr-list-panel'];
+
+function syncPanelWidth() {
+  const col = LIST_COLUMNS.map(s => $(s)).find(el => el && el.offsetWidth > 0);
+  if (col) $('#release-panel').style.setProperty('--release-w', col.offsetWidth + 'px');
+}
+
 export function setupRelease(refresh) {
   refreshAll = refresh;
   $('#btn-release').addEventListener('click', openRelease);
@@ -70,6 +83,11 @@ export function setupRelease(refresh) {
     if (e.target === document.body || $('#release-panel').contains(e.target)) closePanel();
   });
   setupResize();
+  // A ResizeObserver reports each column the moment observation starts and on
+  // every size change after, including to zero when its view is switched away,
+  // so the width is simply re-read from whichever column is visible.
+  const columns = new ResizeObserver(syncPanelWidth);
+  LIST_COLUMNS.forEach(s => { const el = $(s); if (el) columns.observe(el); });
   window.release.onOutput(append);
 }
 
@@ -354,6 +372,7 @@ function closeModal() {
 
 function openPanel() {
   const panel = $('#release-panel');
+  syncPanelWidth();
   panel.style.setProperty('--release-h', panelHeight + 'px');
   panel.classList.add('open');
 }

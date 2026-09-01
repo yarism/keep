@@ -638,9 +638,10 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 
 /* Main content ------------------------------------------------------------ */
 
-/* The content column: the views, and beneath them the release panel when one
-   is running. The sidebar stands beside the whole column, full height. */
-#content-col { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* The content column: the views, with the release panel floating over their
+   bottom-left corner when one is running. The wrapper exists to give the
+   panel an edge to hang from that starts where the sidebar ends. */
+#content-col { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 #content { flex: 1; min-height: 0; overflow: hidden; position: relative; background: var(--bg); }
 .view { display: none; position: absolute; inset: 0; }
 .view.active { display: flex; }
@@ -1803,28 +1804,34 @@ body.decode-unicode .uni-dec { display: inline; }
 .release-modal { min-width: 560px; max-width: 620px; }
 .release-current { font-size: var(--fs-md); color: var(--text-dim); margin-bottom: 14px; }
 
-/* The run panel: docked under the content the way an IDE raises its terminal,
-   with the sidebar keeping its full height beside it. Closed it has no height
-   at all; opening is a height change, so the view above shrinks to make room
-   instead of being covered and greyed out. The visibility delay keeps the
-   closed panel out of the tab order without a display:none that would cut the
-   closing animation short. */
+/* The run panel: a terminal rising over the bottom of the list column, the
+   way an IDE raises one. It covers only that column, tracking its width as
+   the divider is dragged, so the detail pane keeps its full height and the
+   whole window never feels taken over by half a minute of npm test. Closed it
+   has no height at all; the visibility delay keeps it out of the tab order
+   without a display:none that would cut the closing animation short. */
 .release-panel {
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(var(--release-w, 480px), 100%);
   height: 0;
   visibility: hidden;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
-  border-top: 0 solid var(--border-strong);
+  border: 0 solid var(--border-strong);
+  border-top-right-radius: 10px;
+  box-shadow: var(--shadow-menu);
   transition: height 160ms cubic-bezier(.2, .7, .3, 1), visibility 0s linear 160ms;
 }
 .release-panel.open {
   height: var(--release-h, 280px);
   visibility: visible;
   border-top-width: 1px;
+  border-right-width: 1px;
   transition: height 160ms cubic-bezier(.2, .7, .3, 1);
 }
 .release-panel.dragging { transition: none; }
