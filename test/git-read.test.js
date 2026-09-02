@@ -477,6 +477,45 @@ test('tags: a repo with no tags returns an empty array', async () => {
   assert.deepStrictEqual(await git.tags(repo), []);
 });
 
+// ── hasWorkflows ──
+
+test('hasWorkflows: finds a workflow file on the given ref', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, '.github/workflows/build.yml', 'on: push\n');
+  h.commitAll(repo, 'add ci');
+  h.git(repo, 'tag', 'v1.0.0');
+
+  assert.strictEqual(await git.hasWorkflows(repo, 'refs/tags/v1.0.0'), true);
+});
+
+test('hasWorkflows: a repo with no workflows at all says no', async () => {
+  const repo = h.makeRepo();
+  assert.strictEqual(await git.hasWorkflows(repo, 'HEAD'), false);
+});
+
+test('hasWorkflows: answers for the ref, not the working copy', async () => {
+  // The case the check exists for: a tag cut before CI was added cannot be
+  // built, because GitHub reads the workflow from the pushed ref's own tree.
+  const repo = h.makeRepo();
+  h.git(repo, 'tag', 'v0.9.0');
+  h.write(repo, '.github/workflows/build.yaml', 'on: push\n');
+  h.commitAll(repo, 'add ci');
+
+  assert.strictEqual(await git.hasWorkflows(repo, 'refs/tags/v0.9.0'), false);
+  assert.strictEqual(await git.hasWorkflows(repo, 'HEAD'), true);
+});
+
+test('hasWorkflows: only counts what GitHub reads', async () => {
+  // A README in the directory, and YAML tucked into a subdirectory, are both
+  // invisible to Actions and must not put the card on screen.
+  const repo = h.makeRepo();
+  h.write(repo, '.github/workflows/README.md', 'docs\n');
+  h.write(repo, '.github/workflows/shared/steps.yml', 'jobs: {}\n');
+  h.commitAll(repo, 'workflow-adjacent files');
+
+  assert.strictEqual(await git.hasWorkflows(repo, 'HEAD'), false);
+});
+
 // ── remotes ──
 
 test('remotes: collapses the fetch/push pair into one entry per remote', async () => {

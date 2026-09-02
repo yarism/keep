@@ -302,8 +302,11 @@ async function finish(result) {
   // git directly rather than read from the sidebar's copy — the tag was made
   // seconds ago, and whether a refresh has caught up with it is not something
   // this should quietly depend on.
+  //
+  // The card may decline: a repository with no workflow files has no build
+  // coming, and then "Released" plus the link below is the whole story.
   const tag = await tagFor(version);
-  const watching = tag && watchBuild({
+  const watching = tag && await watchBuild({
     repoPath: session.repoPath,
     repoName: (session.pkg && session.pkg.name) || session.repoPath.split('/').pop(),
     tag,
