@@ -508,6 +508,19 @@ exports.tags = async (repoPath) => {
   return out.trim().split('\n').filter(Boolean);
 };
 
+// Whether a ref's tree carries any workflow files. GitHub only files a push
+// build when the workflow exists on the pushed ref itself, so a tag cut from a
+// tree without .github/workflows cannot set off a run: whether a build is even
+// possible is a question the repository can answer, without asking GitHub.
+//
+// Only files directly in .github/workflows count, which is all GitHub reads.
+// `-z` because a workflow named in the wrong alphabet would otherwise come
+// back C-quoted and be missed.
+exports.hasWorkflows = async (repoPath, ref) => {
+  const out = await run(repoPath, ['ls-tree', '-r', '-z', '--name-only', ref, '--', '.github/workflows']);
+  return out.split('\0').some(f => /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(f));
+};
+
 exports.remotes = async (repoPath) => {
   const out = await run(repoPath, ['remote', '-v']);
   const map = {};

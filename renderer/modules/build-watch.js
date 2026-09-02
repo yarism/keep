@@ -46,9 +46,16 @@ export function setupBuildWatch(settings) {
 //
 // `label` is what the card calls it — the tag, or a short hash — and `kind`
 // decides what success means: a tag cuts a release, a commit leaves artifacts.
-export function watchBuild({ repoPath, repoName, tag = null, sha = null, forge }) {
+//
+// A ref whose tree has no workflow files cannot set off a run at all, since
+// GitHub only files push builds for refs that carry the workflow themselves.
+// The repository knows this before GitHub is ever asked, and the two callers
+// want it told differently: the release panel simply keeps its card-free
+// ending, while a menu item that was clicked owes an answer (that is `asked`),
+// because silence after a click reads as a broken menu, not an absent build.
+export async function watchBuild({ repoPath, repoName, tag = null, sha = null, forge, asked = false }) {
   if (!forge || forge.kind !== 'github' || (!tag && !sha)) return false;
-  begin({
+  const next = {
     repoPath,
     repoName,
     tag,
@@ -57,8 +64,39 @@ export function watchBuild({ repoPath, repoName, tag = null, sha = null, forge }
     kind: tag ? 'tag' : 'commit',
     forge,
     startedAt: Date.now(),
-  }, { remember: true });
+  };
+
+  if (!(await hasWorkflows(repoPath, tag ? `refs/tags/${tag}` : sha))) {
+    if (asked) answerNothingToWatch(next);
+    return false;
+  }
+
+  begin(next, { remember: true });
   return true;
+}
+
+// Fail open: a check that cannot be run should fall back to asking GitHub the
+// way the card always has, not quietly suppress it.
+async function hasWorkflows(repoPath, ref) {
+  try { return await window.git.hasWorkflows(repoPath, ref); }
+  catch { return true; }
+}
+
+// The card, already settled: no timers, nothing remembered, just the answer.
+// The open button still leads somewhere useful, since with no run to point at
+// it falls back to the Actions page, which is where a workflow would be added.
+function answerNothingToWatch(next) {
+  clearTimers();
+  watch = { ...next, forge: next.forge || null };
+  lastRun = null;
+  authenticated = false;
+  save(null);
+  render({
+    state: 'unknown',
+    title: `${next.label} · no build`,
+    detail: 'It has no workflow files, so GitHub will not build it.',
+  });
+  $('#build-card').hidden = false;
 }
 
 function begin(next, { remember }) {

@@ -101,7 +101,7 @@ function forgeCommitItems(commit) {
     // A commit no remote has cannot have been built, and the card would sit
     // waiting for a run that was never asked for.
     ...(f.kind === 'github' ? [{ label: `Watch the Build for "${short}"`, disabled: !pushed, action: () => {
-      watchBuild({ repoPath: state.repoPath, repoName: state.repoPath.split('/').pop(), sha: commit.hash, forge: f });
+      watchBuild({ repoPath: state.repoPath, repoName: state.repoPath.split('/').pop(), sha: commit.hash, forge: f, asked: true });
     } }] : []),
   ];
 }
@@ -139,6 +139,7 @@ export function showTagContextMenu(e, tag, refresh) {
         repoName: state.repoPath.split('/').pop(),
         tag,
         forge,
+        asked: true,
       });
     } }] : []),
     { separator: true },
