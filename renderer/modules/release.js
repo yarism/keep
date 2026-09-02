@@ -16,6 +16,11 @@
 // shows rather than something it is locked behind. Only that column: the
 // detail pane keeps its full height, and the window never feels taken over.
 //
+// And the terminal belongs to the repository it is releasing. Walking off to
+// the repository list, or into another repository, disturbs nothing: the run
+// carries on in the main process, and the panel steps off screen until its
+// repository is open again, output accumulated and result waiting.
+//
 // Nothing here decides what a release *is*: release-plan.js suggests, the
 // field below it is editable, and what the user leaves in that field is
 // remembered per repository. Keep's opinion is a starting point, not a rule.
@@ -37,6 +42,9 @@ let refreshAll = null;
 // and, once Release is pressed, for as long as the run panel stays up. Null
 // after the panel is closed, or the modal cancelled unstarted.
 let session = null;
+
+const sessionRepoName = () =>
+  (session.pkg && session.pkg.name) || session.repoPath.split('/').pop();
 
 // How tall the run panel stands, remembered across releases like the sidebar's
 // width. Clamped on every use: a height saved on a big display must not
@@ -81,6 +89,9 @@ export function setupRelease(refresh) {
     // process to think about, so Escape is not a way out. Stop is, and it
     // says so.
     if (e.key !== 'Escape' || session.running) return;
+    // And only when the panel is actually on screen: from another repository
+    // the session is invisible, and Escape must not quietly throw it away.
+    if (!$('#release-panel').classList.contains('open')) return;
     if (e.target === document.body || $('#release-panel').contains(e.target)) closePanel();
   });
   setupResize();
@@ -92,9 +103,14 @@ export function setupRelease(refresh) {
   window.release.onOutput(append);
 }
 
-// The poller asks before refreshing: a release is running git operations of
-// its own, and a refresh mid-run would report a repository mid-mutation.
-export const releaseRunning = () => Boolean(session && session.running);
+const releaseRunning = () => Boolean(session && session.running);
+
+// The poller asks before refreshing: a release runs git operations of its own,
+// and a refresh mid-run would report a repository mid-mutation. Only the
+// repository being released holds its breath, though. Any other one on screen
+// is untouched by the run and refreshes right through it.
+export const releaseRunningHere = () =>
+  Boolean(session && session.running && session.repoPath === state.repoPath);
 
 // Dragged taller the same way the sidebar is dragged wider, and remembered the
 // same way.
@@ -131,9 +147,16 @@ function setupResize() {
 
 async function openRelease() {
   if (!state.repoPath) return;
-  // A run in flight already has the panel up, and the toolbar button is not a
-  // way to start a second one.
-  if (releaseRunning()) return;
+  // A run in flight is not to be doubled. In its own repository the panel is
+  // already up and says so; from another repository the panel is off screen,
+  // and a button that silently did nothing would read as broken, so say where
+  // the release is.
+  if (releaseRunning()) {
+    if (session.repoPath !== state.repoPath) {
+      toast(`A release is already running in ${sessionRepoName()}.`, { type: 'info', prose: true });
+    }
+    return;
+  }
   // A finished run still on screen makes way for the next setup.
   if (session) closePanel();
   const repoPath = state.repoPath;
@@ -166,6 +189,9 @@ async function openRelease() {
     pkg,
     version,
     source: pkg && pkg.version ? 'package.json' : (tag ? `the newest tag, ${tag}` : null),
+    // Read now, while this repository's remotes are the ones in state: by the
+    // time the run finishes, another repository's may be on screen instead.
+    forge: forgeForBranch(state.remotes, null),
     detected: detected.command,
     reason: saved ? 'Saved for this repository.' : detected.reason,
     command: saved || detected.command,
@@ -272,14 +298,19 @@ async function start() {
   $('#release-panel-close').textContent = 'Close';
 
   // The refs moved, or the working copy did — either way the window above this
-  // panel is now describing the repository as it was a minute ago.
-  if (refreshAll) { try { await refreshAll(); } catch {} }
+  // panel is now describing the repository as it was a minute ago. Unless the
+  // window has moved on to another repository: that one saw nothing happen,
+  // and whoever comes back here gets a fresh read on the way in.
+  if (refreshAll && state.repoPath === session.repoPath) { try { await refreshAll(); } catch {} }
 
   await finish(result);
 }
 
 async function finish(result) {
-  const repoName = (session.pkg && session.pkg.name) || session.repoPath.split('/').pop();
+  const repoName = sessionRepoName();
+  // Toasts land in whichever repository is on screen. When that is no longer
+  // the one this release belongs to, the words must say whose ending it is.
+  const locate = (text) => (state.repoPath === session.repoPath ? text : `${repoName} - ${text}`);
   const el = $('#release-result');
   el.hidden = false;
   el.className = `release-result ${result.ok ? 'ok' : 'bad'}`;
@@ -289,7 +320,7 @@ async function finish(result) {
   if (!result.ok) {
     el.innerHTML = `<div class="release-result-text">${escapeHtml(result.message || 'The command failed.')}</div>`;
     if (!result.cancelled) {
-      toast(result.message || 'Release failed', { type: 'error', prose: true });
+      toast(locate(result.message || 'Release failed'), { type: 'error', prose: true });
       notifyRelease(false, result.message || 'Release failed', repoName);
     }
     return;
@@ -297,7 +328,7 @@ async function finish(result) {
 
   const version = versionFromOutput(result.output, session.expected);
   const done = version ? `Released ${version}.` : 'The release command finished.';
-  const forge = forgeForBranch(state.remotes, null);
+  const forge = session.forge;
   const url = releasesUrl(forge);
 
   // The local half is over; the half that decides whether anyone can download
@@ -334,7 +365,7 @@ async function finish(result) {
   if (linkable) {
     $('#release-open').addEventListener('click', () => window.git.openExternal(url));
   }
-  toast(done, { prose: true });
+  toast(locate(done), { prose: true });
   notifyRelease(true, done + (watching ? ' GitHub is building the installers.' : ''), repoName);
 }
 
@@ -386,6 +417,26 @@ function openPanel() {
   syncPanelWidth();
   panel.style.setProperty('--release-h', panelHeight + 'px');
   panel.classList.add('open');
+}
+
+// The panel follows its repository. Called on every workspace change, this
+// puts it up when the released repository is the one open and takes it off
+// screen, run and all still going, when it is not.
+export function syncReleasePanel() {
+  if (!session) return;
+  const panel = $('#release-panel');
+  if (state.repoPath !== session.repoPath) {
+    panel.classList.remove('open');
+    return;
+  }
+  syncPanelWidth();
+  panel.style.setProperty('--release-h', panelHeight + 'px');
+  panel.classList.add('open');
+  // Output kept arriving while the panel was away. The old scroll position
+  // would leave the tail out of view, with the follow-at-bottom check in
+  // append() stuck permanently behind it.
+  const out = $('#release-output');
+  out.scrollTop = out.scrollHeight;
 }
 
 // Stop while the command runs, Close once it is done: the same button, saying
