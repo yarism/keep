@@ -94,7 +94,7 @@ function answerNothingToWatch(next) {
   save(null);
   render({
     state: 'unknown',
-    title: `${next.label} · no build`,
+    title: `${next.label} - no build`,
     detail: 'It has no workflow files, so GitHub will not build it.',
   });
   $('#build-card').hidden = false;
@@ -125,7 +125,7 @@ async function poll() {
   if (!result.ok) {
     // A build that cannot be read about is not a build that failed, and saying
     // so is the difference between going to look and going to fix.
-    render({ state: 'unknown', title: `${watch.label} · not visible`, detail: result.message });
+    render({ state: 'unknown', title: `${watch.label} - not visible`, detail: result.message });
     settle();
     return;
   }
@@ -139,7 +139,7 @@ async function poll() {
   if (!result.run && Date.now() - watch.startedAt > GIVE_UP_MS) {
     render({
       state: 'unknown',
-      title: `${watch.label} · no build`,
+      title: `${watch.label} - no build`,
       detail: 'Nothing was filed for it after five minutes.',
     });
     settle();

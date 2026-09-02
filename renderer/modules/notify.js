@@ -29,6 +29,9 @@ export function notifyAction(label, ok, message) {
   show(actionNotice(label, ok, message, repoName()));
 }
 
+// The build card remembers which repository it is watching, which may not be
+// the one open by the time the build settles, so its name arrives with the
+// call rather than being read from state.
 export function notifyBuild(described, name) {
   show(buildNotice(described, name));
 }

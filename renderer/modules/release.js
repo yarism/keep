@@ -214,7 +214,7 @@ function renderChoices() {
       const selected = bump === session.bump ? ' selected' : '';
       return `<button type="button" class="release-bump${selected}" data-bump="${bump}">
         <span class="release-bump-version">${escapeHtml(next)}</span>
-        <span class="release-bump-name">${bump} · ${BUMP_MEANING[bump]}</span>
+        <span class="release-bump-name">${bump} - ${BUMP_MEANING[bump]}</span>
       </button>`;
     }).join('');
     row.querySelectorAll('.release-bump').forEach(btn => {
