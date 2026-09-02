@@ -760,3 +760,87 @@ test('workflowRun: a repository with no Actions says so in its own words', async
   assert.match(result.message, /Actions/);
   assert.doesNotMatch(result.message, /pull request/);
 });
+
+// ── files and issues ──
+
+const CHESS = { kind: 'github', host: 'github.com', owner: 'yarism', repo: 'keep-chess' };
+const asContent = (obj) => ({ content: Buffer.from(JSON.stringify(obj), 'utf-8').toString('base64') });
+
+test('readJsonFile: decodes the contents API answer back into the file', async () => {
+  const game = { game: 1, ply: 2, fen: 'startpos-ish' };
+  const fetchImpl = fakeFetch(reply(200, asContent(game)));
+
+  const result = await api.readJsonFile('/repo', CHESS, 'game.json', { token: null, fetchImpl });
+
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.data, game);
+  assert.strictEqual(fetchImpl.calls[0].url,
+    'https://api.github.com/repos/yarism/keep-chess/contents/game.json');
+});
+
+test('readJsonFile: reads public repositories without a token', async () => {
+  const fetchImpl = fakeFetch(reply(200, asContent({})));
+
+  await api.readJsonFile('/repo', CHESS, 'game.json', { token: null, fetchImpl });
+
+  assert.strictEqual(fetchImpl.calls[0].init.headers.Authorization, undefined);
+});
+
+test('readJsonFile: base64 with GitHub\'s embedded newlines still decodes', async () => {
+  const b64 = Buffer.from('{"ok":true}', 'utf-8').toString('base64');
+  const wrapped = b64.slice(0, 4) + '\n' + b64.slice(4) + '\n';
+  const fetchImpl = fakeFetch(reply(200, { content: wrapped }));
+
+  const result = await api.readJsonFile('/repo', CHESS, 'game.json', { token: null, fetchImpl });
+
+  assert.deepStrictEqual(result.data, { ok: true });
+});
+
+test('readJsonFile: a missing file is named, not called a pull request', async () => {
+  const fetchImpl = fakeFetch(reply(404, {}));
+
+  const result = await api.readJsonFile('/repo', CHESS, 'game.json', { token: null, fetchImpl });
+
+  assert.strictEqual(result.reason, 'not-found');
+  assert.match(result.message, /game\.json/);
+  assert.doesNotMatch(result.message, /pull request/);
+});
+
+test('readJsonFile: a file that is not JSON is an error, not a crash', async () => {
+  const fetchImpl = fakeFetch(reply(200, { content: Buffer.from('<html>', 'utf-8').toString('base64') }));
+
+  const result = await api.readJsonFile('/repo', CHESS, 'game.json', { token: null, fetchImpl });
+
+  assert.strictEqual(result.ok, false);
+  assert.match(result.message, /not JSON/);
+});
+
+test('createIssue: posts the title and body and hands back where it landed', async () => {
+  const fetchImpl = fakeFetch(reply(201, { html_url: 'https://github.com/yarism/keep-chess/issues/7', number: 7 }));
+
+  const result = await api.createIssue('/repo', CHESS,
+    { title: 'keep-chess | g1 | ply2 | e2e4', body: 'Played from Keep.' }, { token: 'tok', fetchImpl });
+
+  assert.deepStrictEqual(result, { ok: true, url: 'https://github.com/yarism/keep-chess/issues/7', number: 7 });
+  const { url, init } = fetchImpl.calls[0];
+  assert.strictEqual(url, 'https://api.github.com/repos/yarism/keep-chess/issues');
+  assert.strictEqual(init.method, 'POST');
+  assert.deepStrictEqual(JSON.parse(init.body),
+    { title: 'keep-chess | g1 | ply2 | e2e4', body: 'Played from Keep.' });
+});
+
+test('createIssue: refuses without a token and says how to get one', async () => {
+  const result = await api.createIssue('/repo', CHESS, { title: 't' }, { token: null });
+
+  assert.strictEqual(result.reason, 'no-token');
+  assert.match(result.message, /gh auth login/);
+});
+
+test('createIssue: an empty title never leaves the machine', async () => {
+  const fetchImpl = fakeFetch(reply(201, {}));
+
+  const result = await api.createIssue('/repo', CHESS, { title: '  ' }, { token: 'tok', fetchImpl });
+
+  assert.strictEqual(result.reason, 'rejected');
+  assert.strictEqual(fetchImpl.calls.length, 0);
+});

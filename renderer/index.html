@@ -392,6 +392,30 @@
     </div>
   </div>
 
+  <!-- Keep Chess, the world's shared game, offered after a commit. Its own
+       overlay rather than #modal-overlay so it can never collide with a real
+       dialog the refresh happens to open. -->
+  <div id="chess-overlay" class="modal-overlay" hidden>
+    <div class="modal chess-modal">
+      <div class="modal-title">Keep Chess</div>
+      <div class="chess-status" id="chess-status"></div>
+      <div class="chess-board" id="chess-board"></div>
+      <div class="chess-last" id="chess-last"></div>
+      <div class="chess-note">One game, the whole world, one move per commit.
+        <button type="button" id="chess-watch" class="chess-watch">Watch the game</button>
+      </div>
+      <div class="chess-error" id="chess-error" hidden></div>
+      <div class="chess-promo" id="chess-promo" hidden></div>
+      <div class="chess-footer">
+        <button type="button" id="chess-never" class="chess-never">Never show again</button>
+        <div class="modal-actions">
+          <button type="button" id="chess-skip">Skip</button>
+          <button type="button" id="chess-play" disabled>Play</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- The build a released tag set off. Bottom left, opposite the toasts:
        a toast is something that happened, this is something still happening. -->
   <div id="build-card" class="build-card" hidden>

@@ -659,3 +659,55 @@ exports.workflowRun = async (repoPath, forge, opts = {}) => {
     run: normalizeRun(run, jobs.ok && jobs.body ? jobs.body.jobs : []),
   };
 };
+
+// ── Files and issues ──
+//
+// Two general-purpose calls that exist for Keep Chess (renderer/modules/
+// chess.js) but know nothing about it. The world's game state is an ordinary
+// JSON file in a public repository, and a move is an ordinary issue that the
+// game repository's own Action referees, so the two capabilities Keep needs
+// from GitHub are exactly: read a small file, open an issue.
+
+// The contents API caps this representation at 1 MB, which is plenty for a
+// small JSON file and saves inventing a raw.githubusercontent.com special
+// case that GitHub Enterprise would not have.
+exports.readJsonFile = async (repoPath, forge, filePath, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  const url = `${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/contents/${filePath}`;
+  const result = await request(url, { token, host: forge.host, fetchImpl: opts.fetchImpl });
+  if (!result.ok) {
+    // request() words its 404 for the review endpoints it was written for.
+    return result.reason === 'not-found'
+      ? fail('not-found', `${forge.owner}/${forge.repo} has no ${filePath}, or the token cannot see it.`)
+      : result;
+  }
+  try {
+    return { ok: true, data: JSON.parse(Buffer.from(result.body.content || '', 'base64').toString('utf-8')) };
+  } catch {
+    return fail('http', `${filePath} in ${forge.owner}/${forge.repo} is not JSON.`);
+  }
+};
+
+exports.createIssue = async (repoPath, forge, issue, opts = {}) => {
+  if (!forge || forge.kind !== 'github') return fail('unsupported', 'Not a GitHub repository.');
+  if (!String(issue && issue.title || '').trim()) return fail('rejected', 'An issue needs a title.');
+  const token = opts.token !== undefined ? opts.token : await findToken(repoPath, forge.host);
+  if (!token) {
+    return fail('no-token', 'Opening an issue needs a token, and Keep could not find one. Keep reads whatever '
+      + 'the GitHub CLI or your git credential helper holds; `gh auth login` is the shortest way to provide it.');
+  }
+  const result = await request(`${apiBase(forge.host)}/repos/${forge.owner}/${forge.repo}/issues`, {
+    token,
+    host: forge.host,
+    method: 'POST',
+    fetchImpl: opts.fetchImpl,
+    body: { title: issue.title, body: issue.body || '' },
+  });
+  if (!result.ok) {
+    return result.reason === 'not-found'
+      ? fail('not-found', `${forge.owner}/${forge.repo} does not exist, or the token cannot see it.`)
+      : result;
+  }
+  return { ok: true, url: (result.body && result.body.html_url) || '', number: result.body && result.body.number };
+};

@@ -2,6 +2,7 @@ import { $, escapeHtml, state } from './state.js';
 import { renderDiff, renderConflict } from './diff.js';
 import { showContextMenu } from './context-menu.js';
 import { toast } from './toast.js';
+import { offerChess } from './chess.js';
 
 // Set by setupCommitBox so the banner's Abort/Continue can rebuild everything —
 // they move HEAD, which nothing short of a full refresh survives.
@@ -475,6 +476,9 @@ export function setupCommitBox(refresh) {
       btn.disabled = true;
       renderAmendWarning();
       await refresh();
+      // The commit earned a move in the world's chess game. Not awaited:
+      // the game is a guest here and the commit flow is done.
+      offerChess();
     } catch (e) { toast(e.message.trim() || 'Commit failed', { type: 'error' }); }
   }
   $('#btn-stage-all').addEventListener('click', async () => {

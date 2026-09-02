@@ -58,6 +58,13 @@
   --lane-4: color-mix(in srgb, var(--blue) 55%, var(--red));
   --lane-5: color-mix(in srgb, var(--green) 55%, var(--blue));
 
+  /* Chess pieces. Not theme tokens on purpose: a chess set is black and white
+   * in every theme, and pieces tinted from the palette made the sides
+   * indistinguishable on dark boards. The stroke is what keeps each side
+   * visible on both square colours. */
+  --chess-white-piece: #f6f5f1;
+  --chess-black-piece: #1c1b20;
+
   /* Every history row is exactly this tall: each row draws its own half of the
    * graph's lines, so they only join up if the row and its SVG agree. Keep in
    * step with ROW_H in renderer/modules/history.js. */
@@ -1528,6 +1535,129 @@ body.decode-unicode .uni-dec { display: inline; }
 .modal-actions button:last-child:hover { background: var(--accent-hover); }
 .modal-actions button:disabled { opacity: .45; cursor: default; }
 .modal-actions button:disabled:hover { background: var(--accent); }
+
+/* Keep Chess --------------------------------------------------------------- */
+/* The board borrows the modal chrome and mixes its squares from the theme's
+   own colours, the same trick as the commit-graph lanes, so all seven themes
+   get a matching board for free. */
+
+.chess-modal { min-width: 384px; max-width: 384px; }
+.chess-status {
+  font-size: var(--fs-md);
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.chess-board {
+  display: grid;
+  grid-template-columns: repeat(8, 43px);
+  grid-auto-rows: 43px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  width: fit-content;
+}
+.chess-cell {
+  border: none;
+  padding: 0;
+  font-size: var(--fs-display);
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  transition: background 90ms ease;
+}
+/* Both sides use the filled glyphs and differ by colour: the outline glyphs
+   render at a different visual weight and made white's army look thinner.
+   Scoped to the modal so the promotion picker's pieces dress the same way. */
+.chess-modal .white-piece {
+  color: var(--chess-white-piece);
+  -webkit-text-stroke: 1px var(--chess-black-piece);
+}
+.chess-modal .black-piece {
+  color: var(--chess-black-piece);
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--chess-white-piece) 55%, transparent);
+}
+.chess-cell.light { background: var(--bg-surface); }
+.chess-cell.dark { background: color-mix(in srgb, var(--accent) 16%, var(--bg-surface)); }
+.chess-cell.last { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--yellow) 18%, transparent); }
+.chess-cell.check { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--red) 26%, transparent); }
+.chess-cell.selected, .chess-cell.staged {
+  box-shadow: inset 0 0 0 2px var(--accent),
+    inset 0 0 0 999px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+/* A quiet dot marks a move, a ring marks a capture: the classic vocabulary. */
+.chess-cell.target::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.chess-cell.capture { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); }
+.chess-cell:hover { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 10%, transparent); }
+.chess-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chess-last {
+  margin-top: 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.chess-note { margin-top: 2px; font-size: var(--fs-sm); color: var(--text-mute); }
+.chess-watch {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.chess-watch:hover { text-decoration: underline; }
+.chess-error {
+  margin-top: 8px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--red);
+}
+.chess-promo {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chess-promo-label { font-size: var(--fs-sm); color: var(--text-dim); margin-right: 4px; }
+.chess-promo button {
+  width: 34px;
+  height: 34px;
+  font-size: calc(var(--fs-display) * .75);
+  line-height: 1;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text);
+  cursor: pointer;
+}
+.chess-promo button:hover { background: var(--bg-active); }
+.chess-footer {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chess-never {
+  border: none;
+  background: none;
+  padding: 6px 0;
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.chess-never:hover { color: var(--text-dim); text-decoration: underline; }
 
 /* Theme gallery ----------------------------------------------------------- */
 

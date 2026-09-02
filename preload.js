@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('git', {
   reactions: (p, forge, target) => ipcRenderer.invoke('forge-reactions', p, forge, target),
   viewerLogin: (p, forge) => ipcRenderer.invoke('forge-viewer', p, forge),
   workflowRun: (p, forge, target) => ipcRenderer.invoke('forge-workflow-run', p, forge, target),
+  readJsonFile: (p, forge, file) => ipcRenderer.invoke('forge-read-json', p, forge, file),
+  createIssue: (p, forge, issue) => ipcRenderer.invoke('forge-new-issue', p, forge, issue),
   hasWorkflows: (p, ref) => ipcRenderer.invoke('git-has-workflows', p, ref),
   searchLog: (p, query, field, branch, limit, opts) => ipcRenderer.invoke('git-search-log', p, query, field, branch, limit, opts),
   stage: (p, file) => ipcRenderer.invoke('git-stage', p, file),
