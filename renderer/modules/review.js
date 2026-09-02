@@ -91,7 +91,7 @@ export function fileBadge(file) {
   const parts = [];
   if (theirs) parts.push(`${theirs} comment${theirs !== 1 ? 's' : ''}`);
   if (own) parts.push(`${own} pending`);
-  return parts.join(' · ') || null;
+  return parts.join(' - ') || null;
 }
 
 export function fileNote(file) {
@@ -199,7 +199,7 @@ function threadEl(thread, { outdated = false } = {}) {
     summary.type = 'button';
     summary.className = 'review-thread-resolved';
     const count = 1 + (thread.replies || []).length;
-    summary.textContent = `Resolved · ${thread.author} · ${count} comment${count !== 1 ? 's' : ''}`;
+    summary.textContent = `Resolved - ${thread.author} - ${count} comment${count !== 1 ? 's' : ''}`;
     const body = document.createElement('div');
     body.className = 'review-thread-body';
     body.hidden = true;

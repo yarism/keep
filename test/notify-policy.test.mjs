@@ -14,14 +14,14 @@ const P = await loadEsm('renderer/notify-policy.js');
 test('actionNotice: pull, push and publish are worth telling another window about', () => {
   for (const label of ['Pull', 'Push', 'Publish']) {
     const n = P.actionNotice(label, true, 'Already up to date', 'keep');
-    assert.strictEqual(n.title, `${label} finished · keep`);
+    assert.strictEqual(n.title, `${label} finished - keep`);
     assert.strictEqual(n.body, 'Already up to date');
   }
 });
 
 test('actionNotice: a failure says so and carries the error', () => {
   const n = P.actionNotice('Push', false, 'Could not reach github.com.', 'keep');
-  assert.strictEqual(n.title, 'Push failed · keep');
+  assert.strictEqual(n.title, 'Push failed - keep');
   assert.strictEqual(n.body, 'Could not reach github.com.');
 });
 
@@ -64,7 +64,7 @@ test('behindTransition: catching up says nothing but re-arms the next one', () =
 
 test('behindNotice: the count reads as words, singular included', () => {
   const one = P.behindNotice({ name: 'main', upstream: 'origin/main', behind: 1 }, 'keep');
-  assert.strictEqual(one.title, 'New commits on origin/main · keep');
+  assert.strictEqual(one.title, 'New commits on origin/main - keep');
   assert.strictEqual(one.body, 'main is now 1 commit behind.');
 
   const many = P.behindNotice({ name: 'main', upstream: 'origin/main', behind: 3 }, 'keep');
@@ -74,9 +74,9 @@ test('behindNotice: the count reads as words, singular included', () => {
 // ── builds ──
 
 test('buildNotice: only a settled build is worth a notification', () => {
-  assert.strictEqual(P.buildNotice({ state: 'waiting', title: 'v1 · waiting' }, 'keep'), null);
-  assert.strictEqual(P.buildNotice({ state: 'running', title: 'v1 · building' }, 'keep'), null);
-  assert.strictEqual(P.buildNotice({ state: 'unknown', title: 'v1 · not visible' }, 'keep'), null);
+  assert.strictEqual(P.buildNotice({ state: 'waiting', title: 'v1 - waiting' }, 'keep'), null);
+  assert.strictEqual(P.buildNotice({ state: 'running', title: 'v1 - building' }, 'keep'), null);
+  assert.strictEqual(P.buildNotice({ state: 'unknown', title: 'v1 - not visible' }, 'keep'), null);
 });
 
 test('buildNotice: done and failed relay the card wording', () => {
@@ -84,14 +84,14 @@ test('buildNotice: done and failed relay the card wording', () => {
     { state: 'done', title: 'v1.0.35 published', detail: 'The installers are on the release page.' },
     'keep',
   );
-  assert.strictEqual(done.title, 'v1.0.35 published · keep');
+  assert.strictEqual(done.title, 'v1.0.35 published - keep');
   assert.strictEqual(done.body, 'The installers are on the release page.');
 
   const failed = P.buildNotice(
-    { state: 'failed', title: 'v1.0.35 · failed', detail: 'build (macos-latest) did not pass.' },
+    { state: 'failed', title: 'v1.0.35 - failed', detail: 'build (macos-latest) did not pass.' },
     'keep',
   );
-  assert.strictEqual(failed.title, 'v1.0.35 · failed · keep');
+  assert.strictEqual(failed.title, 'v1.0.35 - failed - keep');
   assert.strictEqual(failed.body, 'build (macos-latest) did not pass.');
 });
 
@@ -99,10 +99,10 @@ test('buildNotice: done and failed relay the card wording', () => {
 
 test('releaseNotice: both endings are named and carry their message', () => {
   const ok = P.releaseNotice(true, 'Released 1.0.35.', 'keep');
-  assert.strictEqual(ok.title, 'Release finished · keep');
+  assert.strictEqual(ok.title, 'Release finished - keep');
   assert.strictEqual(ok.body, 'Released 1.0.35.');
 
   const bad = P.releaseNotice(false, 'npm test failed', 'keep');
-  assert.strictEqual(bad.title, 'Release failed · keep');
+  assert.strictEqual(bad.title, 'Release failed - keep');
   assert.strictEqual(bad.body, 'npm test failed');
 });

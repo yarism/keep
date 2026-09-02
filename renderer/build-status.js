@@ -37,7 +37,7 @@ export function describeBuild(run, { label = 'the build', kind = 'tag' } = {}) {
   if (!run) {
     return {
       state: 'waiting',
-      title: `${tag} · waiting`,
+      title: `${tag} - waiting`,
       detail: 'GitHub has not filed the build yet.',
     };
   }
@@ -46,14 +46,14 @@ export function describeBuild(run, { label = 'the build', kind = 'tag' } = {}) {
   const named = (predicate) => jobs.filter(predicate).map(j => stageLabel(j.name));
 
   if (run.status === 'queued' || run.status === 'pending') {
-    return { state: 'waiting', title: `${tag} · queued`, detail: 'Waiting for a runner.' };
+    return { state: 'waiting', title: `${tag} - queued`, detail: 'Waiting for a runner.' };
   }
 
   if (run.status !== 'completed') {
     const running = named(j => j.status === 'in_progress');
     return {
       state: 'running',
-      title: `${tag} · building`,
+      title: `${tag} - building`,
       detail: running.length ? list(running) : 'Starting.',
     };
   }
@@ -69,7 +69,7 @@ export function describeBuild(run, { label = 'the build', kind = 'tag' } = {}) {
   }
 
   if (run.conclusion === 'cancelled') {
-    return { state: 'failed', title: `${tag} · cancelled`, detail: 'The build was stopped.' };
+    return { state: 'failed', title: `${tag} - cancelled`, detail: 'The build was stopped.' };
   }
 
   // Naming the job that failed is the difference between "go and look" and
@@ -80,7 +80,7 @@ export function describeBuild(run, { label = 'the build', kind = 'tag' } = {}) {
       : 'failed';
   return {
     state: 'failed',
-    title: `${tag} · ${why}`,
+    title: `${tag} - ${why}`,
     detail: failed.length ? `${list(failed)} did not pass.` : 'The build did not pass.',
   };
 }

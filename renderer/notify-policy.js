@@ -5,6 +5,10 @@
 // while you were somewhere else: that half is enforced in the main process, at
 // show time, against the real focus state. This half decides what is worth
 // saying at all, and is pure so the decisions can be tested without a window.
+//
+// The repository's name rides on every title: the app's own name and icon are
+// on the notification already, but which repository it is about is not, and a
+// build notice can arrive ten minutes after you switched to another one.
 
 // Toolbar actions worth hearing about from another window. Fetch is left out
 // on purpose: the background fetch is silent by design, and a fetch that found
@@ -13,7 +17,7 @@
 // had time to switch away.
 const NOTIFYING_ACTIONS = new Set(['Pull', 'Push', 'Publish']);
 
-const withRepo = (title, repoName) => (repoName ? `${title} · ${repoName}` : title);
+const withRepo = (title, repoName) => (repoName ? `${title} - ${repoName}` : title);
 
 export function actionNotice(label, ok, message, repoName) {
   if (!NOTIFYING_ACTIONS.has(label)) return null;
