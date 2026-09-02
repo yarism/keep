@@ -650,7 +650,12 @@ exports.push = async (repoPath, opts = {}) => {
   const branch = (await run(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
   return runNetwork(repoPath, ['push', '--set-upstream', remote, branch], 'Publish');
 };
-exports.fetch = (repoPath) => runNetwork(repoPath, ['fetch', '--all'], 'Fetch');
+// --prune, because a branch deleted on the remote (a merged PR, usually) would
+// otherwise keep its remote-tracking ref here forever, and a sidebar listing
+// branches that no longer exist is its own kind of out of sync. Only refs under
+// refs/remotes are pruned: local branches and the PR heads under refs/keep/
+// sit outside every remote's fetch refspec.
+exports.fetch = (repoPath) => runNetwork(repoPath, ['fetch', '--all', '--prune'], 'Fetch');
 
 // The same fetch, but for a timer with nobody watching. It shares the
 // non-interactive environment with every other network command, and differs in
@@ -660,7 +665,7 @@ exports.fetch = (repoPath) => runNetwork(repoPath, ['fetch', '--all'], 'Fetch');
 // and reports which it was, leaving the explaining to the buttons a person
 // actually pressed.
 exports.fetchQuiet = (repoPath) => new Promise((resolve) => {
-  execFile('git', ['fetch', '--all', '--quiet'],
+  execFile('git', ['fetch', '--all', '--prune', '--quiet'],
     { cwd: repoPath, env: nonInteractiveEnv(), timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
     (err) => resolve({ ok: !err, error: err ? (err.message || '').trim() : null }));
 });

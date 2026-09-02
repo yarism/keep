@@ -96,3 +96,10 @@ contextBridge.exposeInMainWorld('updates', {
   install: () => ipcRenderer.invoke('update-install'),
   onState: (cb) => ipcRenderer.on('update-state', (_, s) => cb(s)),
 });
+
+// Notifications go through the main process because the decision does: whether
+// one is worth showing depends on window focus, which main reads at the moment
+// of showing rather than being told about after the fact.
+contextBridge.exposeInMainWorld('notify', {
+  show: (payload) => ipcRenderer.invoke('notify', payload),
+});

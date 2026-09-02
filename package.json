@@ -77,6 +77,7 @@
       "forge-api.js",
       "release.js",
       "menu.js",
+      "notify.js",
       "updater.js",
       "window-bounds.js",
       "renderer/**/*",

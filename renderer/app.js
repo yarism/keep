@@ -11,6 +11,7 @@ import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
 import { setupRelease, releaseRunning } from './modules/release.js';
 import { setupBuildWatch } from './modules/build-watch.js';
+import { setupNotifications, notifyAction, checkBehindUpstream } from './modules/notify.js';
 import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
@@ -41,6 +42,9 @@ async function refresh() {
   // whether this repository has pull requests at all.
   syncPullRequestNav();
   updateTitlebar();
+  // The branch's standing against its upstream was just re-read: if it slipped
+  // behind, this is where that becomes known.
+  checkBehindUpstream();
   // Re-baseline so our own writes don't read as an external change next tick
   await captureFingerprint();
 }
@@ -157,16 +161,17 @@ function stopPolling() {
 //
 // Ahead/behind is only as truthful as the last fetch, and until now the only
 // fetch was one you pressed a button for — so a branch could sit there claiming
-// to be up to date for a week. This keeps the remote-tracking refs current on a
-// timer. Nothing about the working copy is touched, so there is nothing to
-// interrupt: the ref changes land in the fingerprint the poller already watches
-// and the UI refreshes itself.
+// to be up to date for a week. This keeps the remote-tracking refs current on
+// a timer and when the window regains focus. Nothing about the working copy is
+// touched, so there is nothing to interrupt: the ref changes land in the
+// fingerprint the poller already watches and the UI refreshes itself.
 //
 // Set `autoFetchMinutes` to 0 in settings.json to turn it off.
-const DEFAULT_AUTO_FETCH_MINUTES = 10;
+const DEFAULT_AUTO_FETCH_MINUTES = 5;
 let _autoFetchMinutes = DEFAULT_AUTO_FETCH_MINUTES;
 let _fetchTimer = null;
 let _lastFetch = null;
+let _lastAttempt = 0;
 let _fetching = false;
 
 function startAutoFetch() {
@@ -185,6 +190,7 @@ function stopAutoFetch() {
 async function autoFetch() {
   if (!state.repoPath || _fetching) return;
   _fetching = true;
+  _lastAttempt = Date.now();
   try {
     const result = await window.git.fetchQuiet(state.repoPath);
     if (result.ok) _lastFetch = Date.now();
@@ -192,6 +198,22 @@ async function autoFetch() {
   } catch { /* a background job has nobody to tell */ }
   finally { _fetching = false; }
 }
+
+// The moment the window comes back to front is when the counts on screen are
+// most likely to be lies: pushes happen elsewhere precisely while you are
+// elsewhere, and the timer alone could leave you reading "up to date" from
+// minutes ago. So regaining focus fetches too. Throttled to once a minute so
+// that flicking past the window costs nothing, and gated on the last attempt
+// rather than the last success so that being offline does not defeat the
+// throttle. Waking from sleep ends up covered between the two mechanisms: an
+// interval that came due mid-sleep fires once on resume, and a shorter nap
+// than that means the counts are younger than one interval anyway.
+const FOCUS_FETCH_AFTER_MS = 60 * 1000;
+window.addEventListener('focus', () => {
+  if (!_autoFetchMinutes) return;
+  if (Date.now() - _lastAttempt < FOCUS_FETCH_AFTER_MS) return;
+  autoFetch();
+});
 
 // The only visible trace: the Fetch button says when it last managed one.
 function describeLastFetch(result) {
@@ -239,9 +261,13 @@ async function runAction(selector, label, work) {
   try {
     const output = await work();
     await refresh();
-    status.done(describeResult(label, output));
+    const summary = describeResult(label, output);
+    status.done(summary);
+    notifyAction(label, true, summary);
   } catch (e) {
-    status.fail(e.message.trim() || `${label} failed`);
+    const message = e.message.trim() || `${label} failed`;
+    status.fail(message);
+    notifyAction(label, false, message);
     // A merge or rebase that stops on a conflict *fails* — and leaves the repo
     // in a state the UI has to show. Refreshing only on success left the app
     // looking like nothing had happened until the next poll tick.
@@ -275,7 +301,7 @@ function setupToolbar() {
   $('#btn-fetch').addEventListener('click', () =>
     runAction('#btn-fetch', 'Fetch', async () => {
       const out = await window.git.fetch(state.repoPath);
-      _lastFetch = Date.now();
+      _lastFetch = _lastAttempt = Date.now();
       describeLastFetch(null);
       return out;
     }));
@@ -364,6 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupUpdates();
   setupRelease(refresh);
   setupBuildWatch(settings);
+  setupNotifications(settings);
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);
