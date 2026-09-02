@@ -18,6 +18,7 @@ import { icon } from '../icons.js';
 import {
   describeBuild, isFinished, elapsed, pollInterval, explainCallFailure, GIVE_UP_MS,
 } from '../build-status.js';
+import { notifyBuild } from './notify.js';
 
 // A watch older than this is not resumed. A build takes minutes; anything still
 // unfinished hours later was abandoned, and reviving it at launch would put a
@@ -146,7 +147,13 @@ async function poll() {
   }
 
   render(shown);
-  if (isFinished(shown)) { settle(); return; }
+  if (isFinished(shown)) {
+    // The whole reason the card exists is that this moment tends to arrive
+    // after you have stopped watching for it.
+    notifyBuild(shown, watch.repoName);
+    settle();
+    return;
+  }
   timer = setTimeout(poll, pollInterval(authenticated));
 }
 

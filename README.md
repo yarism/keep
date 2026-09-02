@@ -64,18 +64,42 @@ warning appears.
   branch, or view a branch or commit on the web, straight from the context menu
 - Seven colour themes, switchable from the toolbar
 - Progress and results reported for every toolbar command
+- System notifications for what finishes while Keep is in the background:
+  pulls, pushes, releases, GitHub builds, and the moment your branch falls
+  behind its upstream
 
 ## Fetching
 
-Keep fetches in the background every ten minutes, so the ahead/behind counts
-mean something without you pressing Fetch first. It never touches the working
-copy — only the remote-tracking refs — and it runs non-interactively, so a
-repository that would ask for a password is skipped rather than left hanging.
-The Fetch button's tooltip says when the last one got through.
+Keep fetches in the background every five minutes, and again the moment the
+window comes back to front (at most once a minute), so the ahead/behind counts
+mean something without you pressing Fetch first. Fetches prune, so a branch
+deleted on the remote (a merged PR, usually) disappears from the sidebar
+instead of lingering. The working copy and your local branches are never
+touched, only the remote-tracking refs, and it all runs non-interactively, so
+a repository that would ask for a password is skipped rather than left
+hanging. The Fetch button's tooltip says when the last one got through.
 
 To change the interval, or switch it off, set `autoFetchMinutes` in
 `settings.json` (`0` disables it). The file lives in Electron's user-data
 directory — `~/Library/Application Support/Keep` on macOS.
+
+## Notifications
+
+What finishes while Keep is in the background arrives as a system
+notification: a pull or push you started, a release command, the GitHub build
+it set off, and the moment a background fetch first finds new commits on your
+branch's upstream. While the window is front, nothing is posted; the toasts,
+badges and the build card already say it, closer to the work. Clicking a
+notification brings Keep back.
+
+Falling behind notifies once, not once per commit: the first new commits are
+news, and the ones that pile on after them are not. Pull, and the next arrival
+is news again.
+
+macOS asks whether to allow Keep's notifications the first time one is
+posted, not at launch, and the answer can be changed any time in System
+Settings, under Notifications. To turn the feature off in Keep itself, set
+`notifications` to `false` in `settings.json` (the same file as above).
 
 ## Themes
 

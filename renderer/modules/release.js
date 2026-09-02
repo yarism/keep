@@ -22,6 +22,7 @@
 
 import { $, state, escapeHtml } from './state.js';
 import { toast } from './toast.js';
+import { notifyRelease } from './notify.js';
 import { icon } from '../icons.js';
 import { forgeForBranch, releasesUrl } from './forge.js';
 import { watchBuild } from './build-watch.js';
@@ -278,13 +279,19 @@ async function start() {
 }
 
 async function finish(result) {
+  const repoName = (session.pkg && session.pkg.name) || session.repoPath.split('/').pop();
   const el = $('#release-result');
   el.hidden = false;
   el.className = `release-result ${result.ok ? 'ok' : 'bad'}`;
 
+  // A cancelled run is not an ending worth announcing: the person who pressed
+  // Stop is the one person guaranteed to know already.
   if (!result.ok) {
     el.innerHTML = `<div class="release-result-text">${escapeHtml(result.message || 'The command failed.')}</div>`;
-    if (!result.cancelled) toast(result.message || 'Release failed', { type: 'error', prose: true });
+    if (!result.cancelled) {
+      toast(result.message || 'Release failed', { type: 'error', prose: true });
+      notifyRelease(false, result.message || 'Release failed', repoName);
+    }
     return;
   }
 
@@ -308,7 +315,7 @@ async function finish(result) {
   const tag = await tagFor(version);
   const watching = tag && await watchBuild({
     repoPath: session.repoPath,
-    repoName: (session.pkg && session.pkg.name) || session.repoPath.split('/').pop(),
+    repoName,
     tag,
     forge,
   });
@@ -328,6 +335,7 @@ async function finish(result) {
     $('#release-open').addEventListener('click', () => window.git.openExternal(url));
   }
   toast(done, { prose: true });
+  notifyRelease(true, done + (watching ? ' GitHub is building the installers.' : ''), repoName);
 }
 
 async function tagFor(version) {

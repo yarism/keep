@@ -6,6 +6,7 @@ const forgeApi = require('./forge-api');
 const release = require('./release');
 const { windowBounds } = require('./window-bounds');
 const { initUpdater, checkForUpdates } = require('./updater');
+const { initNotify } = require('./notify');
 const { buildMenu } = require('./menu');
 
 let mainWindow;
@@ -159,6 +160,7 @@ app.whenReady().then(() => {
   watchSystemAppearance();
   createWindow();
   initUpdater();
+  initNotify();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
