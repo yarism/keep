@@ -67,6 +67,7 @@ warning appears.
 - System notifications for what finishes while Keep is in the background:
   pulls, pushes, releases, GitHub builds, and the moment your branch falls
   behind its upstream
+- Keep Chess: the whole world plays one game, and a commit buys one move
 
 ## Fetching
 
@@ -100,6 +101,27 @@ macOS asks whether to allow Keep's notifications the first time one is
 posted, not at launch, and the answer can be changed any time in System
 Settings, under Notifications. To turn the feature off in Keep itself, set
 `notifications` to `false` in `settings.json` (the same file as above).
+
+## Keep Chess
+
+Everyone running Keep shares one game of chess. After a commit, the current
+position appears; you play one move, for whichever side is to move, and the
+next move belongs to whoever commits next, anywhere in the world. The game
+lives at [yarism/keep-chess](https://github.com/yarism/keep-chess): each move
+is an issue that the repository's referee Action validates and commits, so
+the game's history is a git log and every move is credited to its player.
+
+Reading the board needs nothing. Playing a move opens an issue under your
+name, which needs a GitHub token; Keep reads whatever your git credential
+helper or the GitHub CLI already holds (`gh auth login` is the quickest way
+to have one found), and never stores it. If no token turns up, the Play
+button explains instead of playing.
+
+Not everyone wants a chess board after every commit: "Never show again" in
+the overlay turns it off, which is stored as `"chess": false` in
+`settings.json` (the same file as above). Delete the line, or set it to
+`true`, to rejoin the game. `chessRepo` (`"owner/repo"`) points Keep at a
+different game, if a fork of the world is more your speed.
 
 ## Themes
 

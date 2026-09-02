@@ -12,6 +12,7 @@ import { setupUpdates } from './modules/updates.js';
 import { setupRelease, releaseRunningHere, syncReleasePanel } from './modules/release.js';
 import { setupBuildWatch } from './modules/build-watch.js';
 import { setupNotifications, notifyAction, checkBehindUpstream } from './modules/notify.js';
+import { setupChess } from './modules/chess.js';
 import { checkAccess } from './modules/access.js';
 import { headTracking } from './modules/sync.js';
 import { busyToast, toast } from './modules/toast.js';
@@ -127,6 +128,9 @@ function startPolling() {
     // Don't refresh while user is typing a commit message or a modal is open
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     if (!$('#modal-overlay').hidden) return;
+    // A chess move is being considered; redrawing the app under the board
+    // would only steal focus from it.
+    if (!$('#chess-overlay').hidden) return;
     // The release modal holds a command being edited, which does not want the
     // window redrawn underneath it. A release running in this repository is
     // busy committing, tagging and pushing; refreshing under that would read
@@ -394,6 +398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRelease(refresh);
   setupBuildWatch(settings);
   setupNotifications(settings);
+  setupChess(settings);
   setupCommitBox(refresh);
   setupOpBanner(refresh);
   setupHistorySearch(refresh);
