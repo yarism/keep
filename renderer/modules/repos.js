@@ -2,6 +2,7 @@ import { $, $$, escapeHtml, state, switchView } from './state.js';
 import { icon } from '../icons.js';
 import { updateSyncBadges } from './sync.js';
 import { showAccess } from './access.js';
+import { syncReleasePanel } from './release.js';
 
 let _onSelectRepo = null;
 
@@ -29,6 +30,9 @@ export function showRepoList() {
   state.branchList = [];
   updateSyncBadges();
   switchView('welcome');
+  // A release terminal belongs to its repository, and no repository is open
+  // here: the run, if one is going, carries on out of sight.
+  syncReleasePanel();
   renderRepoList();
 }
 

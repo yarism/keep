@@ -9,7 +9,7 @@ import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, ref
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
-import { setupRelease, releaseRunning } from './modules/release.js';
+import { setupRelease, releaseRunningHere, syncReleasePanel } from './modules/release.js';
 import { setupBuildWatch } from './modules/build-watch.js';
 import { setupNotifications, notifyAction, checkBehindUpstream } from './modules/notify.js';
 import { checkAccess } from './modules/access.js';
@@ -91,6 +91,9 @@ async function enterWorkspace(path) {
   else { badge.hidden = true; }
   badge.classList.toggle('conflict', changed.some(f => f.conflicted));
   switchView(changed.length > 0 ? 'working-copy' : 'history');
+  // A release begun in this repository keeps its terminal with it: walking
+  // back in brings the panel back, still running or already settled.
+  syncReleasePanel();
   // So the next launch can come straight back here
   window.git.saveSettings({ lastRepo: path });
   // Before the refresh, so an unreadable folder explains itself rather than
@@ -125,11 +128,11 @@ function startPolling() {
     if (document.activeElement && document.activeElement.id === 'commit-subject') return;
     if (!$('#modal-overlay').hidden) return;
     // The release modal holds a command being edited, which does not want the
-    // window redrawn underneath it. A running release is busy committing,
-    // tagging and pushing; refreshing under that would read the repository
-    // mid-mutation. The finished panel, sitting there with its output, blocks
-    // nothing.
-    if (!$('#release-overlay').hidden || releaseRunning()) return;
+    // window redrawn underneath it. A release running in this repository is
+    // busy committing, tagging and pushing; refreshing under that would read
+    // the repository mid-mutation. One running in another repository, and the
+    // finished panel sitting there with its output, block nothing.
+    if (!$('#release-overlay').hidden || releaseRunningHere()) return;
     // A slow refresh must not stack up behind the next tick
     if (_polling) return;
     _polling = true;
