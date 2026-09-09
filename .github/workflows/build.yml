@@ -125,27 +125,27 @@ jobs:
             exit 1
           fi
 
-      # electron-builder reads CSC_LINK as a path, so an empty one resolves to the
-      # checkout directory and fails. The signing variables have to be absent
-      # rather than blank, which only a shell can express.
+      # The notarization variables have to be absent rather than blank when
+      # there is nothing to sign with, which only a shell can express.
+      #
+      # Windows builds unsigned, on purpose. The only certificate in this repo
+      # is an Apple one; signtool accepts it and Windows does not trust it, so
+      # signing with it bought the same SmartScreen prompt as no signature plus
+      # a minute of build time. The updater does not look at Windows signatures
+      # either: build.win sets no publisherName, and electron-updater only
+      # verifies when one is set. The README already says the installer is
+      # unsigned, so this is the workflow catching up with the documentation.
       - name: Build installers
         shell: bash
         env:
           MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
-          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$MAC_CERT_P12" ]; then
+          if [ -z "$MAC_CERT_P12" ] || [ "${{ matrix.label }}" != "macos" ]; then
             unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-          elif [ "${{ matrix.label }}" != "macos" ]; then
-            # Windows is left exactly as it was, signing with whatever this
-            # certificate is worth to signtool. macOS is the platform that now
-            # takes its identity from the keychain above rather than from here.
-            export CSC_LINK="$MAC_CERT_P12"
-            export CSC_KEY_PASSWORD="$MAC_CERT_PASSWORD"
           fi
           npx electron-builder ${{ matrix.args }} --publish never
 
