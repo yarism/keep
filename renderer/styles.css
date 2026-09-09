@@ -303,6 +303,33 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .theme-more .theme-check { color: var(--text-mute); }
 .theme-more:hover .theme-name, .theme-more:focus-visible .theme-name { color: var(--text); }
 
+/* The app icon picker, in the same popover under its own heading. Four across
+   and two down, which is the widest grid the popover holds without being told
+   to grow, and eight is all there are. */
+.app-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 1px 5px 4px;
+}
+.app-icon-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  outline: none;
+}
+.app-icon-swatch canvas { display: block; width: 30px; height: 30px; }
+.app-icon-swatch:hover, .app-icon-swatch:focus-visible { background: var(--bg-hover); }
+/* Ringed and tinted rather than ticked, the same way the gallery's cards say
+   which theme is on: a tick laid over the icon would be covering the very
+   thing being chosen. */
+.app-icon-swatch.active { background: var(--tint-accent); border-color: var(--accent); }
+
 /* Breadcrumb -------------------------------------------------------------- */
 
 #breadcrumb {

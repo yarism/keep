@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeTheme, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const git = require('./git');
@@ -108,6 +108,57 @@ function scheduleRemember(win) {
   rememberTimer = setTimeout(() => rememberWindow(win), 400);
 }
 
+// ── The app icon ──
+//
+// Which colour the running app wears. The picture is drawn by the renderer
+// (renderer/icon-art.js), which is the only side with a canvas; this side owns
+// the Dock and the copy on disk.
+//
+// That copy is the whole reason a choice survives a launch cleanly. The
+// renderer cannot draw before it exists, so an icon that only arrived at first
+// paint would mean a beat of indigo in the Dock on every launch. The last
+// picture drawn is kept in the user's data directory instead, and set here
+// before the window is even created.
+//
+// Only the running app's icon can move. The one in Finder, in Spotlight and in
+// the Dock while Keep is closed comes from the .icns sealed inside the bundle,
+// and the bundle is signed and notarised. Writing into it would break the
+// signature, so that icon stays the one that shipped.
+const appIconFile = path.join(app.getPath('userData'), 'app-icon.png');
+const PNG_DATA_URL = 'data:image/png;base64,';
+const MAX_ICON_BYTES = 4 * 1024 * 1024;
+
+// The icon on screen, or null for the one the bundle shipped with. Kept so the
+// renderer's push at first paint, which normally names the icon that is
+// already up, costs nothing.
+let appliedIconId = null;
+
+function setAppIcon(image) {
+  if (!image || image.isEmpty()) return false;
+  if (process.platform === 'darwin') { app.dock.setIcon(image); return true; }
+  // Elsewhere the icon belongs to the window, which does not exist yet at
+  // launch. Saying so rather than pretending leaves the work to the renderer's
+  // push, by which time it does.
+  if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.setIcon(image); return true; }
+  return false;
+}
+
+function applyStartupIcon() {
+  const chosen = loadSettings().appIcon || null;
+  if (chosen) {
+    // The id is only recorded once the cached picture is actually up: a cache
+    // that has been cleared out from under us means the default is on screen,
+    // and the renderer's push has real work to do.
+    if (setAppIcon(nativeImage.createFromPath(appIconFile))) {
+      appliedIconId = chosen;
+      return;
+    }
+  }
+  if (setAppIcon(nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')))) {
+    appliedIconId = null;
+  }
+}
+
 function createWindow() {
   // Read from settings rather than defaulted, so a dark theme does not launch
   // through one white frame (and a light one through one dark frame).
@@ -152,10 +203,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  if (process.platform === 'darwin') {
-    const { nativeImage } = require('electron');
-    app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')));
-  }
+  applyStartupIcon();
   buildMenu({ checkForUpdates });
   watchSystemAppearance();
   createWindow();
@@ -189,6 +237,30 @@ function saveSettings(patch) {
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_, s) => { saveSettings(s); return true; });
 ipcMain.handle('set-window-chrome', (_, chrome) => applyWindowChrome(mainWindow, chrome));
+
+// A PNG the renderer has just drawn, on its way to the Dock and to the cache.
+// It comes from our own page, but it ends up written to disk, so it is checked
+// rather than taken: the right kind of data URL, and not an unreasonable
+// amount of it.
+ipcMain.handle('set-app-icon', (_, chosen) => {
+  if (!chosen || typeof chosen.png !== 'string' || !chosen.png.startsWith(PNG_DATA_URL)) return false;
+  const base64 = chosen.png.slice(PNG_DATA_URL.length);
+  if (!base64 || base64.length > MAX_ICON_BYTES) return false;
+  // The default is stored as no choice at all, here as in settings.json, so
+  // that this side never has to know which of the palettes is the default one.
+  const id = chosen.isDefault ? null : (chosen.id || null);
+  if (id === appliedIconId) return true;
+  if (!setAppIcon(nativeImage.createFromDataURL(chosen.png))) return false;
+  appliedIconId = id;
+  // Nothing is cached for the default: it is what assets/icon.png already
+  // holds, and a stale copy of it would outlive a redrawn icon in a later
+  // version of the app.
+  try {
+    if (id === null) fs.rmSync(appIconFile, { force: true });
+    else fs.writeFileSync(appIconFile, Buffer.from(base64, 'base64'));
+  } catch {}
+  return true;
+});
 
 // The renderer builds forge URLs (renderer/modules/forge.js) but must not be
 // trusted to hand the OS an arbitrary string — a file: or a custom scheme would
