@@ -5,7 +5,7 @@ import { showModal, showConfirm, showSelect } from './modules/modal.js';
 import { refreshStatus, resetWorkingCopy, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
 import { refreshHistory, resetHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
-import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
+import { setupSidebarResize, setupPanelResize, setupRemotesSection, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { initAppIcon, syncAppIconFromSettings, setupAppIconPicker } from './modules/app-icon.js';
 import { setupCollapsibleSections } from './modules/sections.js';
@@ -442,6 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPanelResize('wc-resize', 'wc-files-panel', 'wcFilesWidth', { minWidth: 220, maxWidth: 600 });
   setupPanelResize('history-resize', 'history-list-panel', 'historyListWidth', { minWidth: 300, maxWidth: 800 });
   setupPanelResize('pr-resize', 'pr-list-panel', 'prListWidth', { minWidth: 260, maxWidth: 800 });
+  setupRemotesSection(refresh);
   setupRepoList(enterWorkspace);
   setupNavigation();
   setupToolbar();

@@ -1,7 +1,7 @@
 import { $, state, suspendTitlebarDrag } from './state.js';
 import { showModal, showConfirm } from './modal.js';
 import {
-  forgeForBranch, remoteBranchName, forgeLabel, pullRequestNoun, pullRequestsNoun,
+  forgeForBranch, remoteBranchName, remoteForBranch, forgeLabel, pullRequestNoun, pullRequestsNoun,
   newPullRequestUrl, branchUrl, commitUrl, pullRequestsUrl,
 } from './forge.js';
 import { watchBuild } from './build-watch.js';
@@ -158,7 +158,14 @@ export function showBranchContextMenu(e, branch, refresh) {
 // sense on it. What does is the one thing the sidebar could not do at all
 // before: get onto a local branch that follows it.
 export function showRemoteBranchContextMenu(e, branch, refresh) {
-  const shortName = remoteBranchName(state.remotes, branch.name, branch.name);
+  // remoteForBranch, not remoteBranchName: that one only answers for a
+  // forge-recognised remote (it exists to build web links), and would hand
+  // back the full "origin/feature" unstripped for anything else — a self-
+  // hosted server, a bare local path — which is wrong for a label and fatal
+  // for the delete below, which needs the remote's real name regardless.
+  const remote = remoteForBranch(state.remotes, branch.name);
+  const shortName = remote && branch.name.startsWith(remote.name + '/')
+    ? branch.name.slice(remote.name.length + 1) : branch.name;
   const current = state.branchList.find(b => b.current && !b.detached);
   const f = forgeForBranch(state.remotes, branch.name);
   showContextMenu(e, [
@@ -167,6 +174,8 @@ export function showRemoteBranchContextMenu(e, branch, refresh) {
       { separator: true },
       { label: `View Branch on ${forgeLabel(f)}`, action: () => openExternal(branchUrl(f, shortName)) },
     ] : []),
+    { separator: true },
+    { label: `Delete "${shortName}" from ${remote ? remote.name : 'the remote'}...`, disabled: !remote, action: () => deleteRemoteBranch(remote.name, shortName, refresh) },
   ]);
 }
 
@@ -181,6 +190,54 @@ async function trackRemoteBranch(remoteBranch, refresh) {
     await window.git.checkoutTracking(state.repoPath, remoteBranch);
     await refresh();
   } catch (err) { alert(err.message); }
+}
+
+// Reaches the server, unlike deleting a local branch: this removes it for
+// whoever else has it too, not just from this sidebar, so the confirm says
+// so rather than reading like the ordinary, private kind of delete.
+async function deleteRemoteBranch(remoteName, shortName, refresh) {
+  const ok = await showConfirm('Delete Remote Branch',
+    `Delete "${shortName}" from ${remoteName}? This removes it from the remote for everyone, not just here.`);
+  if (!ok) return;
+  try {
+    await window.git.deleteRemoteBranch(state.repoPath, remoteName, shortName);
+    await refresh();
+  } catch (err) { alert(err.message); }
+}
+
+// The remote's own row, right-clicked rather than one of its branches:
+// everything here changes the remote itself, not what is checked out, so
+// none of it touches the working copy.
+export function showRemoteContextMenu(e, remote, refresh) {
+  showContextMenu(e, [
+    { label: `Edit "${remote.name}" URL...`, action: async () => {
+      const url = await showModal('Edit Remote', `URL for "${remote.name}"`, remote.url);
+      if (!url || url === remote.url) return;
+      try { await window.git.setRemoteUrl(state.repoPath, remote.name, url); await refresh(); } catch (err) { alert(err.message); }
+    } },
+    { label: `Remove "${remote.name}"...`, action: async () => {
+      const ok = await showConfirm('Remove Remote',
+        `Remove "${remote.name}"? Its branches disappear from the sidebar, but nothing is deleted from the server itself.`);
+      if (!ok) return;
+      try { await window.git.removeRemote(state.repoPath, remote.name); await refresh(); } catch (err) { alert(err.message); }
+    } },
+  ]);
+}
+
+// The Remotes section header, not any one remote: a repository usually
+// arrives with its remote already configured (a clone sets it up on its
+// own), so this is the one action here without a row of its own to hang
+// off, and rare enough that it does not need a permanent button either.
+export function showRemotesSectionContextMenu(e, remotes, refresh) {
+  showContextMenu(e, [
+    { label: 'Add Remote...', action: async () => {
+      const name = await showModal('Add Remote', 'Remote name', remotes.length ? '' : 'origin');
+      if (!name) return;
+      const url = await showModal('Add Remote', `URL for "${name}"`);
+      if (!url) return;
+      try { await window.git.addRemote(state.repoPath, name, url); await refresh(); } catch (err) { alert(err.message); }
+    } },
+  ]);
 }
 
 export function showTagContextMenu(e, tag, refresh) {

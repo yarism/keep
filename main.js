@@ -291,6 +291,10 @@ ipcMain.handle('git-is-repo', (_, repoPath) => git.isRepo(repoPath));
 ipcMain.handle('git-access-problem', (_, repoPath) => git.accessProblem(repoPath));
 ipcMain.handle('git-tags', (_, repoPath) => git.tags(repoPath));
 ipcMain.handle('git-remotes', (_, repoPath) => git.remotes(repoPath));
+ipcMain.handle('git-add-remote', (_, repoPath, name, url) => git.addRemote(repoPath, name, url));
+ipcMain.handle('git-set-remote-url', (_, repoPath, name, url) => git.setRemoteUrl(repoPath, name, url));
+ipcMain.handle('git-remove-remote', (_, repoPath, name) => git.removeRemote(repoPath, name));
+ipcMain.handle('git-delete-remote-branch', (_, repoPath, remote, branch) => git.deleteRemoteBranch(repoPath, remote, branch));
 ipcMain.handle('git-stashes', (_, repoPath) => git.stashes(repoPath));
 ipcMain.handle('git-diff', async (_, repoPath, filePath, staged) => {
   console.log('[main] git-diff called:', filePath, 'staged:', staged);
