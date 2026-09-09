@@ -7,6 +7,7 @@ import { refreshHistory, resetHistory, setupHistorySearch, setupHistoryScope, se
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
 import { setupSidebarResize, setupPanelResize, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
+import { initAppIcon, syncAppIconFromSettings, setupAppIconPicker } from './modules/app-icon.js';
 import { setupCollapsibleSections } from './modules/sections.js';
 import { setupUpdates } from './modules/updates.js';
 import { setupRelease, releaseRunningHere, syncReleasePanel } from './modules/release.js';
@@ -23,6 +24,7 @@ import { createUnicodeToggle } from './modules/diff.js';
 // Before anything renders: the stored theme, read synchronously, so the window
 // never flashes the default palette on the way to the chosen one.
 initTheme();
+initAppIcon();
 hydrateIcons();
 
 // ── Refresh all data ──
@@ -365,6 +367,7 @@ function setupToolbar() {
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateIcons();
   setupThemePicker();
+  setupAppIconPicker();
   state.repositories = await window.git.loadRepos();
   const settings = await window.git.loadSettings();
   // Minutes between background fetches; 0 turns them off entirely.
@@ -373,6 +376,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ? configured
     : DEFAULT_AUTO_FETCH_MINUTES;
   syncThemeFromSettings(settings);
+  syncAppIconFromSettings(settings);
   if (settings.sidebarWidth) {
     $('#sidebar').style.width = settings.sidebarWidth + 'px';
   }
