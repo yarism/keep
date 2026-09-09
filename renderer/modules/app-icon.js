@@ -65,7 +65,7 @@ function selectIcon(id, { persist = true } = {}) {
     try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
     // Null rather than the id when it is the default, so that main has one
     // question to ask at launch (is there a chosen icon?) instead of having to
-    // know which of the eight the default is.
+    // know which of the nine the default is.
     window.git.saveSettings({ appIcon: isDefaultIcon(savedId) ? null : savedId });
   }
   renderIconPicker();
@@ -96,7 +96,7 @@ export function syncAppIconFromSettings(settings) {
 // ── The picker ──
 //
 // A grid of the icon itself rather than a row of coloured dots. There are only
-// eight, they are the same drawing at 30px that the Dock gets at 512, and the
+// nine, they are the same drawing at 30px that the Dock gets at 512, and the
 // thing being chosen is a picture: a swatch would be describing it instead of
 // showing it. Which is also why the chosen one is ringed rather than ticked.
 // A tick would sit on top of the very picture it is pointing at.

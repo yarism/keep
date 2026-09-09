@@ -105,8 +105,8 @@ test('normalizeIconId: an unknown or absent id falls back to the default', () =>
 test('drawKeepIcon: takes a palette or the id of one', () => {
   const byObject = fakeContext();
   const byId = fakeContext();
-  drawKeepIcon(byObject, 512, getIconPalette('ember'));
-  drawKeepIcon(byId, 512, 'ember');
+  drawKeepIcon(byObject, 512, getIconPalette('copper'));
+  drawKeepIcon(byId, 512, 'copper');
   assert.deepStrictEqual(byId.colours(), byObject.colours());
 });
 
