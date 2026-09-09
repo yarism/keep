@@ -1,8 +1,25 @@
 import { $, escapeHtml, state, switchView } from './state.js';
-import { showBranchContextMenu, showTagContextMenu, showRemoteBranchContextMenu, confirmCheckout } from './context-menu.js';
+import {
+  showBranchContextMenu, showTagContextMenu, showRemoteBranchContextMenu,
+  showRemoteContextMenu, showRemotesSectionContextMenu, confirmCheckout,
+} from './context-menu.js';
 import { icon } from '../icons.js';
 import { refreshHistory } from './history.js';
 import { trackingFor, trackingChips, updateSyncBadges } from './sync.js';
+
+// Adding a remote is rare enough — most repositories arrive with origin
+// already set by the clone that made them — that it does not earn a
+// permanent button the way adding a repository does. A right-click on the
+// section header, same as every other row-level action in this sidebar,
+// keeps it out of the way until it is wanted.
+export function setupRemotesSection(refresh) {
+  const header = $('#remotes-section-header');
+  if (!header) return;
+  header.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showRemotesSectionContextMenu(e, state.remotes, refresh);
+  });
+}
 
 // Matches on the data-branch attribute rather than a class so this covers local
 // branches, remote branches and tags — anything the sidebar can pin history to.
@@ -207,6 +224,7 @@ export async function refreshRemotes(refresh) {
         arrow.classList.toggle('open');
         branchContainer.hidden = isOpen;
       });
+      header.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteContextMenu(e, r, refresh); });
 
       remoteEl.appendChild(header);
       remoteEl.appendChild(branchContainer);

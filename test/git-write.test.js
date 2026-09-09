@@ -264,6 +264,59 @@ test('checkoutTracking: rejects a name that is not a remote-tracking branch', as
     /not a remote-tracking branch/i);
 });
 
+// ── managing remotes ──
+
+test('addRemote: adds a remote visible to remotes()', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+
+  await git.addRemote(repo, 'origin', remote);
+
+  assert.deepStrictEqual(await git.remotes(repo), [{ name: 'origin', url: remote }]);
+});
+
+test('setRemoteUrl: repoints an existing remote', async () => {
+  const repo = h.makeRepo();
+  const first = h.makeRepo();
+  const second = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', first);
+
+  await git.setRemoteUrl(repo, 'origin', second);
+
+  assert.deepStrictEqual(await git.remotes(repo), [{ name: 'origin', url: second }]);
+});
+
+test('removeRemote: drops the remote and its remote-tracking branches', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  assert.ok((await git.branches(repo)).some(b => b.isRemote), 'a remote-tracking branch exists first');
+
+  await git.removeRemote(repo, 'origin');
+
+  assert.deepStrictEqual(await git.remotes(repo), []);
+  assert.ok(!(await git.branches(repo)).some(b => b.isRemote), 'and its branches are gone with it');
+});
+
+test('deleteRemoteBranch: removes the branch from the remote and prunes it locally', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+  await git.push(repo, { setUpstream: true });
+  assert.ok((await git.branches(repo)).some(b => b.name === 'origin/feature'));
+
+  await git.deleteRemoteBranch(repo, 'origin', 'feature');
+
+  assert.strictEqual(h.git(remote, 'branch', '--list', 'feature').trim(), '',
+    'gone from the remote itself');
+  assert.ok(!(await git.branches(repo)).some(b => b.name === 'origin/feature'),
+    'and pruned from the local view of the remote');
+});
+
 test('renameBranch: renames without moving HEAD off it', async () => {
   const repo = h.makeRepo();
 

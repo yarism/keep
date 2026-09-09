@@ -542,6 +542,29 @@ exports.remotes = async (repoPath) => {
   return Object.entries(map).map(([name, url]) => ({ name, url }));
 };
 
+// Adding, repointing and removing a remote are all local config edits —
+// `.git/config` gains or loses a [remote "x"] block — with no network
+// contact at all, unlike the operations below that actually reach the
+// server. Removing one also drops every remote-tracking ref under its name,
+// which is what makes its branches disappear from the sidebar.
+exports.addRemote = (repoPath, name, url) => run(repoPath, ['remote', 'add', name, url]);
+exports.setRemoteUrl = (repoPath, name, url) => run(repoPath, ['remote', 'set-url', name, url]);
+exports.removeRemote = (repoPath, name) => run(repoPath, ['remote', 'remove', name]);
+
+// Unlike deleteBranch above, this reaches the server — it is someone else's
+// branch to lose as much as ours from here on, so it gets the same
+// non-interactive handling and explained failures as push/pull/fetch.
+exports.deleteRemoteBranch = async (repoPath, remote, branch) => {
+  const out = await runNetwork(repoPath, ['push', remote, '--delete', branch], 'Delete remote branch');
+  // Deleting it on the remote does not prune this repo's own remote-tracking
+  // ref for it; left alone, the sidebar would keep showing a branch that
+  // exists nowhere any more until the next fetch happens to notice. Best
+  // effort, and silent on failure: the branch is already gone from the
+  // remote either way, which is the part that actually matters.
+  await runNetwork(repoPath, ['remote', 'prune', remote], 'Prune').catch(() => {});
+  return out;
+};
+
 exports.stashes = async (repoPath) => {
   const out = await run(repoPath, ['stash', 'list', '--format=%gd %s']);
   return out.trim().split('\n').filter(Boolean).map(line => {
