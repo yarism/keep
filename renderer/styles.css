@@ -303,12 +303,12 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .theme-more .theme-check { color: var(--text-mute); }
 .theme-more:hover .theme-name, .theme-more:focus-visible .theme-name { color: var(--text); }
 
-/* The app icon picker, in the same popover under its own heading. Four across
-   and two down, which is the widest grid the popover holds without being told
-   to grow, and eight is all there are. */
+/* The app icon picker, in the same popover under its own heading. Three across
+   and three down: nine in a four-wide grid would leave one square sitting alone
+   on a row of its own, and a square is exactly what this should look like. */
 .app-icon-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   padding: 1px 5px 4px;
 }

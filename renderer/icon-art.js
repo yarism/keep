@@ -17,10 +17,22 @@
 // which leaves nothing for a relative specifier to resolve against.
 
 // A palette is three points on the diagonal: the light corner, the colour the
-// icon actually reads as, and the near-black it sinks into. Tailwind's 400, 600
-// and 950 of a hue, which is a ramp somebody already balanced. The middle stop
-// sits under the castle and carries the identity, and the outer two only have
-// to stay out of its way.
+// icon actually reads as, and the near-black it sinks into.
+//
+// They are not picked by eye. Indigo is the one that was drawn and tuned, so it
+// is the reference, and every other palette takes its lightness and its chroma
+// from indigo's three stops and changes only the hue. That is the whole rule,
+// and it is the reason the set looks like a set: a palette that drifts lighter
+// or greyer than indigo reads as washed out the moment the two sit side by side,
+// which is exactly what the first attempt at this did.
+//
+// It also decides which hues can be here at all. Orange peaks in colourfulness
+// around lightness 0.76 and yellow-green around 0.94, both far too pale to hold
+// a white castle; forced down to indigo's 0.51 they turn to brown and olive. So
+// the warm end is represented by copper, at the last hue that stays a colour
+// when it goes deep, and there is no yellow. Onyx is the other exception, a
+// near-neutral by design rather than a hue with the chroma squeezed out.
+//
 // The two shadows the drawing casts are derived from the dark stop, which is
 // what keeps a palette down to three colours. A palette may name them instead,
 // and indigo does: the derived pair lands a few points off the values the
@@ -28,21 +40,21 @@
 // the icon that ships.
 export const ICON_PALETTES = [
   // Indigo is the icon Keep has always had, so its stops are the literal ones
-  // from the original drawing rather than the 400/600/950 of the ramp. Anyone
-  // who never opens the picker keeps exactly this, to the pixel.
+  // from the original drawing rather than anything derived. Anyone who never
+  // opens the picker keeps exactly this, to the pixel.
   {
     id: 'indigo', name: 'Indigo', stops: ['#7a86f5', '#4f46e5', '#1e1b4b'],
     shadow: 'rgba(15, 10, 50, 0.4)', shade: 'rgba(10, 5, 40, 0.28)',
   },
-  { id: 'ocean', name: 'Ocean', stops: ['#38bdf8', '#0284c7', '#082f49'] },
-  { id: 'teal', name: 'Teal', stops: ['#2dd4bf', '#0d9488', '#042f2e'] },
-  { id: 'forest', name: 'Forest', stops: ['#34d399', '#059669', '#022c22'] },
-  { id: 'ember', name: 'Ember', stops: ['#fb923c', '#ea580c', '#431407'] },
-  { id: 'rose', name: 'Rose', stops: ['#fb7185', '#e11d48', '#4c0519'] },
-  { id: 'plum', name: 'Plum', stops: ['#c084fc', '#9333ea', '#3b0764'] },
-  { id: 'slate', name: 'Slate', stops: ['#94a3b8', '#475569', '#020617'] },
+  { id: 'plum', name: 'Plum', stops: ['#c76ac5', '#a50ba6', '#381038'] },
+  { id: 'rose', name: 'Rose', stops: ['#e56268', '#c00030', '#440b11'] },
+  { id: 'copper', name: 'Copper', stops: ['#eb8561', '#b9491c', '#3b190d'] },
+  { id: 'green', name: 'Green', stops: ['#45ac4e', '#007c1f', '#002d05'] },
+  { id: 'forest', name: 'Forest', stops: ['#00ab8d', '#007862', '#002b22'] },
+  { id: 'teal', name: 'Teal', stops: ['#00a2ce', '#007191', '#002836'] },
+  { id: 'ocean', name: 'Ocean', stops: ['#3995f3', '#0067ba', '#002447'] },
+  { id: 'onyx', name: 'Onyx', stops: ['#484d57', '#222428', '#070709'] },
 ];
-
 // What the app ships with, and what an install that has never chosen looks
 // like. Changing this changes nobody's icon on its own: a choice is only ever
 // recorded when it is made, so an absent one still lands here.
