@@ -161,8 +161,14 @@ jobs:
           [ -n "$MAC_CERT_P12" ] || exit 0
           for app in dist/mac*/Keep.app; do
             [ -d "$app" ] || { echo "::error::no built app at $app"; exit 1; }
+            # Passing the seal is not the question here: an ad-hoc signature
+            # verifies and satisfies its own designated requirement just as
+            # happily as a real one. Who signed it is the question.
             codesign --verify --strict --verbose=1 "$app"
-            codesign -dv "$app" 2>&1 | grep -q "Authority=Developer ID Application" \
+            # `-d --verbose=2`, not `-dv`. The authority chain is not printed at
+            # verbosity 1, so the shorter spelling reports nothing at all and
+            # fails a perfectly good build.
+            codesign -d --verbose=2 "$app" 2>&1 | grep -q "Authority=Developer ID Application" \
               || { echo "::error::$app is not signed with the Developer ID certificate"; exit 1; }
           done
 
