@@ -112,17 +112,75 @@ export function showBranchContextMenu(e, branch, refresh) {
     { separator: true },
     { label: 'Pull...', action: async () => { try { await window.git.pull(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Push...', action: async () => { try { await window.git.push(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
+    // Acts on whatever is checked out, same as Push above, not necessarily on
+    // the branch this menu was opened from. force-with-lease still refuses if
+    // the remote moved since the last fetch, so this warns about the ordinary
+    // case (overwriting your own history) and lets git itself catch the rest.
+    { label: 'Force Push...', action: async () => {
+      const ok = await showConfirm('Force Push',
+        'Force push the current branch? This can overwrite commits already on the remote.');
+      if (!ok) return;
+      try { await window.git.push(state.repoPath, { force: true }); await refresh(); } catch (err) { alert(err.message); }
+    }},
     ...forgeBranchItems(branch),
     { separator: true },
     { label: 'Merge With Revision...', disabled: branch.current, action: async () => { try { await window.git.merge(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Rebase On Revision...', disabled: branch.current, action: async () => { try { await window.git.rebase(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } }},
     { separator: true },
     { label: `Rename "${branch.name}"...`, action: async () => { const n = await showModal('Rename Branch', `New name for "${branch.name}"`, branch.name); if (n) { try { await window.git.renameBranch(state.repoPath, branch.name, n); await refresh(); } catch (err) { alert(err.message); } } }},
-    { label: `Delete "${branch.name}"...`, disabled: branch.current, action: async () => { if (confirm(`Delete branch "${branch.name}"?`)) { try { await window.git.deleteBranch(state.repoPath, branch.name); await refresh(); } catch (err) { alert(err.message); } } }},
+    { label: `Delete "${branch.name}"...`, disabled: branch.current, action: async () => {
+      const ok = await showConfirm('Delete Branch', `Delete branch "${branch.name}"?`);
+      if (!ok) return;
+      try {
+        await window.git.deleteBranch(state.repoPath, branch.name);
+        await refresh();
+      } catch (err) {
+        // git's exact refusal for a branch nothing else has fully merged —
+        // asserted in test/git-write.test.js, so this stays matched to it.
+        if (!/not fully merged/i.test(err.message)) { alert(err.message); return; }
+        const force = await showConfirm('Branch Not Merged',
+          `"${branch.name}" has commits no other branch has. Deleting it would lose them for good.\n\nDelete anyway?`);
+        if (!force) return;
+        try {
+          await window.git.deleteBranch(state.repoPath, branch.name, { force: true });
+          await refresh();
+        } catch (err2) { alert(err2.message); }
+      }
+    }},
     { separator: true },
     { label: `Create New Branch from "${branch.name}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from "${branch.name}")`); if (n) { try { await window.git.createBranch(state.repoPath, n, branch.name); await refresh(); } catch (err) { alert(err.message); } } }},
     { label: `Create New Tag from "${branch.name}"...`, action: async () => { const n = await showModal('Create Tag', `Tag name (from "${branch.name}")`); if (n) { try { await window.git.createTag(state.repoPath, n, branch.name); await refresh(); } catch (err) { alert(err.message); } } }},
   ]);
+}
+
+// `branch` is a remote-tracking branch here ("origin/feature", isRemote:
+// true) — never checked out itself, so merge/rebase/rename/delete make no
+// sense on it. What does is the one thing the sidebar could not do at all
+// before: get onto a local branch that follows it.
+export function showRemoteBranchContextMenu(e, branch, refresh) {
+  const shortName = remoteBranchName(state.remotes, branch.name, branch.name);
+  const current = state.branchList.find(b => b.current && !b.detached);
+  const f = forgeForBranch(state.remotes, branch.name);
+  showContextMenu(e, [
+    { label: `Check Out "${shortName}"`, disabled: Boolean(current && current.name === shortName), action: () => trackRemoteBranch(branch.name, refresh) },
+    ...(f ? [
+      { separator: true },
+      { label: `View Branch on ${forgeLabel(f)}`, action: () => openExternal(branchUrl(f, shortName)) },
+    ] : []),
+  ]);
+}
+
+// The same dirty-working-copy check confirmCheckout makes, then hands off to
+// git.js to decide whether a local branch needs creating or just attaching to.
+async function trackRemoteBranch(remoteBranch, refresh) {
+  if (await hasDirtyFiles()) {
+    const ok = await showConfirm('Uncommitted Changes', `You have uncommitted changes. Checking out "${remoteBranch}" may discard them.\n\nContinue?`);
+    if (!ok) return;
+  }
+  try {
+    await window.git.checkoutTracking(state.repoPath, remoteBranch);
+    await refresh();
+  } catch (err) { alert(err.message); }
 }
 
 export function showTagContextMenu(e, tag, refresh) {

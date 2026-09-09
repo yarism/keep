@@ -287,6 +287,41 @@ async function runAction(selector, label, work) {
   }
 }
 
+// The one rejection a push can talk itself out of: the remote has commits
+// this branch does not, usually because it was just amended or rebased, or
+// because someone else pushed to it. Git's own refusal already names this
+// plainly, so this only recognises it, not rewrites it. Every other failure
+// (a bad credential, an unreachable host) is left to runAction as before.
+const REJECTED_PUSH = /\[rejected\]|non-fast-forward|tip of your current branch is behind/i;
+
+// Push, with the standalone busy/toast/refresh handling runAction also does,
+// but able to retry itself once: on the rejection above it asks whether to
+// force push instead of just reporting the failure, since Keep can carry
+// that out directly rather than sending the user to a terminal for it.
+async function pushOnce(opts, label) {
+  const status = busyToast(`${label}…`);
+  try {
+    const output = await window.git.push(state.repoPath, opts);
+    await refresh();
+    const summary = describeResult(label, output);
+    status.done(summary);
+    notifyAction(label, true, summary);
+  } catch (e) {
+    const message = e.message.trim() || `${label} failed`;
+    await refresh();
+    if (!opts.force && REJECTED_PUSH.test(message)) {
+      status.dismiss();
+      const ok = await showConfirm('Push Rejected',
+        `${message}\n\nForce push to overwrite the remote with this branch's history? ` +
+        'This can discard commits pushed there by someone else.');
+      if (ok) return pushOnce({ force: true }, 'Force Push');
+      return;
+    }
+    status.fail(message);
+    notifyAction(label, false, message);
+  }
+}
+
 // Every branch the repo has is already known here, so "which branch?" is a
 // choice to be picked rather than a name to be spelled correctly from memory.
 // The branch you are on is left out: neither merge nor rebase can take it.
@@ -317,17 +352,30 @@ function setupToolbar() {
   $('#btn-pull').addEventListener('click', () =>
     runAction('#btn-pull', 'Pull', () => window.git.pull(state.repoPath)));
   $('#btn-push').addEventListener('click', async () => {
+    const btn = $('#btn-push');
+    if (btn.dataset.busy) return;
     // A branch with no upstream cannot simply be pushed: git refuses and prints
     // the --set-upstream incantation. Offer to do that instead of relaying the
     // refusal, since publishing the branch is plainly what was meant.
     const t = headTracking();
+    let opts = {}, label = 'Push';
     if (t && !t.upstream) {
       const ok = await showConfirm('Publish Branch',
         `"${t.name}" is not on any remote yet.\n\nPush it and set it to track the remote branch?`);
       if (!ok) return;
-      return runAction('#btn-push', 'Publish', () => window.git.push(state.repoPath, { setUpstream: true }));
+      opts = { setUpstream: true }; label = 'Publish';
     }
-    runAction('#btn-push', 'Push', () => window.git.push(state.repoPath));
+    // Not runAction: a rejected push (see pushOnce) has a retry runAction has
+    // nowhere to hang, so the busy/toast bookkeeping is inlined here instead,
+    // held across however many attempts pushOnce ends up making.
+    btn.dataset.busy = '1';
+    btn.classList.add('busy');
+    try {
+      await pushOnce(opts, label);
+    } finally {
+      delete btn.dataset.busy;
+      btn.classList.remove('busy');
+    }
   });
   $('#btn-stash').addEventListener('click', async () => {
     const msg = await showModal('Save Stash', 'Stash message (optional)', '', { allowEmpty: true });

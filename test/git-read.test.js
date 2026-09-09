@@ -271,6 +271,11 @@ test('log: labels the refs sitting on a commit', async () => {
 test('log: a branch with a slash in its name is not mistaken for a remote', async () => {
   const repo = h.makeRepo();
   const remote = h.makeRepo();
+  // A differently-named remote branch, not "main": repo and remote share a
+  // commit hash by construction (see helpers/repo.js), which would otherwise
+  // make origin/main decorate the very commit local main already does, and
+  // the dedup covered below would fold it away before this gets to check it.
+  h.git(remote, 'branch', 'only-remote');
   h.git(repo, 'remote', 'add', 'origin', remote);
   h.git(repo, 'fetch', '-q', 'origin');
   h.git(repo, 'branch', 'feature/thing');
@@ -279,7 +284,53 @@ test('log: a branch with a slash in its name is not mistaken for a remote', asyn
   const byName = Object.fromEntries(head.refs.map(r => [r.name, r.type]));
 
   assert.strictEqual(byName['feature/thing'], 'branch');
-  assert.strictEqual(byName['origin/main'], 'remote');
+  assert.strictEqual(byName['origin/only-remote'], 'remote');
+});
+
+// ── one branch, decorated once ──
+//
+// A local branch and the remote it is up to date with land on the same
+// commit under two names. Showing both is what made the tip of a synced
+// branch the widest, most crowded row in the list for no new information —
+// the header above the list already says "up to date".
+
+test('log: a branch in sync with its remote decorates once, not twice', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+  await git.push(repo, { setUpstream: true });
+
+  const [head] = await git.log(repo);
+  const byName = Object.fromEntries(head.refs.map(r => [r.name, r.type]));
+
+  assert.strictEqual(byName['feature'], 'head', 'the local branch is still shown');
+  assert.strictEqual(byName['origin/feature'], undefined,
+    'not repeated as a second, near-identical chip once it is also on the remote');
+});
+
+test('log: a branch ahead of its remote still shows the remote chip, where it actually is', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+  await git.push(repo, { setUpstream: true });
+
+  // One more local commit the remote does not have yet.
+  h.write(repo, 'feature.txt', 'y\n');
+  h.commitAll(repo, 'a second commit, not yet pushed');
+
+  const log = await git.log(repo);
+  const tip = Object.fromEntries(log[0].refs.map(r => [r.name, r.type]));
+  const previous = Object.fromEntries(log[1].refs.map(r => [r.name, r.type]));
+
+  assert.strictEqual(tip['feature'], 'head', 'the branch itself has moved on');
+  assert.strictEqual(tip['origin/feature'], undefined, 'the remote has not, so it is not shown here');
+  assert.strictEqual(previous['origin/feature'], 'remote', 'shown on the commit it actually still points to');
 });
 
 test('log: a subject containing the field separator characters still parses', async () => {
