@@ -1,5 +1,5 @@
 import { $, escapeHtml, state, switchView } from './state.js';
-import { showBranchContextMenu, showTagContextMenu, confirmCheckout } from './context-menu.js';
+import { showBranchContextMenu, showTagContextMenu, showRemoteBranchContextMenu, confirmCheckout } from './context-menu.js';
 import { icon } from '../icons.js';
 import { refreshHistory } from './history.js';
 import { trackingFor, trackingChips, updateSyncBadges } from './sync.js';
@@ -197,6 +197,7 @@ export async function refreshRemotes(refresh) {
           highlightBranch(b.name);
           refreshHistory(refresh, b.name);
         });
+        branchEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteBranchContextMenu(e, b, refresh); });
         branchContainer.appendChild(branchEl);
       });
 

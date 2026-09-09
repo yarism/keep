@@ -190,6 +190,80 @@ test('deleteBranch: refuses an unmerged branch (-d, not -D)', async () => {
     'the branch survives the refusal');
 });
 
+test('deleteBranch: force deletes an unmerged branch anyway (-D)', async () => {
+  const repo = h.makeRepo();
+  await git.createBranch(repo, 'unmerged');
+  h.write(repo, 'work.txt', 'x\n');
+  h.commitAll(repo, 'unmerged work');
+  await git.checkout(repo, 'main');
+
+  await git.deleteBranch(repo, 'unmerged', { force: true });
+
+  assert.ok(!(await git.branches(repo)).some(b => b.name === 'unmerged'));
+});
+
+// ── tracking a remote branch ──
+//
+// The scenario the sidebar's remote-branches section exists for: a branch
+// nobody has checked out here yet, known only because it was fetched.
+
+test('checkoutTracking: creates and checks out a local branch when none exists yet', async () => {
+  const remote = h.makeRepo();
+  const publisher = h.makeRepo();
+  h.git(publisher, 'remote', 'add', 'origin', remote);
+  h.git(publisher, 'checkout', '-q', '-b', 'feature');
+  h.write(publisher, 'feature.txt', 'x\n');
+  h.commitAll(publisher, 'feature work');
+  h.git(publisher, 'push', '-q', 'origin', 'feature');
+
+  const repo = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  assert.ok(!(await git.branches(repo)).some(b => b.name === 'feature' && !b.isRemote),
+    'no local branch yet, only the fetched remote-tracking one');
+
+  await git.checkoutTracking(repo, 'origin/feature');
+
+  const feature = (await git.branches(repo)).find(b => b.name === 'feature');
+  assert.ok(feature, 'a local branch was created');
+  assert.strictEqual(feature.current, true);
+  assert.strictEqual(feature.upstream, 'origin/feature');
+});
+
+test('checkoutTracking: switches to an existing local branch and attaches tracking', async () => {
+  const remote = h.makeRepo();
+  const publisher = h.makeRepo();
+  h.git(publisher, 'remote', 'add', 'origin', remote);
+  h.git(publisher, 'checkout', '-q', '-b', 'feature');
+  h.write(publisher, 'feature.txt', 'x\n');
+  h.commitAll(publisher, 'feature work');
+  h.git(publisher, 'push', '-q', 'origin', 'feature');
+
+  // repo already has its own "feature", made independently and never pointed
+  // at any remote — the ordinary case of a branch that happens to share a name.
+  const repo = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'fetch', '-q', 'origin');
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.git(repo, 'checkout', '-q', 'main');
+  const before = (await git.branches(repo)).find(b => b.name === 'feature');
+  assert.strictEqual(before.upstream, null);
+
+  await git.checkoutTracking(repo, 'origin/feature');
+
+  const after = (await git.branches(repo)).find(b => b.name === 'feature');
+  assert.strictEqual(after.current, true);
+  assert.strictEqual(after.upstream, 'origin/feature');
+});
+
+test('checkoutTracking: rejects a name that is not a remote-tracking branch', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', h.makeRepo());
+
+  await assert.rejects(() => git.checkoutTracking(repo, 'not-a-remote/feature'),
+    /not a remote-tracking branch/i);
+});
+
 test('renameBranch: renames without moving HEAD off it', async () => {
   const repo = h.makeRepo();
 
@@ -749,6 +823,67 @@ test('push: a plain push of an unpublished branch is refused, as git does', asyn
 
   // The UI offers to publish precisely because this is what happens otherwise.
   await assert.rejects(() => git.push(repo), /upstream/i);
+});
+
+// ── force pushing ──
+//
+// force-with-lease is the whole point of offering a force push from the UI at
+// all: it only overwrites what Keep's own remote-tracking ref last saw, so an
+// amend of your own work behaves differently from a push that would also
+// discard someone else's, and only the first of those is meant to go through
+// without a second look.
+
+test('push: force pushes a rewritten history a plain push would reject', async () => {
+  const repo = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+  await git.push(repo, { setUpstream: true });
+
+  h.write(repo, 'feature.txt', 'y\n');
+  h.git(repo, 'add', '-A');
+  h.git(repo, 'commit', '-q', '--amend', '-m', 'feature work, amended');
+
+  // The remote still has the pre-amend commit, which this branch's history no
+  // longer contains — exactly what a plain push refuses.
+  await assert.rejects(() => git.push(repo), /rejected|non-fast-forward/i);
+
+  await git.push(repo, { force: true });
+
+  assert.match(h.git(remote, 'log', '-1', '--format=%s', 'feature'), /amended/);
+});
+
+test('push: force still refuses when the remote moved since the last fetch', async () => {
+  const repo = h.makeRepo();
+  const other = h.makeRepo();
+  const remote = h.makeRepo();
+  h.git(repo, 'remote', 'add', 'origin', remote);
+  h.git(repo, 'checkout', '-q', '-b', 'feature');
+  h.write(repo, 'feature.txt', 'x\n');
+  h.commitAll(repo, 'feature work');
+  await git.push(repo, { setUpstream: true });
+
+  // A second checkout of the same remote pushes to `feature` first...
+  h.git(other, 'remote', 'add', 'origin', remote);
+  h.git(other, 'fetch', '-q', 'origin', 'feature:feature');
+  h.git(other, 'checkout', '-q', 'feature');
+  h.write(other, 'elsewhere.txt', 'z\n');
+  h.commitAll(other, "someone else's work");
+  h.git(other, 'push', '-q', 'origin', 'feature');
+
+  // ...which `repo` never fetches before amending its own, now-stale, tip.
+  h.write(repo, 'feature.txt', 'y\n');
+  h.git(repo, 'add', '-A');
+  h.git(repo, 'commit', '-q', '--amend', '-m', 'feature work, amended');
+
+  // force-with-lease checks the remote-tracking ref repo last saw against what
+  // the remote actually has, and refuses on the mismatch — a plain --force
+  // would not have noticed and would have overwritten the other push.
+  await assert.rejects(() => git.push(repo, { force: true }), /stale info|rejected/i);
+  assert.match(h.git(remote, 'log', '-1', '--format=%s', 'feature'), /someone else/,
+    "the other push survives what force-with-lease refused to overwrite");
 });
 
 // ── hunk identity ──

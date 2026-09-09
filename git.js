@@ -244,7 +244,7 @@ const LOG_FORMAT = '%H%x1f%an%x1f%ae%x1f%aI%x1f%P%x1f%D%x1f%s%x1e';
 // slash, since a local branch may well be called `feature/thing`.
 function parseDecoration(decoration, remoteNames) {
   if (!decoration) return [];
-  return decoration.split(',').map(s => s.trim()).filter(Boolean).map(ref => {
+  const refs = decoration.split(',').map(s => s.trim()).filter(Boolean).map(ref => {
     if (ref.startsWith('tag: ')) return { name: ref.slice(5), type: 'tag' };
     if (ref.startsWith('HEAD -> ')) return { name: ref.slice(8), type: 'head' };
     if (ref === 'HEAD') return { name: 'HEAD', type: 'head' };
@@ -254,6 +254,17 @@ function parseDecoration(decoration, remoteNames) {
     if (remoteNames.some(r => ref.startsWith(r + '/'))) return { name: ref, type: 'remote' };
     return { name: ref, type: 'branch' };
   }).filter(Boolean);
+
+  // A local branch that is up to date with its remote decorates this same
+  // commit twice: "feature" and "origin/feature", one fact in two chips, the
+  // widest a commit row has. Longest matching remote name wins, the same
+  // tie-break used everywhere else a remote-tracking name gets split.
+  const localNames = new Set(refs.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.name));
+  return refs.filter(r => {
+    if (r.type !== 'remote') return true;
+    const remote = remoteNames.filter(n => r.name.startsWith(n + '/')).sort((a, b) => b.length - a.length)[0];
+    return !remote || !localNames.has(r.name.slice(remote.length + 1));
+  });
 }
 
 function parseLog(out, remoteNames) {
@@ -636,7 +647,35 @@ exports.createBranch = (repoPath, name, from) => {
   if (from) args.push(from);
   return run(repoPath, args);
 };
-exports.deleteBranch = (repoPath, name) => run(repoPath, ['branch', '-d', name]);
+
+// Check out a local branch that tracks a remote-tracking one, e.g. right-
+// clicking "origin/feature" in the sidebar. Where no local "feature" exists
+// yet, --track creates it in the same step, named by stripping the remote's
+// own prefix off, the same rule the sidebar already displays it by. Where one
+// already exists, this only switches to it and points its upstream here,
+// rather than refusing the way a bare `checkout --track` would: the ask reads
+// the same in both cases, and a local branch already named after this one is
+// almost always the one it belongs to.
+exports.checkoutTracking = async (repoPath, remoteBranch) => {
+  // Longest match wins, the same tie-break as the renderer's own
+  // remoteForBranch: a remote's own name can contain a slash, so the shortest
+  // matching prefix is not always the right one to strip.
+  const remote = (await remoteNames(repoPath))
+    .filter(r => remoteBranch.startsWith(r + '/'))
+    .sort((a, b) => b.length - a.length)[0];
+  if (!remote) throw new Error(`"${remoteBranch}" is not a remote-tracking branch.`);
+  const shortName = remoteBranch.slice(remote.length + 1);
+  const exists = await run(repoPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${shortName}`])
+    .then(() => true, () => false);
+  if (!exists) return run(repoPath, ['checkout', '--track', remoteBranch]);
+  await run(repoPath, ['checkout', shortName]);
+  return run(repoPath, ['branch', `--set-upstream-to=${remoteBranch}`, shortName]);
+};
+// -d refuses a branch that still holds commits no other ref has; -D deletes it
+// anyway. Keep only ever sends force after the caller has already seen that
+// refusal and asked again, so losing commits this way is always a second,
+// explicit choice, never the first thing tried.
+exports.deleteBranch = (repoPath, name, opts = {}) => run(repoPath, ['branch', opts.force ? '-D' : '-d', name]);
 exports.renameBranch = (repoPath, oldName, newName) => run(repoPath, ['branch', '-m', oldName, newName]);
 exports.merge = (repoPath, branch) => runReporting(repoPath, ['merge', branch]);
 exports.rebase = (repoPath, branch) => runReporting(repoPath, ['rebase', branch]);
@@ -645,6 +684,13 @@ exports.pull = (repoPath) => runNetwork(repoPath, ['pull'], 'Pull');
 // how, which is a poor first experience for "I made a branch and want it on the
 // server". `publish` is that explanation carried out.
 exports.push = async (repoPath, opts = {}) => {
+  // --force-with-lease, not --force: it refuses unless the remote-tracking ref
+  // Keep last fetched still matches what the remote actually has, so a push
+  // that landed there since (from another machine, or another person on a
+  // shared branch) is not silently overwritten. Plain --force cannot tell "my
+  // history should win" apart from "I have not looked in a while," and the UI
+  // only ever offers this after a plain push was already rejected once.
+  if (opts.force) return runNetwork(repoPath, ['push', '--force-with-lease'], 'Force push');
   if (!opts.setUpstream) return runNetwork(repoPath, ['push'], 'Push');
   const remote = (await remoteNames(repoPath))[0] || 'origin';
   const branch = (await run(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
