@@ -280,7 +280,18 @@ function renderTracking(branchName) {
   if (!el) return;
   const t = branchName === null ? headTracking() : trackingFor(branchName);
   if (!t) { el.hidden = true; el.innerHTML = ''; return; }
-  const upstream = t.upstream ? `<span class="track-upstream">${escapeHtml(t.upstream)}</span>` : '';
+  // The upstream's own name is almost always the branch's own name again,
+  // just under a remote prefix — "origin/feature" next to a label that
+  // already says "feature". That is two lines of the same word wrapping in a
+  // header already crowded with the sync chip and the scope toggle, for a
+  // branch name long enough to wrap once on its own. Only the remote prefix
+  // is new information then, so only that much is shown; the full upstream
+  // name earns its place back the one time it actually differs (a rename
+  // after publishing, or a push to a differently named branch).
+  const remotePrefix = t.upstream && t.upstream.endsWith('/' + t.name)
+    ? t.upstream.slice(0, -(t.name.length + 1)) : null;
+  const upstreamLabel = remotePrefix !== null ? remotePrefix : t.upstream;
+  const upstream = upstreamLabel ? `<span class="track-upstream">${escapeHtml(upstreamLabel)}</span>` : '';
   el.innerHTML = upstream + trackingChips(t, { showSynced: true, showUnpublished: true });
   el.hidden = !el.innerHTML;
 }
