@@ -1346,7 +1346,17 @@ body.decode-unicode .uni-dec { display: inline; }
 .track-chip.ahead { background: var(--tint-accent-strong); color: var(--accent); }
 .track-chip.behind { background: color-mix(in srgb, var(--yellow) 22%, transparent); color: var(--yellow); }
 .track-chip.gone { background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red); }
-.track-chip.synced, .track-chip.none { color: var(--text-mute); font-weight: 500; }
+/* Same outline treatment as .unpublished below: every other variant is a
+ * filled, coloured pill, so a plain word with none looked like stray text
+ * rather than a chip, especially next to .track-upstream right before it,
+ * which is unpadded text too, in a different font. A border is enough to
+ * read as "chip" without implying anything is wrong, which a fill would. */
+.track-chip.synced, .track-chip.none {
+  color: var(--text-dim);
+  border: 1px solid color-mix(in srgb, var(--text-mute) 45%, transparent);
+  font-weight: 600;
+  padding: 0 5px;
+}
 
 .branch-item .branch-name { margin-right: auto; }
 
