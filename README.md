@@ -50,6 +50,8 @@ warning appears.
 - Remote branches visible under each remote
 - Stash support — save, apply, drop
 - Merge, rebase, cherry-pick, and revert operations
+- Removing the last commit, or resetting a branch back to an earlier one, with
+  the changes kept as uncommitted work
 - Tag creation
 - Multi-repository support
 - Detached HEAD state handling

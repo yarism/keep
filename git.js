@@ -746,6 +746,13 @@ exports.stashSave = (repoPath, message) => {
 exports.stashApply = (repoPath, index) => run(repoPath, ['stash', 'apply', `stash@{${index}}`]);
 exports.stashDrop = (repoPath, index) => run(repoPath, ['stash', 'drop', `stash@{${index}}`]);
 exports.revert = (repoPath, hash) => run(repoPath, ['revert', '--no-edit', hash]);
+
+// Move the current branch back onto `hash`. --mixed, always: the commits that
+// come off leave their changes behind in the working copy as uncommitted work,
+// so a reset started from the context menu can be re-committed or discarded
+// file by file afterwards. --hard is the version that throws that work away,
+// and nothing in Keep asks for it.
+exports.reset = (repoPath, hash) => run(repoPath, ['reset', '--mixed', hash]);
 // Copy one commit onto the current branch. Reporting, because a cherry-pick
 // that stops on a conflict says why on stderr, and that sentence is the whole
 // explanation the UI has to offer before the conflict banner takes over.
