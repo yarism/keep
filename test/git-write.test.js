@@ -464,6 +464,40 @@ test('revert: adds an inverse commit without prompting for a message', async () 
   assert.match(head.subject, /^Revert "add a mistake"$/);
 });
 
+test('reset: moves the branch back and keeps the changes in the working copy', async () => {
+  const repo = h.makeRepo();
+  const base = h.git(repo, 'rev-parse', 'HEAD').trim();
+  h.write(repo, 'later.txt', 'work in progress\n');
+  h.commitAll(repo, 'a commit to take off');
+
+  await git.reset(repo, base);
+
+  const [head] = await git.log(repo, null, 1);
+  assert.strictEqual(head.hash, base, 'the branch tip is the commit reset to');
+  assert.ok(h.exists(repo, 'later.txt'), 'the file the commit added is still there');
+  assert.partialDeepStrictEqual(await statusOf(repo, 'later.txt'), [
+    { status: 'untracked', staged: false },
+  ]);
+});
+
+test('reset: leaves uncommitted work alone', async () => {
+  const repo = h.makeRepo();
+  const base = h.git(repo, 'rev-parse', 'HEAD').trim();
+  h.write(repo, 'committed.txt', 'committed\n');
+  h.commitAll(repo, 'a commit to take off');
+  h.write(repo, 'README.md', '# edited but never committed\n');
+
+  await git.reset(repo, base);
+
+  assert.strictEqual(h.read(repo, 'README.md'), '# edited but never committed\n');
+});
+
+test('reset: rejects a hash that is not a commit', async () => {
+  const repo = h.makeRepo();
+
+  await assert.rejects(() => git.reset(repo, 'deadbee'));
+});
+
 test('createTag: tags HEAD when no ref is given', async () => {
   const repo = h.makeRepo();
 

@@ -13,7 +13,8 @@ needed. `npm run test:watch` reruns on change.
 | File | Covers |
 | --- | --- |
 | `git-read.test.js` | `git.js` read paths: status/log/branch/tag/remote/stash/diff parsing, commit detail and file lists, log search, the repo fingerprint |
-| `git-write.test.js` | `git.js` write paths: stage/unstage/commit, branch create-delete-rename, merge/rebase, stash, revert, tag, discard, hunk staging |
+| `git-write.test.js` | `git.js` write paths: stage/unstage/commit, branch create-delete-rename, merge/rebase, stash, revert, reset, tag, discard, hunk staging |
+| `reset-plan.test.mjs` | `renderer/modules/reset-plan.js`: which commits a reset takes off the branch, and when the loaded history cannot say |
 | `state.test.mjs` | `renderer/modules/state.js`: HTML escaping, the titlebar string, and the branch/tag pin reconciliation rules |
 | `network-errors.test.mjs` | `git.js` network failures: the sentence a refused credential, locked key, unverified host, timeout or outage turns into |
 

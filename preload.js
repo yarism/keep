@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('git', {
   stashApply: (p, idx) => ipcRenderer.invoke('git-stash-apply', p, idx),
   stashDrop: (p, idx) => ipcRenderer.invoke('git-stash-drop', p, idx),
   revert: (p, hash) => ipcRenderer.invoke('git-revert', p, hash),
+  reset: (p, hash) => ipcRenderer.invoke('git-reset', p, hash),
   cherryPick: (p, hash) => ipcRenderer.invoke('git-cherry-pick', p, hash),
   createTag: (p, name, ref) => ipcRenderer.invoke('git-create-tag', p, name, ref),
   deleteTag: (p, name) => ipcRenderer.invoke('git-delete-tag', p, name),

@@ -5,6 +5,7 @@ import {
   newPullRequestUrl, branchUrl, commitUrl, pullRequestsUrl,
 } from './forge.js';
 import { watchBuild } from './build-watch.js';
+import { commitsRemovedByReset } from './reset-plan.js';
 
 async function hasDirtyFiles() {
   try {
@@ -277,6 +278,77 @@ export function showTagContextMenu(e, tag, refresh) {
   ]);
 }
 
+// Long subjects are the norm, and a confirmation that wraps for four lines gets
+// skimmed instead of read.
+function shorten(text, max = 52) {
+  const s = (text || '').trim();
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
+}
+
+// Moving a branch backwards is the one thing in this menu that unmakes commits,
+// so it is only offered when the history already on screen can say exactly what
+// would come off: a branch is checked out, nothing else is half-finished, and
+// every affected commit is loaded.
+//
+// On the tip commit the question people actually ask is "get rid of this one",
+// so that case resets to the parent and is called Remove. Further down, the
+// branch moves onto the commit that was clicked, which is what reset means
+// everywhere else. Either way the changes survive as uncommitted work: see
+// git.reset(), which is --mixed and has no --hard to ask for.
+function resetCommitItems(commit, refresh) {
+  // A search result set is not a contiguous slice of history, so the walk below
+  // would be counting rows that happen to match rather than rows in the way.
+  if (state.searching) return [];
+  if (state.repoState.kind) return [];
+  const current = state.branchList.find(b => b.current);
+  if (!current || current.detached) return [];
+  const head = state.commits.find(c => c.refs.some(r => r.type === 'head' && r.name === current.name));
+  if (!head) return [];
+
+  const isTip = commit.hash === head.hash;
+  // The very first commit in a repository has no parent to fall back to.
+  const target = isTip ? commit.parents[0] : commit.hash;
+  if (!target) return [];
+  const dropped = commitsRemovedByReset(state.commits, head.hash, target);
+  if (!dropped || !dropped.length) return [];
+
+  const n = dropped.length;
+  const h = target.substring(0, 7);
+  const subject = shorten((state.commits.find(c => c.hash === dropped[0]) || {}).subject);
+  const changes = (n === 1 ? 'Its' : 'Their')
+    + ' changes stay in the working copy as uncommitted changes, so nothing is lost.';
+  // The same rule as the amend warning: rewriting is free until the commits
+  // have left the machine. With no remote configured, nothing is known to be
+  // pushed and the warning would fire on every commit in the repository.
+  const published = state.remotes.length > 0 && dropped.some(hash => !state.unpushed.has(hash));
+  const warning = published
+    ? `\n\n${n === 1 ? 'This commit is' : 'Some of these commits are'} already on a remote, `
+      + 'and the next push will be rejected unless it is forced.'
+    : '';
+  const reset = async () => {
+    try { await window.git.reset(state.repoPath, target); await refresh(); }
+    catch (err) { alert(err.message); }
+  };
+
+  if (isTip) {
+    return [{ label: `Remove "${commit.hash.substring(0, 7)}"...`, action: async () => {
+      const ok = await showConfirm('Remove Commit',
+        (n === 1
+          ? `Take "${subject}" off "${current.name}"?`
+          : `Take "${subject}" and the ${n - 1} commits it merged in off "${current.name}"?`)
+        + `\n\nThe branch moves back to "${h}". ${changes}${warning}`);
+      if (ok) await reset();
+    } }];
+  }
+  return [{ label: `Reset "${current.name}" to "${h}"...`, action: async () => {
+    const ok = await showConfirm('Reset Branch',
+      `Move "${current.name}" back to "${h}"?\n\n`
+      + `${n === 1 ? 'One commit comes' : `${n} commits come`} off the branch, `
+      + `starting with "${subject}". ${changes}${warning}`);
+    if (ok) await reset();
+  } }];
+}
+
 export function showCommitContextMenu(e, commit, refresh) {
   const h = commit.hash.substring(0, 7);
   showContextMenu(e, [
@@ -297,6 +369,7 @@ export function showCommitContextMenu(e, commit, refresh) {
       catch (err) { alert(err.message); await refresh(); }
     }},
     { label: `Revert "${h}"...`, action: async () => { const ok = await showConfirm('Revert Commit', `Create a new commit that undoes changes from "${h}"?`); if (!ok) return; try { await window.git.revert(state.repoPath, commit.hash); await refresh(); } catch (err) { alert(err.message); } }},
+    ...resetCommitItems(commit, refresh),
     { separator: true },
     { label: `Create New Branch from "${h}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from ${h})`); if (n) { try { await window.git.createBranch(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
     { label: `Create New Tag from "${h}"...`, action: async () => { const n = await showModal('Create Tag', `Tag name (from ${h})`); if (n) { try { await window.git.createTag(state.repoPath, n, commit.hash); await refresh(); } catch (err) { alert(err.message); } } }},
