@@ -1013,7 +1013,12 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   padding: 0 5px;
 }
 
-#commit-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+/* The row wraps rather than overflows. At the panel's narrowest the toggle and
+ * the two buttons need more room than the box has even with their padding
+ * gone, so below that the buttons drop to a line of their own, still on the
+ * right. A label never breaks inside its button: "Stage" over "All" reads as
+ * a bug, not as a narrow panel. */
+#commit-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .commit-buttons { display: flex; gap: 8px; margin-left: auto; }
 #commit-actions button {
   background: var(--bg-hover);
@@ -1025,6 +1030,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-size: var(--fs-base);
   font-family: inherit;
   font-weight: 500;
+  white-space: nowrap;
 }
 #commit-actions button:hover:not(:disabled) { background: var(--bg-active); }
 #btn-commit {
