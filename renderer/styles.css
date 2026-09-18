@@ -897,6 +897,8 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
+  /* Says something about the file without being part of it. */
+  user-select: none;
 }
 .conflict-line {
   display: flex;
@@ -1086,6 +1088,8 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-size: var(--fs-xs);
   font-family: var(--font-ui);
   font-weight: 500;
+  /* Controls, not text of the file: Select All over a diff leaves them out. */
+  user-select: none;
 }
 .diff-hunk-header button.hunk-discard:hover { background: var(--red); color: var(--on-status); }
 .diff-hunk-header button.hunk-stage:hover { background: var(--accent); color: var(--on-accent); }
@@ -2402,6 +2406,9 @@ body.decode-unicode .uni-dec { display: inline; }
   cursor: pointer;
   font-size: var(--fs-code-sm);
   opacity: 0;
+  /* One of these sits on every row, so a copied diff would carry a "+" per
+   * line if they could be selected. */
+  user-select: none;
 }
 .diff-line.commentable:hover .review-add-btn,
 .review-add-btn:focus-visible { opacity: 1; }

@@ -20,6 +20,7 @@ import { busyToast, toast } from './modules/toast.js';
 import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
 import { createUnicodeToggle } from './modules/diff.js';
+import { setupSelectAll } from './modules/select-all.js';
 
 // Before anything renders: the stored theme, read synchronously, so the window
 // never flashes the default palette on the way to the chosen one.
@@ -459,6 +460,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupHistoryScope(refresh, settings);
   setupPullRequests();
   $('#wc-diff-panel .panel-header').appendChild(createUnicodeToggle($('#diff-content')));
+  setupSelectAll();
   await restoreLastRepo(settings);
 });
 

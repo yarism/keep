@@ -284,6 +284,29 @@ function handleFileClick(idx, e) {
   renderFileList();
 }
 
+// Every row at once: what Select All means while the list, rather than a diff,
+// is where the user is standing. The diff pane stays on the file it was showing.
+export function selectAllFiles() {
+  state.statusFiles.forEach((_, idx) => _selectedIndices.add(idx));
+  renderFileList();
+}
+
+// A click in the panel that lands on no file lets go of them all, the way a
+// click on the empty part of any list does. That includes the file in the diff
+// pane: left standing, it would be a detail with no row to belong to. The
+// commit box is not part of this. Clicking into it is how a message gets
+// typed, and that is no reason to lose the files picked out for it.
+function setupDeselect() {
+  $('#wc-files-panel').addEventListener('click', (e) => {
+    if (e.target.closest('.file-item, #commit-box')) return;
+    if (!_selectedIndices.size && !state.selectedFile) return;
+    _selectedIndices.clear();
+    _lastClickedIndex = null;
+    renderFileList();
+    showNoFile();
+  });
+}
+
 async function selectFile(f) {
   state.selectedFile = fileKey(f);
   $('#diff-filename').textContent = f.filePath;
@@ -332,6 +355,9 @@ async function renderFileDiff(f, { force = false } = {}) {
     sig = 'error\0' + e.message;
     draw = () => { pane.innerHTML = `<div style="padding:20px;color:var(--red)">${escapeHtml(e.message)}</div>`; };
   }
+  // An answer to a question nobody is asking any more: another file was
+  // clicked, or all of them let go of, while git was still reading this one.
+  if (state.selectedFile !== key) return;
   // Redrawing identical text every few seconds would throw away the scroll
   // position, any text selection, and the focus ring for nothing.
   if (!force && _shown && _shown.key === key && _shown.sig === sig) return;
@@ -359,18 +385,23 @@ async function refreshSelectedDiff() {
   if (!f) {
     // Committed, discarded, or reverted by hand: there is no longer a change to
     // show, and a stale diff claims there is.
-    state.selectedFile = null;
-    _shown = null;
-    $('#diff-filename').textContent = 'No file selected';
-    $('#diff-content').innerHTML = '';
-    const bar = $('#conflict-actions');
-    if (bar) bar.hidden = true;
+    showNoFile();
     return;
   }
   state.selectedFile = fileKey(f);
   $('#diff-filename').textContent = f.filePath;
   renderConflictActions(f);
   await renderFileDiff(f);
+}
+
+// The pane with no file in it.
+function showNoFile() {
+  state.selectedFile = null;
+  _shown = null;
+  $('#diff-filename').textContent = 'No file selected';
+  $('#diff-content').innerHTML = '';
+  const bar = $('#conflict-actions');
+  if (bar) bar.hidden = true;
 }
 
 // Take Ours / Take Theirs / Mark Resolved, above the file they apply to. Ours
@@ -407,10 +438,7 @@ function setupConflictActions() {
       await window.git[RESOLVERS[btn.dataset.resolve]](state.repoPath, bar.dataset.file);
       // Nothing is selected any more, or the refresh below would pull the file
       // straight back into the pane as a now-resolved diff.
-      state.selectedFile = null;
-      $('#diff-content').innerHTML = '';
-      $('#diff-filename').textContent = 'No file selected';
-      bar.hidden = true;
+      showNoFile();
       await refreshStatus();
     } catch (err) { toast(err.message, { type: 'error' }); }
   });
@@ -423,6 +451,7 @@ let _draft = null;
 export function setupCommitBox(refresh) {
   _refresh = refresh;
   setupConflictActions();
+  setupDeselect();
   document.addEventListener('refresh-status', () => refreshStatus());
 
   const subject = $('#commit-subject');
