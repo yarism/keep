@@ -1546,7 +1546,7 @@ body.decode-unicode .uni-dec { display: inline; }
 }
 ::highlight(find-current) {
   background-color: var(--yellow);
-  color: #000;
+  color: var(--on-status);
 }
 
 /* Context menu ------------------------------------------------------------ */
