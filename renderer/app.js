@@ -21,6 +21,7 @@ import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
 import { createUnicodeToggle } from './modules/diff.js';
 import { setupSelectAll } from './modules/select-all.js';
+import { setupFind } from './modules/find.js';
 
 // Before anything renders: the stored theme, read synchronously, so the window
 // never flashes the default palette on the way to the chosen one.
@@ -461,6 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPullRequests();
   $('#wc-diff-panel .panel-header').appendChild(createUnicodeToggle($('#diff-content')));
   setupSelectAll();
+  setupFind();
   await restoreLastRepo(settings);
 });
 

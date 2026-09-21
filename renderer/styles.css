@@ -1485,6 +1485,70 @@ body.decode-unicode .uni-dec { display: inline; }
   background: var(--bg);
 }
 
+/* Find in file ------------------------------------------------------------ */
+
+/* Fixed rather than inside the diff, so it stays put in the corner of whatever
+ * scrolls the file while the file moves under it. find.js places it. */
+#find-bar {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 4px 0 9px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-menu);
+  color: var(--text-mute);
+}
+#find-bar[hidden] { display: none; }
+.find-bar-icon { display: flex; }
+#find-input {
+  width: 180px;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0 2px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+}
+#find-input::placeholder { color: var(--text-mute); }
+.find-count {
+  min-width: 34px;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+#find-bar.no-results .find-count { color: var(--red); }
+#find-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-mute);
+  cursor: pointer;
+}
+#find-bar button:hover { background: var(--bg-hover); color: var(--text); }
+#find-bar .find-prev svg { transform: rotate(-90deg); }
+#find-bar .find-next svg { transform: rotate(90deg); }
+
+::highlight(find-match) {
+  background-color: color-mix(in srgb, var(--yellow) 35%, transparent);
+}
+::highlight(find-current) {
+  background-color: var(--yellow);
+  color: #000;
+}
+
 /* Context menu ------------------------------------------------------------ */
 
 .context-menu {
