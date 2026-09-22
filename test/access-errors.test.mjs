@@ -61,3 +61,29 @@ test('access: a rejected SSH key is left to the network explainer', () => {
 
   assert.strictEqual(text, null);
 });
+
+// Apple's /usr/bin/git is a stub that runs git from Xcode or the Command Line
+// Tools. After an Xcode update it refuses until the new license is accepted,
+// and the window goes empty in exactly the way a blocked folder makes it. The
+// fix is a Terminal command, so the message has to name it.
+const { explainToolchainError } = createRequire(import.meta.url)('../git.js');
+
+test('toolchain: an unaccepted Xcode license names the command that accepts it', () => {
+  const text = explainToolchainError(
+    'You have not agreed to the Xcode license agreements. Please run \'sudo xcodebuild -license\' from within a Terminal window to review and agree to the Xcode and Apple SDKs license.\n');
+
+  assert.match(text, /sudo xcodebuild -license accept/);
+});
+
+test('toolchain: missing Command Line Tools point at xcode-select', () => {
+  const text = explainToolchainError(
+    'xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun at: /Library/Developer/CommandLineTools/usr/bin/xcrun\n');
+
+  assert.match(text, /xcode-select --install/);
+});
+
+test('toolchain: ordinary git failures and folder denials are left alone', () => {
+  assert.strictEqual(explainToolchainError('fatal: not a git repository'), null);
+  assert.strictEqual(explainToolchainError(REAL), null);
+  assert.strictEqual(explainToolchainError(undefined), null);
+});

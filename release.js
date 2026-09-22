@@ -110,6 +110,7 @@ function fallbackPath() {
 }
 
 exports.parseShellPath = parseShellPath;
+exports.loginPath = loginPath;
 
 async function childEnv() {
   return {

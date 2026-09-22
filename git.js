@@ -110,6 +110,32 @@ function explainAccessError(repoPath, message) {
     '(or Full Disk Access), then reopen the repository.';
 }
 
+// /usr/bin/git on a Mac is not git but Apple's stub, which hands over to the
+// Xcode or Command Line Tools copy. After an Xcode update the stub refuses to
+// run anything until the new license is accepted (exit 69), and after some
+// macOS updates the tools it points at are gone altogether. Either way every
+// git call fails, and the window looks like a repository with nothing in it.
+// Neither can be fixed from inside Keep: accepting the license needs an admin
+// password, so the most Keep can do is say which command to run.
+//
+// Pure, so it can be tested without breaking a toolchain.
+function explainToolchainError(message) {
+  const text = String(message || '');
+
+  if (/Xcode.*licen[sc]e|xcodebuild -license/i.test(text)) {
+    return 'Git is blocked until the new Xcode license is accepted (this happens after Xcode updates).\n' +
+      'Run `sudo xcodebuild -license accept` in Terminal, then quit and reopen Keep.';
+  }
+  if (/invalid active developer path|No developer tools were found|missing xcrun/i.test(text)) {
+    return 'Git cannot run because the Xcode Command Line Tools are missing (this can happen after a macOS update).\n' +
+      'Run `xcode-select --install` in Terminal, then quit and reopen Keep.';
+  }
+  if (/spawn git ENOENT/i.test(text)) {
+    return 'Keep could not find git on this computer. Install git, then quit and reopen Keep.';
+  }
+  return null;
+}
+
 // The three folders macOS protects by default. Named in the message because
 // "grant access to the folder" is useless without knowing which one to look for
 // in a settings list.
@@ -495,7 +521,7 @@ exports.accessProblem = async (repoPath) => {
     await run(repoPath, ['rev-parse', '--git-dir']);
     return null;
   } catch (e) {
-    return explainAccessError(repoPath, e.message);
+    return explainToolchainError(e.message) || explainAccessError(repoPath, e.message);
   }
 };
 
@@ -943,4 +969,5 @@ exports.searchLog = async (repoPath, query, field, branch, limit = 200, opts = {
 
 exports.explainNetworkError = explainNetworkError;
 exports.explainAccessError = explainAccessError;
+exports.explainToolchainError = explainToolchainError;
 exports.NETWORK_TIMEOUT_MS = NETWORK_TIMEOUT_MS;

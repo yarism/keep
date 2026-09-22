@@ -202,7 +202,18 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+// Opened from Finder, Keep gets launchd's PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+// so `git` is Apple's /usr/bin/git stub even when the terminal finds Homebrew's
+// first. That stub stops working after an Xcode update until the license is
+// accepted, which made Keep break from Finder while working from a terminal.
+// Taking the login shell's PATH makes both launches run the same git. Started
+// before whenReady so the shell answers while Electron is still starting up.
+const shellPathReady = release.loginPath()
+  .then((p) => { if (p) process.env.PATH = p; })
+  .catch(() => {});
+
+app.whenReady().then(async () => {
+  await shellPathReady;
   applyStartupIcon();
   buildMenu({ checkForUpdates });
   watchSystemAppearance();
