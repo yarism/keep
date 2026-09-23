@@ -20,7 +20,7 @@
     "gui",
     "electron"
   ],
-  "author": "",
+  "author": "Joakim Johansson",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {

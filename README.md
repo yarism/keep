@@ -309,4 +309,4 @@ keep/
 
 ## License
 
-ISC
+ISC, see [LICENSE](LICENSE).
