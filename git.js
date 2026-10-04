@@ -368,7 +368,7 @@ exports.parseTrack = parseTrack;
 exports.branches = async (repoPath) => {
   // Tab-separated: %(upstream:track) contains spaces and commas, so the old
   // split-on-space parse would have read "[ahead" as the upstream name.
-  const format = '%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)';
+  const format = '%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)%09%(refname)';
   const [out, remotes] = await Promise.all([
     run(repoPath, ['branch', '-a', '--format=' + format]),
     remoteNames(repoPath),
@@ -376,7 +376,7 @@ exports.branches = async (repoPath) => {
   const branches = [];
   let detachedHead = false;
   out.split('\n').filter(Boolean).forEach(line => {
-    const [name, head, upstreamRaw, track] = line.split('\t');
+    const [name, head, upstreamRaw, track, ref] = line.split('\t');
     const current = head === '*';
     const upstream = upstreamRaw || null;
     const isRemote = remotes.some(r => name.startsWith(r + '/'));
@@ -384,8 +384,13 @@ exports.branches = async (repoPath) => {
     // branch nor named like a remote one — left alone it shows up in the
     // sidebar as a local branch called "origin" that nobody created.
     if (remotes.includes(name)) return;
-    // Detect detached HEAD — git outputs "(HEAD" as the name
-    if (name.startsWith('(HEAD')) {
+    // With HEAD on no branch, git heads the list with a description of where
+    // it is in place of a name: "(HEAD detached at 1a2b3c4)", and in the
+    // middle of a rebase "(no branch, rebasing main)". Only the first used to
+    // be recognised, so mid-rebase the description went into the sidebar as a
+    // branch and History asked git to log it. What every form of it has in
+    // common, in any language git speaks, is that it is not a ref.
+    if (!String(ref).startsWith('refs/')) {
       detachedHead = true;
       return; // skip this pseudo-branch
     }
