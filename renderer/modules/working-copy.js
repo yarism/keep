@@ -1,8 +1,12 @@
 import { $, escapeHtml, state } from './state.js';
 import { renderDiff, renderConflict } from './diff.js';
 import { showContextMenu } from './context-menu.js';
+import { showConfirm } from './modal.js';
 import { toast } from './toast.js';
 import { offerChess } from './chess.js';
+import {
+  bannerText, conflictCaption, conflictsFirst, describeConflict, describeSides, nextConflict, sideActions,
+} from './conflicts.js';
 
 // Set by setupCommitBox so the banner's Abort/Continue can rebuild everything —
 // they move HEAD, which nothing short of a full refresh survives.
@@ -19,10 +23,54 @@ export async function refreshStatus(preloaded) {
     window.git.repoState(state.repoPath)
       .catch(() => ({ kind: null, conflicts: [], branch: null, step: 0, total: 0 })),
   ]);
-  state.statusFiles = files;
+  const before = state.statusFiles;
+  state.statusFiles = conflictsFirst(files);
   state.repoState = repoState;
+  followSelection(before);
+  landOnFirstConflict();
   renderStatus();
   await refreshSelectedDiff();
+}
+
+// The selection is kept as row numbers, and rows move: a resolved conflict
+// leaves the group at the top, a staged file changes halves. So after every
+// read the numbers are worked out again from the files they stood for, by the
+// exact row first and by path for a file whose row has changed kind.
+function followSelection(before) {
+  const follow = (indices) => {
+    const keys = new Set(), paths = new Set();
+    indices.forEach(i => {
+      const f = before[i];
+      if (f) { keys.add(fileKey(f)); paths.add(f.filePath); }
+    });
+    const now = new Set();
+    state.statusFiles.forEach((f, i) => {
+      if (keys.has(fileKey(f))) { now.add(i); paths.delete(f.filePath); }
+    });
+    state.statusFiles.forEach((f, i) => {
+      if (paths.has(f.filePath)) { now.add(i); paths.delete(f.filePath); }
+    });
+    return now;
+  };
+  _selectedIndices = follow(_selectedIndices);
+  const [anchor] = _lastClickedIndex === null ? [] : follow([_lastClickedIndex]);
+  _lastClickedIndex = anchor === undefined ? null : anchor;
+}
+
+// Conflicts arriving are not something to be found by scrolling: the first one
+// is opened at the moment there start being any. Once, and only when nothing
+// else is selected, so letting go of the file or picking another one is
+// respected for as long as the conflicts last.
+let _hadConflicts = false;
+
+function landOnFirstConflict() {
+  const first = state.statusFiles.findIndex(f => f.conflicted);
+  const arrived = first >= 0 && !_hadConflicts;
+  _hadConflicts = first >= 0;
+  if (!arrived || state.selectedFile || _selectedIndices.size) return;
+  _selectedIndices = new Set([first]);
+  _lastClickedIndex = first;
+  state.selectedFile = fileKey(state.statusFiles[first]);
 }
 
 // Everything refreshStatus draws, from state alone, so a repository can be
@@ -49,6 +97,13 @@ export function resetWorkingCopy() {
   // The skeletons below bypass renderFileList, so its notion of what is on
   // screen must not survive into the next repository.
   _listSig = null;
+  // Nor must a conflict the previous repository had in the pane.
+  _hadConflicts = false;
+  _bulk = false;
+  showConflictPanel([], null);
+  renderListHeader();
+  const pane = $('#diff-content');
+  if (pane) pane.classList.remove('two-sided');
   const list = $('#wc-file-list');
   if (!list) return;
   let html = '';
@@ -103,34 +158,27 @@ function conflictCount() {
   return state.statusFiles.filter(f => f.conflicted).length;
 }
 
-// What is in progress, how far through it you are, and the two ways out.
-const OP_LABELS = {
-  merge: 'Merging',
-  rebase: 'Rebasing',
-  'cherry-pick': 'Cherry-picking',
-  revert: 'Reverting',
-};
-
+// What is in the way, what it interrupted, and the two ways out.
 function renderOpBanner() {
   const banner = $('#op-banner');
   if (!banner) return;
-  const { kind, branch, step, total } = state.repoState;
+  const { kind } = state.repoState;
   const conflicts = conflictCount();
+  // Nothing can be committed over an unmerged file, and Stage All here would
+  // mark every conflict resolved, markers and all. So the commit box steps
+  // aside until the conflicts are dealt with, which also gives the list of
+  // them its room.
+  const box = $('#commit-box');
+  if (box) box.hidden = conflicts > 0;
   // A stash pop can leave conflicts with no operation in flight; there is
   // nothing to abort or continue there, but they still have to be announced.
   if (!kind && !conflicts) { banner.hidden = true; return; }
   banner.hidden = false;
   banner.classList.toggle('resolved', conflicts === 0);
 
-  const what = kind ? OP_LABELS[kind] : 'Conflicts';
-  $('#op-banner-title').textContent = branch ? `${what} ${branch}` : what;
-
-  const bits = [];
-  if (kind === 'rebase' && total) bits.push(`commit ${step} of ${total}`);
-  bits.push(conflicts
-    ? `${conflicts} conflicted file${conflicts !== 1 ? 's' : ''} to resolve`
-    : 'all conflicts resolved');
-  $('#op-banner-detail').textContent = bits.join(' \u00b7 ');
+  const { title, detail } = bannerText(state.repoState, conflicts);
+  $('#op-banner-title').textContent = title;
+  $('#op-banner-detail').textContent = detail;
 
   const cont = $('#op-continue');
   cont.textContent = kind === 'merge' ? 'Commit Merge' : 'Continue';
@@ -172,8 +220,30 @@ function fileKey(f) {
 // already exist keeps the hover (and focus) where they were.
 let _listSig = null;
 
+// The header over the list names what leads it. With conflicts in the list that
+// is them: how many are left, and a way to select them all at once.
+function renderListHeader() {
+  const title = $('#wc-list-title');
+  if (!title) return;
+  const conflicts = conflictCount();
+  title.textContent = conflicts ? 'Conflicts' : 'Changed Files';
+  const count = $('#wc-conflict-count');
+  count.textContent = conflicts;
+  count.hidden = !conflicts;
+  const button = $('#btn-select-conflicts');
+  button.hidden = conflicts < 2;
+  // With every one of them selected, the same button lets go of them again.
+  button.textContent = allConflictsSelected() ? 'Deselect All' : 'Select All';
+}
+
+function allConflictsSelected() {
+  return conflictCount() > 0
+    && state.statusFiles.every((f, idx) => !f.conflicted || _selectedIndices.has(idx));
+}
+
 function renderFileList() {
   const list = $('#wc-file-list');
+  renderListHeader();
   // Clean up indices that are out of range
   _selectedIndices.forEach(i => { if (i >= state.statusFiles.length) _selectedIndices.delete(i); });
 
@@ -204,19 +274,26 @@ function renderFileList() {
     return;
   }
 
+  const conflicts = conflictCount();
   state.statusFiles.forEach((f, idx) => {
+    // The conflicts come first (see conflictsFirst), so this is where they end.
+    if (conflicts && idx === conflicts) {
+      const divider = document.createElement('div');
+      divider.className = 'file-list-divider';
+      divider.textContent = 'Changed Files';
+      list.appendChild(divider);
+    }
     const item = document.createElement('div');
     const isSelected = _selectedIndices.has(idx);
     item.className = 'file-item' + (isSelected ? ' selected' : '') + (f.conflicted ? ' conflicted' : '');
     item.tabIndex = 0;
     item.dataset.index = idx;
-    // A conflicted file has no checkbox: ticking one would mean `git add`, which
-    // marks a conflict resolved — too big a thing to hang off a checkbox that
-    // means "stage" on every other row.
+    // On a conflicted row the box is never ticked, an unmerged file being
+    // neither staged nor unstaged, and ticking it marks the file resolved, the
+    // way it does in Tower. That is `git add` and nothing more, so
+    // resolveConflicts asks first when the file still has markers in it.
     item.innerHTML = `
-      ${f.conflicted
-        ? '<span class="file-checkbox-slot"></span>'
-        : `<input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1">`}
+      <input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1"${f.conflicted ? ' title="Mark resolved"' : ''}>
       <span class="file-status ${f.status}">${f.conflicted ? '!' : f.status[0].toUpperCase()}</span>
       <span class="file-name" title="${f.filePath}">${f.filePath.split('/').pop()}</span>
       <span class="file-path">${f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : ''}</span>
@@ -244,8 +321,9 @@ function renderFileList() {
         if (box) box.click();
       }
     });
-    if (!f.conflicted) item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
+    item.querySelector('.file-checkbox').addEventListener('change', async (e) => {
       e.stopPropagation();
+      if (f.conflicted) { resolveConflicts([f], 'resolved'); return; }
       try {
         if (f.staged) await window.git.unstage(state.repoPath, f.filePath, f.oldPath);
         else await window.git.stage(state.repoPath, f.filePath);
@@ -296,35 +374,84 @@ function handleFileClick(idx, e) {
 }
 
 // Every row at once: what Select All means while the list, rather than a diff,
-// is where the user is standing. The diff pane stays on the file it was showing.
+// is where the user is standing. The diff pane stays on the file it was
+// showing, unless that took in several conflicts, which it then turns to as a
+// group.
 export function selectAllFiles() {
   state.statusFiles.forEach((_, idx) => _selectedIndices.add(idx));
   renderFileList();
+  showBulkConflicts();
+}
+
+// Every conflicted row and nothing else, from the button in the list's header:
+// the step before taking one side for all of them. Pressed again while they
+// are all selected, it is Deselect All (see renderListHeader) and lets go.
+function toggleAllConflicts() {
+  if (allConflictsSelected()) { deselectAll(); return; }
+  _selectedIndices = new Set();
+  state.statusFiles.forEach((f, idx) => { if (f.conflicted) _selectedIndices.add(idx); });
+  _lastClickedIndex = null;
+  renderFileList();
+  showBulkConflicts();
 }
 
 // A click in the panel that lands on no file lets go of them all, the way a
 // click on the empty part of any list does. That includes the file in the diff
 // pane: left standing, it would be a detail with no row to belong to. The
 // commit box is not part of this. Clicking into it is how a message gets
-// typed, and that is no reason to lose the files picked out for it.
+// typed, and that is no reason to lose the files picked out for it. Nor is the
+// header's Select All, which exists to pick files out.
 function setupDeselect() {
   $('#wc-files-panel').addEventListener('click', (e) => {
-    if (e.target.closest('.file-item, #commit-box')) return;
+    if (e.target.closest('.file-item, #commit-box, #btn-select-conflicts')) return;
     if (!_selectedIndices.size && !state.selectedFile) return;
-    _selectedIndices.clear();
-    _lastClickedIndex = null;
-    renderFileList();
-    showNoFile();
+    deselectAll();
   });
 }
 
+function deselectAll() {
+  _selectedIndices.clear();
+  _lastClickedIndex = null;
+  renderFileList();
+  showNoFile();
+}
+
 async function selectFile(f) {
+  // Several conflicted files picked together are one decision to make, so the
+  // pane is about all of them rather than about the one clicked last.
+  if (showBulkConflicts()) return;
+  _bulk = false;
   state.selectedFile = fileKey(f);
   $('#diff-filename').textContent = f.filePath;
-  renderConflictActions(f);
-  // A click means "show me this", so it draws even if the text is unchanged —
+  // A click means "show me this", so it draws even if the text is unchanged:
   // the pane may have been emptied by something else since.
   await renderFileDiff(f, { force: true });
+}
+
+// The conflicted files among the selected rows.
+function selectedConflicts() {
+  return getSelectedFiles().filter(f => f.conflicted);
+}
+
+// Whether the pane is on a group of conflicts rather than on one file.
+let _bulk = false;
+
+// With two or more conflicted files selected the pane stops being about a
+// file: it offers the two sides once, for the whole group. Thirty translation
+// files that all want the same answer are one decision, not thirty. Says
+// whether that is what the pane is now showing.
+function showBulkConflicts() {
+  const files = selectedConflicts();
+  if (files.length < 2) return false;
+  _bulk = true;
+  state.selectedFile = null;
+  _shown = null;
+  $('#diff-filename').textContent = `${files.length} conflicted files selected`;
+  const pane = $('#diff-content');
+  pane.innerHTML = '';
+  pane.classList.remove('two-sided');
+  showConflictPanel(files, null);
+  return true;
 }
 
 // What the diff pane is currently showing, so a poll can tell a file that has
@@ -334,15 +461,17 @@ let _shown = null;
 async function renderFileDiff(f, { force = false } = {}) {
   const pane = $('#diff-content');
   const key = fileKey(f);
-  let sig, draw;
+  let sig, draw, conflict = null;
   try {
     if (f.conflicted) {
       // `git diff` on an unmerged path prints a combined diff that reads as
       // noise. What you actually need to look at is the file with its markers
-      // in place.
-      const text = await window.git.fileContents(state.repoPath, f.filePath);
-      sig = 'conflict\0' + text;
-      draw = () => renderConflict(text, pane, f);
+      // in place, or, where git wrote none, the two versions set against each
+      // other.
+      const details = await window.git.conflictDetails(state.repoPath, f.filePath);
+      conflict = details;
+      sig = `conflict\0${details.sidesDiff}\0${details.text}`;
+      draw = () => drawConflict(details, pane);
     } else if (f.status === 'untracked') {
       // `git diff` has nothing to say about an untracked file, so the pane sat
       // on "No diff available" until the file was staged. Diffed against
@@ -369,16 +498,31 @@ async function renderFileDiff(f, { force = false } = {}) {
   // An answer to a question nobody is asking any more: another file was
   // clicked, or all of them let go of, while git was still reading this one.
   if (state.selectedFile !== key) return;
+  // Unlike the file under it, the panel is brought up to date every time: what
+  // it says depends on the rest of the list (which conflict comes next) as
+  // much as on this file, and setting the same words again costs nothing.
+  showConflictPanel(conflict ? [f] : [], conflict);
   // Redrawing identical text every few seconds would throw away the scroll
   // position, any text selection, and the focus ring for nothing.
   if (!force && _shown && _shown.key === key && _shown.sig === sig) return;
   const top = pane.scrollTop;
   const sameFile = _shown && _shown.key === key;
   draw();
+  pane.classList.toggle('two-sided', !!(conflict && conflict.sidesDiff));
   // The file moved on under the user, but they were reading a particular part
   // of it, so stay where they were.
   if (sameFile && !force) pane.scrollTop = top;
   _shown = { key, sig };
+}
+
+// The body of the pane for a conflicted file. With markers in it that is the
+// file itself, since those lines are what gets edited. Without them there is
+// nothing in the file to point at, so the two versions are set against each
+// other instead: a diff from one side to the other, in the sides' colours.
+function drawConflict(details, pane) {
+  if (details.sidesDiff) renderDiff(details.sidesDiff, pane, null);
+  else if (details.text !== null) renderConflict(details.text, pane);
+  else pane.innerHTML = '<div style="padding:20px;color:var(--text-dim)">This file is not on disk</div>';
 }
 
 // The file on screen keeps changing after it was clicked — edited in an editor,
@@ -386,6 +530,16 @@ async function renderFileDiff(f, { force = false } = {}) {
 // list refreshes what the diff pane is showing too, instead of leaving it on a
 // picture of the file as it was when it was clicked.
 async function refreshSelectedDiff() {
+  if (showBulkConflicts()) return;
+  if (_bulk) {
+    // The group has shrunk under the pane, resolved one way or another. One
+    // file still selected is worth showing; otherwise there is nothing left
+    // for the pane to be about.
+    _bulk = false;
+    const rest = getSelectedFiles();
+    if (!state.selectedFile && rest.length === 1) state.selectedFile = fileKey(rest[0]);
+    if (!state.selectedFile) { showNoFile(); return; }
+  }
   const selected = state.selectedFile;
   if (!selected) { _shown = null; return; }
   const path = selected.slice(0, selected.lastIndexOf(':'));
@@ -401,7 +555,6 @@ async function refreshSelectedDiff() {
   }
   state.selectedFile = fileKey(f);
   $('#diff-filename').textContent = f.filePath;
-  renderConflictActions(f);
   await renderFileDiff(f);
 }
 
@@ -409,50 +562,150 @@ async function refreshSelectedDiff() {
 function showNoFile() {
   state.selectedFile = null;
   _shown = null;
+  _bulk = false;
   $('#diff-filename').textContent = 'No file selected';
-  $('#diff-content').innerHTML = '';
-  const bar = $('#conflict-actions');
-  if (bar) bar.hidden = true;
+  const pane = $('#diff-content');
+  pane.innerHTML = '';
+  pane.classList.remove('two-sided');
+  showConflictPanel([], null);
 }
 
-// Take Ours / Take Theirs / Mark Resolved, above the file they apply to. Ours
-// and theirs need both sides to still have a file, so a delete conflict gets
-// keep/remove instead.
-function renderConflictActions(f) {
-  const bar = $('#conflict-actions');
-  if (!bar) return;
-  bar.hidden = !f || !f.conflicted;
-  if (bar.hidden) return;
-  const deletion = f.conflictKind.includes('deleted');
-  const [ours, theirs, resolved] = bar.querySelectorAll('button');
-  ours.textContent = deletion ? 'Keep File' : 'Take Ours';
-  theirs.textContent = deletion ? 'Remove File' : 'Take Theirs';
-  ours.dataset.resolve = deletion ? 'keep' : 'ours';
-  theirs.dataset.resolve = deletion ? 'remove' : 'theirs';
-  resolved.disabled = deletion;
-  bar.dataset.file = f.filePath;
+const baseName = (filePath) => filePath.split('/').pop();
+
+// What each side's button says, by what taking that side does to the file.
+const SIDE_BUTTONS = { use: 'Use This Version', keep: 'Keep the File', remove: 'Remove the File' };
+
+// The panel between the pane's header and the file: the two versions by name,
+// a button to take each, and a line on what happened. `files` is what those
+// buttons act on, either the one file in the pane (with what conflictDetails
+// found for it) or every conflicted file in the selection. None hides it.
+function showConflictPanel(files, details) {
+  const panel = $('#conflict-panel');
+  const footer = $('#conflict-footer');
+  if (!panel || !footer) return;
+  panel.hidden = footer.hidden = files.length === 0;
+  if (!files.length) return;
+
+  const bulk = files.length > 1;
+  const sides = describeSides(state.repoState);
+  const actions = bulk ? null : sideActions(files[0].conflictKind);
+  for (const side of ['ours', 'theirs']) {
+    const card = panel.querySelector(`.conflict-side.${side}`);
+    const name = card.querySelector('.conflict-side-name');
+    const detail = card.querySelector('.conflict-side-detail');
+    name.textContent = name.title = sides[side].name;
+    detail.textContent = detail.title = sides[side].detail;
+    // Where git could not write both versions into the file, this is the one
+    // it left there, which is also what Mark Resolved would keep.
+    card.querySelector('.conflict-side-ondisk').hidden = bulk || details.onDisk !== side;
+    card.querySelector('button').textContent = bulk
+      ? `Use for All ${files.length}`
+      : SIDE_BUTTONS[actions[side]];
+  }
+  $('#conflict-note').textContent = bulk
+    ? 'One choice applies to all of them.'
+    : describeConflict(files[0], details, sides);
+  const caption = $('#conflict-caption');
+  caption.textContent = bulk ? '' : conflictCaption(details);
+  caption.hidden = !caption.textContent;
+
+  const next = bulk ? null : nextConflict(state.statusFiles, files);
+  $('#conflict-next').textContent = bulk ? '' : (next ? `Next: ${baseName(next.filePath)}` : 'Last one');
+  const resolved = footer.querySelector('button');
+  resolved.textContent = bulk ? 'Mark All Resolved' : 'Mark Resolved';
+  // With no file on disk there is nothing for `git add` to pick up.
+  resolved.disabled = !bulk && details.text === null;
 }
 
-const RESOLVERS = {
-  ours: 'useOurs', theirs: 'useTheirs',
-  keep: 'keepFile', remove: 'removeFile',
-  resolved: 'markResolved',
-};
+// What the panel's buttons act on: the group when the pane is on one,
+// otherwise the conflicted file it is showing.
+function conflictTargets() {
+  const picked = selectedConflicts();
+  if (picked.length > 1) return picked;
+  const shown = state.statusFiles.find(f => fileKey(f) === state.selectedFile);
+  return shown && shown.conflicted ? [shown] : [];
+}
+
+// Marking a file resolved is `git add`, which stages a file with its conflict
+// markers still in it as readily as one without. That is occasionally meant
+// and usually a slip, so it gets asked about.
+async function confirmLeftoverMarkers(paths) {
+  let marked;
+  // Not being able to look is no reason to refuse what was asked for.
+  try { marked = await window.git.conflictMarkers(state.repoPath, paths); }
+  catch { return true; }
+  if (!marked.length) return true;
+  return showConfirm('Mark Resolved', paths.length === 1
+    ? `"${baseName(paths[0])}" still has conflict markers in it.\n\nMark it resolved anyway?`
+    : `${marked.length} of these ${paths.length} files still have conflict markers in them.\n\nMark them all resolved anyway?`);
+}
+
+// One resolution at a time. Each one moves the pane on to the next conflict
+// and leaves the same button under the cursor, so a double click would
+// otherwise answer for a file that was never looked at.
+let _resolving = false;
+
+// Every way of resolving ends up here: the buttons in the pane, a row's
+// checkbox, the context menu. `how` is a side to take ('ours' or 'theirs', in
+// git's words, which describeSides turns into names) or 'resolved', which
+// keeps each file as it stands on disk.
+async function resolveConflicts(files, how) {
+  if (_resolving || !files.length) return;
+  _resolving = true;
+  try {
+    const paths = files.map(f => f.filePath);
+    if (how === 'resolved' && !(await confirmLeftoverMarkers(paths))) {
+      // A ticked checkbox may be what asked, and the answer was no.
+      renderFileList();
+      return;
+    }
+    try {
+      if (how === 'resolved') await window.git.markResolved(state.repoPath, paths);
+      else await window.git[how === 'theirs' ? 'useTheirs' : 'useOurs'](state.repoPath, paths);
+      moveOnFrom(paths);
+    } catch (err) { toast(err.message, { type: 'error' }); }
+    await refreshStatus();
+  } finally {
+    _resolving = false;
+  }
+}
+
+// After resolving, on to the next conflict rather than back to an empty pane:
+// with a list of them to get through, the next one is what there is to look
+// at. Only when the pane or the selection was on what just got resolved,
+// though. A checkbox ticked further down the list leaves the file being read,
+// and whatever else is selected, alone. Runs before the list is read again,
+// and refreshStatus then follows the selection to wherever the rows end up.
+function moveOnFrom(paths) {
+  const taken = new Set(paths);
+  const files = state.statusFiles;
+  const wasShown = files.some(f => taken.has(f.filePath) && fileKey(f) === state.selectedFile);
+  let wasSelected = false;
+  files.forEach((f, i) => {
+    if (taken.has(f.filePath) && _selectedIndices.delete(i)) wasSelected = true;
+  });
+  // Others of a group are still selected, so the pane stays on those.
+  if (!wasShown && (!wasSelected || selectedConflicts().length)) return;
+  const next = nextConflict(files, files.filter(f => taken.has(f.filePath)));
+  if (!next) {
+    _selectedIndices.clear();
+    _lastClickedIndex = null;
+    showNoFile();
+    return;
+  }
+  const at = files.indexOf(next);
+  _selectedIndices = new Set([at]);
+  _lastClickedIndex = at;
+  _bulk = false;
+  state.selectedFile = fileKey(next);
+}
 
 function setupConflictActions() {
-  const bar = $('#conflict-actions');
-  if (!bar) return;
-  bar.addEventListener('click', async (e) => {
+  $('#wc-diff-panel').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-resolve]');
-    if (!btn) return;
-    try {
-      await window.git[RESOLVERS[btn.dataset.resolve]](state.repoPath, bar.dataset.file);
-      // Nothing is selected any more, or the refresh below would pull the file
-      // straight back into the pane as a now-resolved diff.
-      showNoFile();
-      await refreshStatus();
-    } catch (err) { toast(err.message, { type: 'error' }); }
+    if (btn) resolveConflicts(conflictTargets(), btn.dataset.resolve);
   });
+  $('#btn-select-conflicts').addEventListener('click', toggleAllConflicts);
 }
 
 // The draft the user had typed before ticking Amend, so unticking gives it back
@@ -535,27 +788,45 @@ function getSelectedFiles() {
   return [..._selectedIndices].sort((a, b) => a - b).map(i => state.statusFiles[i]).filter(Boolean);
 }
 
-// Nothing on the ordinary file menu applies mid-conflict — staging is what
-// resolving *is*, and discarding one side of a merge is not a thing git offers.
-function showConflictContextMenu(e, f, name) {
-  const deletion = f.conflictKind.includes('deleted');
-  const act = (method) => async () => {
-    try { await window.git[method](state.repoPath, f.filePath); await refreshStatus(); }
-    catch (err) { toast(err.message, { type: 'error' }); }
+// Nothing on the ordinary file menu applies mid-conflict: staging is what
+// resolving is, and discarding one side of a merge is not a thing git offers.
+// So a conflicted file gets the pane's choices instead, and so do several at
+// once, with the sides under the same names the pane gives them.
+function showConflictContextMenu(e, files) {
+  const sides = describeSides(state.repoState);
+  const [one] = files;
+  const many = files.length > 1;
+  const actions = sideActions(one.conflictKind);
+  const take = (side) => {
+    const name = sides[side].name;
+    if (many) return `Use ${name} for ${files.length} Files`;
+    if (actions[side] === 'use') return `Use ${name}`;
+    return `${SIDE_BUTTONS[actions[side]]} (${name})`;
   };
   showContextMenu(e, [
-    { label: `Conflict: ${f.conflictKind}`, disabled: true },
+    { label: many ? `${files.length} Conflicted Files` : `Conflict: ${one.conflictKind}`, disabled: true },
     { separator: true },
-    { label: deletion ? 'Keep the File' : 'Take Ours (this branch)', action: act(deletion ? 'keepFile' : 'useOurs') },
-    { label: deletion ? 'Remove the File' : 'Take Theirs (incoming)', action: act(deletion ? 'removeFile' : 'useTheirs') },
-    { label: `Mark "${name}" Resolved`, disabled: deletion, action: act('markResolved') },
-    { separator: true },
-    { label: 'Reveal in Finder', action: () => window.git.showInFinder(state.repoPath, f.filePath) },
+    { label: take('ours'), action: () => resolveConflicts(files, 'ours') },
+    { label: take('theirs'), action: () => resolveConflicts(files, 'theirs') },
+    {
+      label: many ? `Mark ${files.length} Files Resolved` : `Mark "${baseName(one.filePath)}" Resolved`,
+      // Both sides deleted it: there is no file left to keep as it is.
+      disabled: !many && one.conflictKind === 'both deleted',
+      action: () => resolveConflicts(files, 'resolved'),
+    },
+    ...(many ? [] : [
+      { separator: true },
+      { label: 'Reveal in Finder', action: () => window.git.showInFinder(state.repoPath, one.filePath) },
+    ]),
   ]);
 }
 
 function showMultiFileContextMenu(e) {
   const files = getSelectedFiles();
+  // Conflicts in the selection are what there is to act on: Stage would mark
+  // them resolved under another name, and nothing else here applies to them.
+  const conflicts = files.filter(f => f.conflicted);
+  if (conflicts.length) { showConflictContextMenu(e, conflicts); return; }
   const count = files.length;
   const hasUnstaged = files.some(f => !f.staged);
   const hasStaged = files.some(f => f.staged);
@@ -599,7 +870,7 @@ function showMultiFileContextMenu(e) {
 function showFileContextMenu(e, f) {
   const name = f.filePath.split('/').pop();
   const isUntracked = f.status === 'untracked';
-  if (f.conflicted) { showConflictContextMenu(e, f, name); return; }
+  if (f.conflicted) { showConflictContextMenu(e, [f]); return; }
   showContextMenu(e, [
     { label: 'Reveal in Finder', action: () => window.git.showInFinder(state.repoPath, f.filePath) },
     { separator: true },

@@ -267,20 +267,52 @@
                 </div>
               </div>
             </div>
-            <div class="panel-header"><span>Changed Files</span></div>
+            <!-- Names what leads the list: "Conflicts", with how many and a way
+                 to select them all, for as long as there are any. -->
+            <div class="panel-header">
+              <span>
+                <span id="wc-list-title">Changed Files</span>
+                <span id="wc-conflict-count" class="badge conflict" hidden></span>
+              </span>
+              <button id="btn-select-conflicts" hidden>Select All</button>
+            </div>
             <div id="wc-file-list" class="file-list"></div>
           </div>
           <div id="wc-resize"></div>
           <div id="wc-diff-panel">
             <div class="panel-header">
               <span id="diff-filename">No file selected</span>
-              <div id="conflict-actions" class="conflict-actions" hidden>
-                <button data-resolve="ours">Take Ours</button>
-                <button data-resolve="theirs">Take Theirs</button>
-                <button data-resolve="resolved" class="primary">Mark Resolved</button>
+            </div>
+            <!-- Only while the pane is on a conflict: the two versions it is a
+                 choice between, each named as the branch or commit it is, with
+                 the button that takes it. -->
+            <div id="conflict-panel" class="conflict-panel" hidden>
+              <div id="conflict-note" class="conflict-note"></div>
+              <div class="conflict-sides">
+                <div class="conflict-side ours">
+                  <div class="conflict-side-head">
+                    <span class="conflict-side-name"></span>
+                    <span class="conflict-side-ondisk" hidden>On disk</span>
+                  </div>
+                  <span class="conflict-side-detail"></span>
+                  <button data-resolve="ours">Use This Version</button>
+                </div>
+                <div class="conflict-side theirs">
+                  <div class="conflict-side-head">
+                    <span class="conflict-side-name"></span>
+                    <span class="conflict-side-ondisk" hidden>On disk</span>
+                  </div>
+                  <span class="conflict-side-detail"></span>
+                  <button data-resolve="theirs">Use This Version</button>
+                </div>
               </div>
+              <div id="conflict-caption" class="conflict-caption" hidden></div>
             </div>
             <div id="diff-content" class="diff-view"></div>
+            <div id="conflict-footer" class="conflict-footer" hidden>
+              <span id="conflict-next"></span>
+              <button data-resolve="resolved">Mark Resolved</button>
+            </div>
           </div>
         </div>
       </div>

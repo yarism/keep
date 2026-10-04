@@ -188,13 +188,12 @@ export function renderConflict(text, containerOrId) {
   container.innerHTML = '';
   const lines = text.split('\n');
   let side = null;   // which half of a conflict we are inside
-  let regions = 0;
 
   const frag = document.createDocumentFragment();
   lines.forEach((line, i) => {
     const div = document.createElement('div');
     let cls = 'conflict-line';
-    if (line.startsWith('<<<<<<<')) { side = 'ours'; regions++; cls += ' marker ours'; }
+    if (line.startsWith('<<<<<<<')) { side = 'ours'; cls += ' marker ours'; }
     else if (line.startsWith('|||||||') && side) { side = 'base'; cls += ' marker base'; }
     else if (line.startsWith('=======') && side) { side = 'theirs'; cls += ' marker theirs'; }
     else if (line.startsWith('>>>>>>>') && side) { cls += ' marker theirs'; side = null; }
@@ -205,12 +204,8 @@ export function renderConflict(text, containerOrId) {
     frag.appendChild(div);
   });
 
-  const summary = document.createElement('div');
-  summary.className = 'conflict-summary';
-  summary.textContent = regions
-    ? `${regions} conflicting region${regions !== 1 ? 's' : ''} — take one side above, or edit the file and mark it resolved`
-    : 'No conflict markers in the file — resolve it by choosing a side, or mark it resolved';
-  container.appendChild(summary);
+  // What the file is and what to do about it is said by the panel above the
+  // pane (see showConflictPanel in working-copy.js), which also names the sides.
   container.appendChild(frag);
   refreshUnicodeToggles();
 }

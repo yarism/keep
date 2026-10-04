@@ -58,6 +58,13 @@
   --lane-4: color-mix(in srgb, var(--blue) 55%, var(--red));
   --lane-5: color-mix(in srgb, var(--green) 55%, var(--blue));
 
+  /* The two sides of a conflict, mixed from the theme's own colours for the
+   * same reason as the lanes. Deliberately not the green and red of a diff:
+   * neither version is an addition or a removal, they are two answers to
+   * choose between. */
+  --side-ours: var(--blue);
+  --side-theirs: color-mix(in srgb, var(--blue) 45%, var(--red));
+
   /* Chess pieces. Not theme tokens on purpose: a chess set is black and white
    * in every theme, and pieces tinted from the palette made the sides
    * indistinguishable on dark boards. The stroke is what keeps each side
@@ -806,8 +813,23 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .file-item.conflicted { background: color-mix(in srgb, var(--red) 8%, transparent); }
 .file-item.conflicted:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
 .file-item.conflicted.selected { background: color-mix(in srgb, var(--red) 20%, transparent); }
-/* Holds the space the checkbox would take, so names stay in one column. */
-.file-checkbox-slot { width: 14px; flex-shrink: 0; }
+/* Where the conflicts end and the files that came through cleanly begin: the
+ * list's own header, said again inside it. */
+.file-list-divider {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 6px 0 4px;
+  padding: 0 12px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+/* The count beside "Conflicts" in the list's header. */
+.panel-header .badge { margin-left: 6px; }
 .conflict-kind {
   margin-left: auto;
   font-size: var(--fs-2xs);
@@ -859,32 +881,6 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .op-banner-actions .op-continue:hover:not(:disabled) { background: var(--accent-hover); }
 .op-banner-actions button:disabled { opacity: 0.4; cursor: default; }
 
-/* Resolution actions, above the file they act on. The panel header is a fixed
- * 32px, so these have to stay on one line whatever the panel's width. */
-.conflict-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.conflict-actions button {
-  font-family: inherit;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-}
-.conflict-actions button:hover:not(:disabled) { background: var(--bg-hover); }
-.conflict-actions button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-.conflict-actions button:disabled { opacity: 0.4; cursor: default; }
-
-/* The file itself, with each side of every conflict tinted. Deliberately the
- * same green/red as a diff: "ours" is what is here now, "theirs" is what is
- * arriving, and the markers stay visible because they are what gets edited. */
 #diff-filename {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -892,17 +888,105 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   min-width: 0;
 }
 
-.conflict-summary {
-  padding: 7px 12px;
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
+/* The conflict panel: between the pane's header and the file, and only while
+ * the pane is on a conflict. The two versions sit side by side as what they
+ * are (a branch, a commit), each with the button that takes it. */
+.conflict-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   /* Says something about the file without being part of it. */
   user-select: none;
 }
+.conflict-note { font-size: var(--fs-base); color: var(--text-dim); line-height: 1.4; }
+.conflict-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.conflict-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.conflict-side-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* The name wears its side's colour, and the lines of the file below that
+ * belong to that side wear the same one. */
+.conflict-side-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conflict-side.ours .conflict-side-name {
+  background: color-mix(in srgb, var(--side-ours) 16%, transparent);
+  color: var(--side-ours);
+}
+.conflict-side.theirs .conflict-side-name {
+  background: color-mix(in srgb, var(--side-theirs) 16%, transparent);
+  color: var(--side-theirs);
+}
+/* Shown on the side whose version git left in the working tree, when it could
+ * not write both into the file. */
+.conflict-side-ondisk { font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; flex-shrink: 0; }
+.conflict-side-detail {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A side with nothing to add still takes its line, so the two buttons stay
+ * level with each other. */
+.conflict-side-detail:empty::before { content: '\00a0'; }
+.conflict-side button { margin-top: 4px; }
+.conflict-caption { font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); }
+
+/* Under the file: which conflict comes next, and the way to keep this one as
+ * it stands on disk. */
+.conflict-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+.conflict-side button,
+.conflict-footer button {
+  font-family: inherit;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.conflict-side button:hover:not(:disabled),
+.conflict-footer button:hover:not(:disabled) { background: var(--bg-hover); }
+.conflict-footer button:disabled { opacity: 0.4; cursor: default; }
+
+/* The file itself, with each side of every conflict tinted in that side's
+ * colour and the markers left visible, because they are what gets edited. The
+ * text keeps its own colour: these are two versions to read and choose
+ * between, and the bar down the edge says whose each one is. A file with no
+ * markers is shown as a diff of the two versions instead (.two-sided), whose
+ * removed and added lines are the same two sides. */
 .conflict-line {
   display: flex;
   font-family: var(--font-mono);
@@ -910,8 +994,18 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   line-height: 1.5;
   white-space: pre;
 }
-.conflict-line.ours { background: var(--diff-add-bg); color: var(--diff-add-text); }
-.conflict-line.theirs { background: var(--diff-del-bg); color: var(--diff-del-text); }
+.conflict-line.ours,
+.diff-view.two-sided .diff-line.del {
+  background: color-mix(in srgb, var(--side-ours) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--side-ours);
+  color: var(--text);
+}
+.conflict-line.theirs,
+.diff-view.two-sided .diff-line.add {
+  background: color-mix(in srgb, var(--side-theirs) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--side-theirs);
+  color: var(--text);
+}
 .conflict-line.base { background: var(--bg-hover); color: var(--text-dim); }
 .conflict-line.marker {
   font-weight: 700;

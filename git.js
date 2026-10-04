@@ -450,35 +450,185 @@ exports.repoState = async (repoPath) => {
   // Listed even with no operation in flight: `git stash pop` can leave conflicts
   // behind without any of the files above existing.
   const out = await run(repoPath, ['diff', '--name-only', '--diff-filter=U', '-z']).catch(() => '');
-  return { kind, conflicts: out.split('\0').filter(Boolean), branch, step, total };
+  const conflicts = out.split('\0').filter(Boolean);
+  // Naming the two sides takes a handful of git calls, so it is only done
+  // while there is a conflict for the names to be used on.
+  const sides = conflicts.length
+    ? await conflictSides(repoPath, kind, read).catch(() => null)
+    : null;
+  return { kind, conflicts, branch, step, total, sides };
 };
 
-// Resolving a conflict is, to git, just staging the file — but "git add" is a
-// poor name for "I have dealt with this", so the intent gets its own verb.
-exports.markResolved = (repoPath, filePath) => run(repoPath, ['add', '--', filePath]);
+// The two versions a conflict is a choice between, as what each one is.
+//
+// git's own words are "ours" and "theirs", and they only mean what they say in
+// a merge. A rebase replays your commits on top of the other branch, so there
+// "ours" is the branch being rebased onto and "theirs" is your own commit:
+// the reverse of what anyone reading the words would guess, and of what a
+// pull that rebases looks like from the outside. So each side is reported as
+// the branch or the commit it is, and the wording is left to the UI.
+//
+// A side is { ref, pulled, commit }: the branch sitting on it if there is one,
+// whether that branch is the upstream (what a pull brings in), and the commit
+// itself as { hash, subject, author, mine }.
+async function conflictSides(repoPath, kind, read) {
+  const line = (args) => run(repoPath, args).then(s => s.trim(), () => '');
+  const short = (ref) => ref.replace(/^refs\/(heads|remotes)\//, '');
 
-// Take one side wholesale. --ours is what the branch you are on had, --theirs
-// is what the branch you are merging in has; both only make sense when both
-// sides still have the file, which is why the delete conflicts get keep/remove
-// instead (see the context menu).
-exports.useOurs = async (repoPath, filePath) => {
-  await run(repoPath, ['checkout', '--ours', '--', filePath]);
-  return run(repoPath, ['add', '--', filePath]);
-};
-exports.useTheirs = async (repoPath, filePath) => {
-  await run(repoPath, ['checkout', '--theirs', '--', filePath]);
-  return run(repoPath, ['add', '--', filePath]);
-};
-// The two ways out of a delete/modify conflict.
-exports.keepFile = (repoPath, filePath) => run(repoPath, ['add', '--', filePath]);
-exports.removeFile = (repoPath, filePath) => run(repoPath, ['rm', '-f', '--', filePath]);
+  // Branches whose tip is this commit, local ones first (git sorts by name,
+  // and refs/heads comes before refs/remotes). A remote's HEAD is an alias for
+  // one of its branches, not a name anyone would use for the commit.
+  const refsAt = async (sha) => (await line(
+    ['for-each-ref', '--points-at', sha, '--format=%(refname)', 'refs/heads', 'refs/remotes']))
+    .split('\n').filter(ref => ref && !/^refs\/remotes\/[^/]+\/HEAD$/.test(ref));
 
-// The working-tree file as it stands, conflict markers and all. A conflicted
-// file has no useful `git diff`: what you need to read is the merged text.
-exports.fileContents = async (repoPath, filePath) => {
+  const email = await line(['config', 'user.email']);
+  const commit = async (sha) => {
+    if (!sha) return null;
+    const [hash, subject, author, authorEmail] =
+      (await line(['log', '-1', '--format=%h%x00%s%x00%an%x00%ae', sha])).split('\0');
+    return hash ? { hash, subject, author, mine: !!email && authorEmail === email } : null;
+  };
+
+  // A side that is a point in history. `branchRef` is the branch the operation
+  // is being done to: when its upstream sits on this commit, this side is what
+  // a pull brought in. `preferred` is the name git itself gave the side, used
+  // when a branch of that name really is there.
+  const at = async (sha, branchRef, preferred) => {
+    if (!sha) return { ref: null, pulled: false, commit: null };
+    const [refs, upstream] = await Promise.all([
+      refsAt(sha),
+      branchRef ? line(['for-each-ref', '--format=%(upstream)', branchRef]) : '',
+    ]);
+    const pulled = !!upstream && refs.includes(upstream);
+    const ref = (preferred && refs.includes(preferred) && preferred) || (pulled && upstream) || refs[0];
+    return { ref: ref ? short(ref) : null, pulled, commit: await commit(sha) };
+  };
+  const only = async (sha) => ({ ref: null, pulled: false, commit: await commit(sha) });
+
+  // Empty when HEAD is detached, which it always is in the middle of a rebase.
+  const head = await line(['symbolic-ref', '-q', 'HEAD']);
+  const here = { ref: head ? short(head) : null, pulled: false, commit: null };
+
+  if (kind === 'rebase') {
+    const d = read('rebase-merge/onto') ? 'rebase-merge' : 'rebase-apply';
+    const branchRef = read(d + '/head-name');
+    return {
+      ours: await at(read(d + '/onto'), branchRef.startsWith('refs/') ? branchRef : null),
+      theirs: await only(read('REBASE_HEAD') || read(d + '/stopped-sha')),
+    };
+  }
+  if (kind === 'merge') {
+    const named = /'([^']+)'/.exec(read('MERGE_MSG'));
+    return {
+      ours: here,
+      theirs: await at(read('MERGE_HEAD').split('\n')[0], head, named ? `refs/heads/${named[1]}` : null),
+    };
+  }
+  if (kind === 'cherry-pick') return { ours: here, theirs: await only(read('CHERRY_PICK_HEAD')) };
+  if (kind === 'revert') return { ours: here, theirs: await only(read('REVERT_HEAD')) };
+  // Nothing in flight: a stash applied over changes it does not fit.
+  return { ours: here, theirs: await only(null) };
+}
+
+// Resolving a conflict is, to git, just staging the file. "git add" is a poor
+// name for "I have dealt with this", so the intent gets its own verb. One path
+// or many: thirty conflicted translation files are one decision, not thirty.
+exports.markResolved = (repoPath, filePaths) => run(repoPath, ['add', '--', ...[].concat(filePaths)]);
+
+// Which of the three versions of each unmerged path the index is holding: 1 is
+// the common ancestor, 2 is "ours", 3 is "theirs". A side that deleted the
+// file, or never had it, simply has no entry.
+async function unmergedStages(repoPath, filePaths) {
+  const out = await run(repoPath, ['ls-files', '-u', '-z', '--', ...filePaths]);
+  const stages = new Map();
+  for (const entry of out.split('\0')) {
+    // "<mode> <object> <stage>\t<path>"
+    const tab = entry.indexOf('\t');
+    if (tab < 0) continue;
+    const filePath = entry.slice(tab + 1);
+    if (!stages.has(filePath)) stages.set(filePath, new Set());
+    stages.get(filePath).add(entry.slice(0, tab).split(' ')[2]);
+  }
+  return stages;
+}
+
+// Take one side wholesale, for one path or many. `side` is git's word, 'ours'
+// or 'theirs'; which branch or commit that is depends on the operation (see
+// conflictSides above), so the UI names them and only passes the word along.
+//
+// Taking a side means ending up with what that side has. Where it has a
+// version of the file, that is the version; where it deleted the file or never
+// had it, the file goes. `git checkout --theirs` refuses the whole command if
+// any one path has no "their version", so the paths are sorted into the two
+// cases first. A path that is no longer unmerged was dealt with elsewhere in
+// the meantime, and is left alone.
+async function takeSide(repoPath, filePaths, side) {
+  const paths = [].concat(filePaths);
+  const stage = side === 'theirs' ? '3' : '2';
+  const stages = await unmergedStages(repoPath, paths);
+  const take = paths.filter(p => stages.has(p) && stages.get(p).has(stage));
+  const drop = paths.filter(p => stages.has(p) && !stages.get(p).has(stage));
+  if (take.length) {
+    await run(repoPath, ['checkout', `--${side}`, '--', ...take]);
+    await run(repoPath, ['add', '--', ...take]);
+  }
+  if (drop.length) await run(repoPath, ['rm', '-f', '--', ...drop]);
+}
+exports.useOurs = (repoPath, filePaths) => takeSide(repoPath, filePaths, 'ours');
+exports.useTheirs = (repoPath, filePaths) => takeSide(repoPath, filePaths, 'theirs');
+
+// A line that opens a conflict region, as git writes it.
+const CONFLICT_MARKER = /^<{7}/m;
+
+// Everything the pane needs to show one conflicted file. First its text as it
+// stands on disk, markers and all: `git diff` on an unmerged path prints a
+// combined diff that reads as noise, and the markers are what gets edited.
+//
+// Not every conflict has markers, though. A file git will not merge as text
+// (binary, or `-merge` in .gitattributes, which generated translation files
+// often carry) is left as one side's whole version, and the text alone then
+// shows nothing of what the two sides disagree about. For those, `onDisk` says
+// whose version is sitting in the working tree, and `sidesDiff` is an ordinary
+// diff from "ours" to "theirs".
+exports.conflictDetails = async (repoPath, filePath) => {
   const fs = require('fs');
   const path = require('path');
-  return fs.promises.readFile(path.join(repoPath, filePath), 'utf-8');
+  // Gone from disk is an answer, not a failure: several kinds of conflict
+  // leave no file behind.
+  const text = await fs.promises.readFile(path.join(repoPath, filePath), 'utf-8').catch(() => null);
+  if (text !== null && CONFLICT_MARKER.test(text)) return { text, onDisk: null, sidesDiff: '' };
+
+  const id = (args) => run(repoPath, args).then(s => s.trim(), () => null);
+  const [ours, theirs, disk] = await Promise.all([
+    id(['rev-parse', '-q', '--verify', `:2:${filePath}`]),
+    id(['rev-parse', '-q', '--verify', `:3:${filePath}`]),
+    text === null ? null : id(['hash-object', '--', filePath]),
+  ]);
+  const onDisk = !disk ? null : (disk === ours ? 'ours' : (disk === theirs ? 'theirs' : null));
+  let sidesDiff = '';
+  if (ours && theirs) {
+    // By object rather than by path, so a path marked `-diff` still gets its
+    // lines compared. Headers with no hunk are a truly binary file, which has
+    // no lines to show.
+    const out = await run(repoPath, ['diff', ours, theirs]).catch(() => '');
+    if (out.includes('\n@@')) sidesDiff = out;
+  }
+  return { text, onDisk, sidesDiff };
+};
+
+// The paths among these whose file still has a conflict marker in it. Marking
+// such a file resolved commits the markers along with it, so the UI asks
+// before it does.
+exports.conflictMarkers = async (repoPath, filePaths) => {
+  const fs = require('fs');
+  const path = require('path');
+  const marked = [];
+  for (const filePath of [].concat(filePaths)) {
+    const text = await fs.promises.readFile(path.join(repoPath, filePath), 'utf-8').catch(() => '');
+    if (CONFLICT_MARKER.test(text)) marked.push(filePath);
+  }
+  return marked;
 };
 
 // core.editor=true short-circuits the editor git would otherwise open for the
