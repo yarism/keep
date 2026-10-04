@@ -369,10 +369,12 @@ exports.branches = async (repoPath) => {
   // Tab-separated: %(upstream:track) contains spaces and commas, so the old
   // split-on-space parse would have read "[ahead" as the upstream name.
   const format = '%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)';
-  const out = await run(repoPath, ['branch', '-a', '--format=' + format]);
+  const [out, remotes] = await Promise.all([
+    run(repoPath, ['branch', '-a', '--format=' + format]),
+    remoteNames(repoPath),
+  ]);
   const branches = [];
   let detachedHead = false;
-  const remotes = await remoteNames(repoPath);
   out.split('\n').filter(Boolean).forEach(line => {
     const [name, head, upstreamRaw, track] = line.split('\t');
     const current = head === '*';

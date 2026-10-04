@@ -196,6 +196,33 @@ export function resetHistory() {
   if (changeset) changeset.innerHTML = '';
 }
 
+// The first page of what the list shows, kept so that coming back to this
+// repository can paint it at once and let the real read catch up behind it.
+// Search results are not history, so they are never kept.
+export function historySnapshot() {
+  if (state.searching || !_pagedRef) return null;
+  return {
+    ref: _pagedRef,
+    commits: state.commits.slice(0, PAGE_SIZE),
+    unpushed: state.unpushed,
+    label: $('#history-branch-label').textContent,
+  };
+}
+
+// Only when the snapshot answers the question the list is about to ask: one
+// taken while a branch was pinned says nothing about HEAD's history.
+export function restoreHistory(snap, refresh) {
+  const { branch, all } = historyRef();
+  if (!snap || snap.ref !== refKey(branch, all)) return;
+  state.commits = snap.commits;
+  state.unpushed = snap.unpushed;
+  _pagedRef = snap.ref;
+  _atEnd = snap.commits.length < PAGE_SIZE;
+  $('#history-branch-label').textContent = snap.label;
+  renderTracking(all ? null : branch);
+  renderCommitList(refresh);
+}
+
 // Ghost rows to stand in for the commit list while it loads. Widths vary in a
 // fixed pattern rather than randomly so the shimmer doesn't reshuffle on every
 // repository switch.

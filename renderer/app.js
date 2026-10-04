@@ -2,10 +2,10 @@ import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, rese
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
-import { refreshStatus, resetWorkingCopy, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
-import { refreshHistory, resetHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
+import { refreshStatus, renderStatus, resetWorkingCopy, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
+import { refreshHistory, resetHistory, historySnapshot, restoreHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
-import { setupSidebarResize, setupPanelResize, setupRemotesSection, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar } from './modules/sidebar.js';
+import { setupSidebarResize, setupPanelResize, setupRemotesSection, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar, renderBranches, renderTags, renderRemotes } from './modules/sidebar.js';
 import { initTheme, syncThemeFromSettings, setupThemePicker } from './modules/theme.js';
 import { initAppIcon, syncAppIconFromSettings, setupAppIconPicker } from './modules/app-icon.js';
 import { setupCollapsibleSections } from './modules/sections.js';
@@ -30,17 +30,43 @@ initAppIcon();
 hydrateIcons();
 
 // ── Refresh all data ──
-async function refresh() {
+//
+// Everything read is local, but each read is a git process, so what a
+// repository looked like at its last refresh is kept. Coming back to it paints
+// that at once, and the refresh corrects whatever has moved since.
+const _snapshots = new Map();
+
+function saveSnapshot() {
+  const prev = _snapshots.get(state.repoPath);
+  _snapshots.set(state.repoPath, {
+    branchList: state.branchList,
+    tagList: state.tagList,
+    remotes: state.remotes,
+    statusFiles: state.statusFiles,
+    repoState: state.repoState,
+    // A search on screen has no history to offer; the last real one still does.
+    history: historySnapshot() || (prev ? prev.history : null),
+  });
+}
+
+function refresh() {
+  return refreshWith({});
+}
+
+// `pre` carries reads that are already in hand (opening a repository starts
+// them all at once rather than queueing them up here).
+async function refreshWith(pre) {
   if (!state.repoPath) return;
+  const path = state.repoPath;
   // Branches must load first since remotes and history depend on branchList
-  await refreshBranches(refresh);
+  await refreshBranches(refresh, pre.branches);
   // ...and the pin must be settled before history decides what to render
   reconcileSelectedBranch();
   await Promise.all([
-    refreshStatus(),
+    refreshStatus(pre.status),
     refreshHistory(refresh),
     refreshTags(refresh),
-    refreshRemotes(refresh),
+    refreshRemotes(refresh, pre.remotes),
     refreshStashes(),
   ]);
   // refreshRemotes has just settled state.remotes, which is what decides
@@ -52,6 +78,8 @@ async function refresh() {
   checkBehindUpstream();
   // Re-baseline so our own writes don't read as an external change next tick
   await captureFingerprint();
+  // Unless another repository was opened while this one was being read.
+  if (state.repoPath === path) saveSnapshot();
 }
 
 // ── Enter workspace mode ──
@@ -73,6 +101,22 @@ async function enterWorkspace(path) {
   // Stale remotes would put the previous repo's forge in this one's menus.
   state.remotes = [];
   resetPullRequests();
+  // A repository seen before this session is painted as it was last seen, over
+  // the ghost rows, while the reads below find out what has changed.
+  const snap = _snapshots.get(path);
+  if (snap) {
+    state.branchList = snap.branchList;
+    state.tagList = snap.tagList;
+    state.remotes = snap.remotes;
+    state.statusFiles = snap.statusFiles;
+    state.repoState = snap.repoState;
+    renderBranches(refresh);
+    renderTags(refresh);
+    renderRemotes(refresh);
+    renderStatus();
+    restoreHistory(snap.history, refresh);
+    syncPullRequestNav();
+  }
   const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;
@@ -89,8 +133,17 @@ async function enterWorkspace(path) {
   // off the full refresh instead would mean opening on History and then pulling
   // the view out from under you a second later. It also settles the changed-file
   // count now rather than popping it into the nav once the refresh lands.
-  let changed = [];
-  try { changed = await window.git.status(path); } catch {}
+  //
+  // Everything else the opening needs is started alongside it: each is its own
+  // git process, and waiting for them in turn is what kept the ghost rows up.
+  const statusRead = window.git.status(path).catch(() => []);
+  const accessRead = checkAccess(path);
+  const remotesRead = window.git.remotes(path).catch(() => []);
+  const branchesRead = window.git.branches(path).catch(() => []);
+  const changed = await statusRead;
+  // Another repository (or the list) was opened meanwhile; this one's answers
+  // must not be drawn into it.
+  if (state.repoPath !== path) return;
   const badge = $('#wc-badge');
   if (changed.length > 0) { badge.textContent = changed.length; badge.hidden = false; }
   else { badge.hidden = true; }
@@ -103,14 +156,19 @@ async function enterWorkspace(path) {
   window.git.saveSettings({ lastRepo: path });
   // Before the refresh, so an unreadable folder explains itself rather than
   // rendering four empty panes and leaving the reason to guesswork.
-  await checkAccess(path);
+  await accessRead;
   // Whether the Pull Requests nav item exists depends only on the remotes —
   // one cheap read, not the full refresh, whose branch pass is what takes the
   // time. Deciding it now keeps the item from popping in seconds later and
   // shoving the sections beneath it around.
-  try { state.remotes = await window.git.remotes(path); } catch { state.remotes = []; }
+  const remotes = await remotesRead;
+  if (state.repoPath !== path) return;
+  state.remotes = remotes;
   syncPullRequestNav();
-  await refresh();
+  const branches = await branchesRead;
+  if (state.repoPath !== path) return;
+  await refreshWith({ status: changed, remotes, branches });
+  if (state.repoPath !== path) return;
   startPolling();
   startAutoFetch();
 }
@@ -157,6 +215,8 @@ function startPolling() {
         if (fp) _lastFingerprint = fp.fingerprint;
         await refreshStatus();
         updateTitlebar();
+        const snap = _snapshots.get(state.repoPath);
+        if (snap) { snap.statusFiles = state.statusFiles; snap.repoState = state.repoState; }
       }
     } finally {
       _polling = false;

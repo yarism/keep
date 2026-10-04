@@ -104,8 +104,17 @@ export function resetSidebar() {
   }
 }
 
-export async function refreshBranches(refresh) {
-  try { state.branchList = await window.git.branches(state.repoPath); } catch { state.branchList = []; }
+// `preloaded` is a branch list someone has already read (opening a repository
+// starts that read early, alongside its others), so it is not read twice.
+export async function refreshBranches(refresh, preloaded) {
+  if (preloaded) state.branchList = preloaded;
+  else try { state.branchList = await window.git.branches(state.repoPath); } catch { state.branchList = []; }
+  renderBranches(refresh);
+}
+
+// Rendering is separate from reading so a repository can be painted from what
+// it looked like last time, before git has answered anything.
+export function renderBranches(refresh) {
   const list = $('#branches-list');
   list.innerHTML = '';
   state.branchList.filter(b => !b.isRemote).forEach(b => {
@@ -144,98 +153,100 @@ export async function refreshBranches(refresh) {
 
 export async function refreshTags(refresh) {
   try {
-    const tags = await window.git.tags(state.repoPath);
-    state.tagList = tags;
-    const list = $('#tags-list');
-    list.innerHTML = '';
-    tags.forEach(t => {
-      const item = document.createElement('div');
-      item.className = 'tag-item';
-      item.dataset.branch = t;
-      item.innerHTML = `${icon('tag', 14)}<span>${escapeHtml(t)}</span>`;
-      // Same behaviour as a branch row: show that ref's history
-      item.addEventListener('click', () => {
-        switchView('history');
-        state.selectedBranch = t;
-        highlightBranch(t);
-        refreshHistory(refresh, t);
-      });
-      item.addEventListener('contextmenu', (e) => { e.preventDefault(); showTagContextMenu(e, t, refresh); });
-      list.appendChild(item);
-    });
-    if (state.selectedBranch) highlightBranch(state.selectedBranch);
+    state.tagList = await window.git.tags(state.repoPath);
   } catch {
     // A failed read must still take the skeleton (or the previous repo's
     // tags) off screen — an empty section is the honest answer.
     state.tagList = [];
-    const list = $('#tags-list');
-    if (list) list.innerHTML = '';
   }
+  renderTags(refresh);
 }
 
-export async function refreshRemotes(refresh) {
-  try {
-    const remotes = await window.git.remotes(state.repoPath);
-    state.remotes = remotes;
-    const remoteBranches = state.branchList.filter(b => b.isRemote);
-    const list = $('#remotes-list');
-    list.innerHTML = '';
-    remotes.forEach(r => {
-      // Remote header (collapsible)
-      const remoteEl = document.createElement('div');
-      remoteEl.className = 'remote-group';
-
-      const header = document.createElement('div');
-      header.className = 'remote-item';
-      header.innerHTML = `
-        <span class="expand-arrow open">${icon('chevron', 12)}</span>
-        ${icon('cloud', 14)}
-        <span>${escapeHtml(r.name)}</span>
-      `;
-
-      const branchContainer = document.createElement('div');
-      branchContainer.className = 'remote-branches';
-
-      // Filter branches for this remote
-      const prefix = r.name + '/';
-      remoteBranches.filter(b => b.name.startsWith(prefix)).forEach(b => {
-        const shortName = b.name.substring(prefix.length);
-        if (shortName === 'HEAD') return; // skip origin/HEAD
-        const branchEl = document.createElement('div');
-        branchEl.className = 'branch-item remote-branch-item';
-        branchEl.dataset.branch = b.name;
-        branchEl.innerHTML = `
-          ${icon('branch', 14)}
-          <span>${escapeHtml(shortName)}</span>
-        `;
-        branchEl.addEventListener('click', () => {
-          switchView('history');
-          state.selectedBranch = b.name;
-          highlightBranch(b.name);
-          refreshHistory(refresh, b.name);
-        });
-        branchEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteBranchContextMenu(e, b, refresh); });
-        branchContainer.appendChild(branchEl);
-      });
-
-      header.addEventListener('click', () => {
-        const arrow = header.querySelector('.expand-arrow');
-        const isOpen = arrow.classList.contains('open');
-        arrow.classList.toggle('open');
-        branchContainer.hidden = isOpen;
-      });
-      header.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteContextMenu(e, r, refresh); });
-
-      remoteEl.appendChild(header);
-      remoteEl.appendChild(branchContainer);
-      list.appendChild(remoteEl);
+export function renderTags(refresh) {
+  const list = $('#tags-list');
+  if (!list) return;
+  list.innerHTML = '';
+  state.tagList.forEach(t => {
+    const item = document.createElement('div');
+    item.className = 'tag-item';
+    item.dataset.branch = t;
+    item.innerHTML = `${icon('tag', 14)}<span>${escapeHtml(t)}</span>`;
+    // Same behaviour as a branch row: show that ref's history
+    item.addEventListener('click', () => {
+      switchView('history');
+      state.selectedBranch = t;
+      highlightBranch(t);
+      refreshHistory(refresh, t);
     });
-    if (state.selectedBranch) highlightBranch(state.selectedBranch);
-  } catch {
-    state.remotes = [];
-    const list = $('#remotes-list');
-    if (list) list.innerHTML = '';
-  }
+    item.addEventListener('contextmenu', (e) => { e.preventDefault(); showTagContextMenu(e, t, refresh); });
+    list.appendChild(item);
+  });
+  if (state.selectedBranch) highlightBranch(state.selectedBranch);
+}
+
+export async function refreshRemotes(refresh, preloaded) {
+  if (preloaded) state.remotes = preloaded;
+  else try { state.remotes = await window.git.remotes(state.repoPath); } catch { state.remotes = []; }
+  renderRemotes(refresh);
+}
+
+export function renderRemotes(refresh) {
+  const list = $('#remotes-list');
+  if (!list) return;
+  const remotes = state.remotes;
+  const remoteBranches = state.branchList.filter(b => b.isRemote);
+  list.innerHTML = '';
+  remotes.forEach(r => {
+    // Remote header (collapsible)
+    const remoteEl = document.createElement('div');
+    remoteEl.className = 'remote-group';
+
+    const header = document.createElement('div');
+    header.className = 'remote-item';
+    header.innerHTML = `
+      <span class="expand-arrow open">${icon('chevron', 12)}</span>
+      ${icon('cloud', 14)}
+      <span>${escapeHtml(r.name)}</span>
+    `;
+
+    const branchContainer = document.createElement('div');
+    branchContainer.className = 'remote-branches';
+
+    // Filter branches for this remote
+    const prefix = r.name + '/';
+    remoteBranches.filter(b => b.name.startsWith(prefix)).forEach(b => {
+      const shortName = b.name.substring(prefix.length);
+      if (shortName === 'HEAD') return; // skip origin/HEAD
+      const branchEl = document.createElement('div');
+      branchEl.className = 'branch-item remote-branch-item';
+      branchEl.dataset.branch = b.name;
+      branchEl.innerHTML = `
+        ${icon('branch', 14)}
+        <span>${escapeHtml(shortName)}</span>
+      `;
+      branchEl.addEventListener('click', () => {
+        switchView('history');
+        state.selectedBranch = b.name;
+        highlightBranch(b.name);
+        refreshHistory(refresh, b.name);
+      });
+      branchEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteBranchContextMenu(e, b, refresh); });
+      branchContainer.appendChild(branchEl);
+    });
+
+    header.addEventListener('click', () => {
+      const arrow = header.querySelector('.expand-arrow');
+      const isOpen = arrow.classList.contains('open');
+      arrow.classList.toggle('open');
+      branchContainer.hidden = isOpen;
+    });
+    header.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteContextMenu(e, r, refresh); });
+
+    remoteEl.appendChild(header);
+    remoteEl.appendChild(branchContainer);
+    list.appendChild(remoteEl);
+  });
+  if (state.selectedBranch) highlightBranch(state.selectedBranch);
 }
 
 export async function refreshStashes() {

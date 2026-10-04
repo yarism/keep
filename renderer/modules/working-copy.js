@@ -11,11 +11,23 @@ let _refresh = null;
 let _selectedIndices = new Set();
 let _lastClickedIndex = null;
 
-export async function refreshStatus() {
-  try { state.statusFiles = await window.git.status(state.repoPath); }
-  catch { state.statusFiles = []; }
-  try { state.repoState = await window.git.repoState(state.repoPath); }
-  catch { state.repoState = { kind: null, conflicts: [], branch: null, step: 0, total: 0 }; }
+// `preloaded` is a status someone has already read: opening a repository reads
+// it up front to choose the view, and the refresh that follows reuses it.
+export async function refreshStatus(preloaded) {
+  const [files, repoState] = await Promise.all([
+    preloaded || window.git.status(state.repoPath).catch(() => []),
+    window.git.repoState(state.repoPath)
+      .catch(() => ({ kind: null, conflicts: [], branch: null, step: 0, total: 0 })),
+  ]);
+  state.statusFiles = files;
+  state.repoState = repoState;
+  renderStatus();
+  await refreshSelectedDiff();
+}
+
+// Everything refreshStatus draws, from state alone, so a repository can be
+// painted from what it looked like last time before git has answered.
+export function renderStatus() {
   const badge = $('#wc-badge');
   if (state.statusFiles.length > 0) { badge.textContent = state.statusFiles.length; badge.hidden = false; }
   else { badge.hidden = true; }
@@ -25,7 +37,6 @@ export async function refreshStatus() {
   renderOpBanner();
   syncAmendAvailability();
   renderFileList();
-  await refreshSelectedDiff();
 }
 
 // Switching repositories leaves the previous one's changed files on screen
