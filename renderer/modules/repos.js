@@ -82,7 +82,46 @@ function renderRepoList() {
       window.git.saveRepos(state.repositories);
       renderRepoList();
     });
+    item.draggable = true;
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => clearDropMarks(list));
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = item.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      clearDropMarks(list, item);
+      item.classList.toggle('drop-before', !after);
+      item.classList.toggle('drop-after', after);
+    });
+    item.addEventListener('dragleave', (e) => {
+      if (!item.contains(e.relatedTarget)) item.classList.remove('drop-before', 'drop-after');
+    });
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const from = Number(e.dataTransfer.getData('text/plain'));
+      const after = item.classList.contains('drop-after');
+      clearDropMarks(list);
+      if (!Number.isInteger(from) || !state.repositories[from]) return;
+      let to = i + (after ? 1 : 0);
+      const [moved] = state.repositories.splice(from, 1);
+      if (from < to) to--;
+      state.repositories.splice(to, 0, moved);
+      if (to === from) return;
+      window.git.saveRepos(state.repositories);
+      renderRepoList();
+    });
     list.appendChild(item);
+  });
+}
+
+function clearDropMarks(list, except) {
+  list.querySelectorAll('.dragging, .drop-before, .drop-after').forEach(el => {
+    if (el !== except) el.classList.remove('dragging', 'drop-before', 'drop-after');
   });
 }
 

@@ -598,6 +598,9 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 /* The name absorbs the row's free space so the badge and the remove button
    keep to the right edge without fighting over auto margins. */
 .repo-item-name { flex: 1; }
+.repo-item.dragging { opacity: 0.4; }
+.repo-item.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.repo-item.drop-after { box-shadow: 0 2px 0 var(--accent); }
 /* The working-copy badge's quieter cousin: says a repository has uncommitted
    work without lighting the list up in accent. */
 .repo-item-badge {
