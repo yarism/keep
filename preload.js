@@ -67,7 +67,7 @@ contextBridge.exposeInMainWorld('git', {
   renameBranch: (p, oldN, newN) => ipcRenderer.invoke('git-rename-branch', p, oldN, newN),
   merge: (p, branch) => ipcRenderer.invoke('git-merge', p, branch),
   rebase: (p, branch) => ipcRenderer.invoke('git-rebase', p, branch),
-  pull: (p) => ipcRenderer.invoke('git-pull', p),
+  pull: (p, from) => ipcRenderer.invoke('git-pull', p, from),
   push: (p, opts) => ipcRenderer.invoke('git-push', p, opts),
   fetch: (p) => ipcRenderer.invoke('git-fetch', p),
   fetchQuiet: (p) => ipcRenderer.invoke('git-fetch-quiet', p),

@@ -155,9 +155,10 @@ export function showBranchContextMenu(e, branch, refresh) {
 }
 
 // `branch` is a remote-tracking branch here ("origin/feature", isRemote:
-// true) — never checked out itself, so merge/rebase/rename/delete make no
-// sense on it. What does is the one thing the sidebar could not do at all
-// before: get onto a local branch that follows it.
+// true). It is never checked out itself, so rename and the local kind of
+// delete make no sense on it. What does: getting onto a local branch that
+// follows it (Check Out, what Tower calls Track), starting new work from it
+// under another name, and pulling it into whatever is checked out.
 export function showRemoteBranchContextMenu(e, branch, refresh) {
   // remoteForBranch, not remoteBranchName: that one only answers for a
   // forge-recognised remote (it exists to build web links), and would hand
@@ -171,6 +172,11 @@ export function showRemoteBranchContextMenu(e, branch, refresh) {
   const f = forgeForBranch(state.remotes, branch.name);
   showContextMenu(e, [
     { label: `Check Out "${shortName}"`, disabled: Boolean(current && current.name === shortName), action: () => trackRemoteBranch(branch.name, refresh) },
+    { label: `Create New Branch from "${branch.name}"...`, action: async () => { const n = await showModal('Create Branch', `Branch name (from "${branch.name}")`); if (n) { try { await window.git.createBranch(state.repoPath, n, branch.name); await refresh(); } catch (err) { alert(err.message); } } }},
+    { separator: true },
+    // Needs a branch to land in (a detached HEAD has none to name) and the
+    // remote's real name, which an unrecognised prefix does not give.
+    { label: current ? `Pull "${branch.name}" into "${current.name}"` : `Pull "${branch.name}"`, disabled: !current || !remote, action: () => pullRemoteBranch(remote.name, shortName, refresh) },
     ...(f ? [
       { separator: true },
       { label: `View Branch on ${forgeLabel(f)}`, action: () => openExternal(branchUrl(f, shortName)) },
@@ -191,6 +197,18 @@ async function trackRemoteBranch(remoteBranch, refresh) {
     await window.git.checkoutTracking(state.repoPath, remoteBranch);
     await refresh();
   } catch (err) { alert(err.message); }
+}
+
+// Refreshes whether the pull worked or not: one that stops on a conflict
+// fails, but leaves a merge (or rebase) in progress the sidebar has to show,
+// and showing it before the alert puts the explanation over the right state.
+async function pullRemoteBranch(remoteName, shortName, refresh) {
+  let failure = null;
+  try {
+    await window.git.pull(state.repoPath, { remote: remoteName, branch: shortName });
+  } catch (err) { failure = err; }
+  await refresh();
+  if (failure) alert(failure.message);
 }
 
 // Reaches the server, unlike deleting a local branch: this removes it for

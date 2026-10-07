@@ -848,8 +848,14 @@ exports.headMessage = async (repoPath) => {
     : { subject: text.slice(0, split), body: text.slice(split + 1).replace(/^\n/, '') };
 };
 exports.checkout = (repoPath, branch) => run(repoPath, ['checkout', branch]);
+// --no-track because a new branch is new work, never a copy of where it
+// started. Started from a remote branch ("origin/main"), git would otherwise
+// make that its upstream: "fix-login" would follow origin/main, its
+// ahead/behind would count against main, and Push would refuse outright since
+// the names differ. With no upstream, the first push publishes it under its
+// own name, the same Publish flow every other new branch gets.
 exports.createBranch = (repoPath, name, from) => {
-  const args = ['checkout', '-b', name];
+  const args = ['checkout', '--no-track', '-b', name];
   if (from) args.push(from);
   return run(repoPath, args);
 };
@@ -885,7 +891,11 @@ exports.deleteBranch = (repoPath, name, opts = {}) => run(repoPath, ['branch', o
 exports.renameBranch = (repoPath, oldName, newName) => run(repoPath, ['branch', '-m', oldName, newName]);
 exports.merge = (repoPath, branch) => runReporting(repoPath, ['merge', branch]);
 exports.rebase = (repoPath, branch) => runReporting(repoPath, ['rebase', branch]);
-exports.pull = (repoPath) => runNetwork(repoPath, ['pull'], 'Pull');
+// `from` ({ remote, branch }) pulls one named remote branch into whatever is
+// checked out, rather than the checked-out branch's own upstream: right-
+// clicking "origin/main" while on a feature branch, say.
+exports.pull = (repoPath, from) =>
+  runNetwork(repoPath, from ? ['pull', from.remote, from.branch] : ['pull'], 'Pull');
 // A branch with no upstream cannot just be pushed — git refuses and explains
 // how, which is a poor first experience for "I made a branch and want it on the
 // server". `publish` is that explanation carried out.
