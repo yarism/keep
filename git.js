@@ -368,16 +368,28 @@ exports.parseTrack = parseTrack;
 exports.branches = async (repoPath) => {
   // Tab-separated: %(upstream:track) contains spaces and commas, so the old
   // split-on-space parse would have read "[ahead" as the upstream name.
+  //
+  // %(worktreepath) is where the branch is checked out, if anywhere: a branch
+  // another worktree holds cannot be checked out here, and the sidebar says so
+  // (and offers to go there) instead of letting git refuse. Only git 2.36 and
+  // later know the field, so an older git gets the format without it and the
+  // column comes back empty.
   const format = '%(refname:short)%09%(HEAD)%09%(upstream:short)%09%(upstream:track)%09%(refname)';
-  const [out, remotes] = await Promise.all([
-    run(repoPath, ['branch', '-a', '--format=' + format]),
+  const [out, remotes, self] = await Promise.all([
+    run(repoPath, ['branch', '-a', '--format=' + format + '%09%(worktreepath)'])
+      .catch(e => /unknown field|worktreepath/i.test(e.message)
+        ? run(repoPath, ['branch', '-a', '--format=' + format])
+        : Promise.reject(e)),
     remoteNames(repoPath),
+    realPath(repoPath),
   ]);
   const branches = [];
   let detachedHead = false;
   out.split('\n').filter(Boolean).forEach(line => {
-    const [name, head, upstreamRaw, track, ref] = line.split('\t');
+    const [name, head, upstreamRaw, track, ref, worktreePath = ''] = line.split('\t');
     const current = head === '*';
+    // Its own worktree is not "elsewhere".
+    const worktree = worktreePath && worktreePath !== self ? worktreePath : null;
     const upstream = upstreamRaw || null;
     const isRemote = remotes.some(r => name.startsWith(r + '/'));
     // refs/remotes/origin/HEAD shortens to plain "origin", which is neither a
@@ -394,7 +406,7 @@ exports.branches = async (repoPath) => {
       detachedHead = true;
       return; // skip this pseudo-branch
     }
-    branches.push({ name, current, upstream, isRemote, ...parseTrack(track) });
+    branches.push({ name, current, upstream, isRemote, worktree, ...parseTrack(track) });
   });
   // If detached, find the current commit hash
   if (detachedHead) {
@@ -421,6 +433,27 @@ async function gitDir(repoPath) {
   const dir = (await run(repoPath, ['rev-parse', '--absolute-git-dir'])).trim();
   _gitDirs.set(repoPath, dir);
   return dir;
+}
+
+// The directory every worktree of a repository shares: refs, objects, and the
+// `worktrees/` folder that lists the linked ones. For the main worktree it is
+// its own .git; for a linked worktree git answers with an absolute path, and
+// for the main one with a relative `.git`, hence the resolve.
+const _commonDirs = new Map();
+
+async function commonDir(repoPath) {
+  if (_commonDirs.has(repoPath)) return _commonDirs.get(repoPath);
+  const out = (await run(repoPath, ['rev-parse', '--git-common-dir'])).trim();
+  const dir = require('path').resolve(repoPath, out);
+  _commonDirs.set(repoPath, dir);
+  return dir;
+}
+
+// git reports worktree paths with symlinks resolved (/private/tmp, not /tmp),
+// so a path Keep was given has to be resolved the same way before the two can
+// be compared. A path that cannot be resolved is left as it was.
+function realPath(p) {
+  return require('fs').promises.realpath(p).catch(() => p);
 }
 
 exports.repoState = async (repoPath) => {
@@ -683,19 +716,119 @@ exports.accessProblem = async (repoPath) => {
 };
 
 exports.repoFingerprint = async (repoPath) => {
-  const [head, refs] = await Promise.all([
+  const [head, refs, worktrees] = await Promise.all([
     // `rev-parse HEAD --abbrev-ref HEAD` prints the sha, then the branch name
     // (or literally "HEAD" when detached). Fails in a repo with no commits yet.
     run(repoPath, ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD']).catch(() => ''),
     run(repoPath, ['for-each-ref', '--format=%(objectname) %(refname)']).catch(() => ''),
+    // A worktree added or removed (by an agent, say) is a change to the
+    // sidebar the refs alone do not show: adding one checks out a branch that
+    // already existed. The folder listing is a directory read, not a git
+    // process, so it costs the poll nothing.
+    linkedWorktreeNames(repoPath),
   ]);
   const [hash = '', ref = ''] = head.trim().split('\n');
   return {
     hash,
     branch: ref === 'HEAD' || !ref ? null : ref,
-    fingerprint: head + refs,
+    fingerprint: head + refs + worktrees,
   };
 };
+
+async function linkedWorktreeNames(repoPath) {
+  try {
+    const dir = await commonDir(repoPath);
+    const names = await require('fs').promises.readdir(require('path').join(dir, 'worktrees'));
+    return names.sort().join(',');
+  } catch { return ''; }
+}
+
+// ── Worktrees ──
+//
+// A repository can have several working copies checked out at once, each on
+// its own branch, all sharing one set of refs and objects. AI coding agents
+// make them freely (Claude Code under <repo>/.claude/worktrees/, Copilot under
+// ~/.copilot/repos/copilot-worktrees/) and a client that models a repository as
+// one folder shows none of that: the agent's branch looks checkoutable and
+// fails, and its uncommitted work is nowhere on screen. Everything here reads
+// from git's own list, so where an agent chose to put its folder never matters.
+//
+// The answer is { main, current, list }: the main worktree's path (the one
+// whose .git is a directory), the path in the list that `repoPath` is, and one
+// entry per worktree in git's order, the main one first.
+exports.worktrees = async (repoPath) => {
+  const [out, self] = await Promise.all([
+    run(repoPath, ['worktree', 'list', '--porcelain']),
+    realPath(repoPath),
+  ]);
+  const list = parseWorktreeList(out);
+  const current = list.find(w => w.path === self) || null;
+  return {
+    main: list.length ? list[0].path : null,
+    current: current ? current.path : null,
+    list: list.map(w => ({ ...w, isCurrent: w === current })),
+  };
+};
+
+// Blank-line-separated blocks of "key value" lines. `branch` carries the full
+// ref, `detached` and `bare` stand alone, `locked` and `prunable` may carry a
+// reason. Exported for its tests.
+function parseWorktreeList(out) {
+  const list = [];
+  for (const block of String(out).split(/\n\s*\n/)) {
+    const lines = block.split('\n').filter(Boolean);
+    if (!lines.length) continue;
+    const w = { path: null, head: null, branch: null, detached: false, bare: false, locked: null, prunable: null, isMain: list.length === 0 };
+    for (const line of lines) {
+      const sp = line.indexOf(' ');
+      const key = sp === -1 ? line : line.slice(0, sp);
+      const value = sp === -1 ? '' : line.slice(sp + 1);
+      if (key === 'worktree') w.path = value;
+      else if (key === 'HEAD') w.head = value;
+      else if (key === 'branch') w.branch = value.replace(/^refs\/heads\//, '');
+      else if (key === 'detached') w.detached = true;
+      else if (key === 'bare') w.bare = true;
+      else if (key === 'locked') w.locked = value || 'locked';
+      else if (key === 'prunable') w.prunable = value || 'prunable';
+    }
+    if (w.path) list.push(w);
+  }
+  return list;
+}
+exports.parseWorktreeList = parseWorktreeList;
+
+// The main worktree a path belongs to: the path itself for an ordinary
+// repository, the parent for a linked worktree. The repository list keys on
+// this, so adding an agent's worktree folder lands on the repository it came
+// from rather than as a second entry.
+exports.mainWorktree = async (repoPath) => (await exports.worktrees(repoPath)).main;
+
+// `branch` checks out an existing branch in the new folder; `newBranch` creates
+// one there (from `from`, or HEAD) instead. Never both.
+exports.addWorktree = (repoPath, dir, { branch, newBranch, from } = {}) => {
+  const args = ['worktree', 'add'];
+  if (newBranch) {
+    args.push('-b', newBranch, dir);
+    if (from) args.push(from);
+  } else {
+    args.push(dir);
+    if (branch) args.push(branch);
+  }
+  return runReporting(repoPath, args);
+};
+
+// Without --force git refuses a worktree with uncommitted changes, which is the
+// right first answer; the UI only sends force after it has asked.
+exports.removeWorktree = (repoPath, dir, { force = false } = {}) =>
+  runReporting(repoPath, force ? ['worktree', 'remove', '--force', dir] : ['worktree', 'remove', dir]);
+
+// Drops the bookkeeping for worktrees whose folders are gone.
+exports.pruneWorktrees = (repoPath) => runReporting(repoPath, ['worktree', 'prune', '-v']);
+
+// A locked worktree is skipped by prune even when its folder is unreachable,
+// which is what you want for one on a removable disk or a network share.
+exports.lockWorktree = (repoPath, dir, lock = true) =>
+  runReporting(repoPath, lock ? ['worktree', 'lock', dir] : ['worktree', 'unlock', dir]);
 
 exports.tags = async (repoPath) => {
   const out = await run(repoPath, ['tag', '--sort=-creatordate']);

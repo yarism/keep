@@ -84,6 +84,14 @@ contextBridge.exposeInMainWorld('git', {
   discardFile: (p, file) => ipcRenderer.invoke('git-discard-file', p, file),
   trashFile: (p, file) => ipcRenderer.invoke('git-trash-file', p, file),
   showInFinder: (p, file) => ipcRenderer.invoke('git-show-in-finder', p, file),
+  worktrees: (p) => ipcRenderer.invoke('git-worktrees', p),
+  mainWorktree: (p) => ipcRenderer.invoke('git-main-worktree', p),
+  addWorktree: (p, dir, opts) => ipcRenderer.invoke('git-add-worktree', p, dir, opts),
+  removeWorktree: (p, dir, opts) => ipcRenderer.invoke('git-remove-worktree', p, dir, opts),
+  pruneWorktrees: (p) => ipcRenderer.invoke('git-prune-worktrees', p),
+  lockWorktree: (p, dir, lock) => ipcRenderer.invoke('git-lock-worktree', p, dir, lock),
+  chooseWorktreeFolder: (defaultPath) => ipcRenderer.invoke('choose-worktree-folder', defaultPath),
+  openInTerminal: (dir) => ipcRenderer.invoke('open-in-terminal', dir),
 });
 
 // Releasing is its own bridge for the same reason updates are: nothing here

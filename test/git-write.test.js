@@ -1047,3 +1047,75 @@ test('discardHunk: discards the hunk at the given position and no other', async 
   assert.match(contents, /EDITED MIDDLE/, 'the others survive');
   assert.match(contents, /EDITED BOTTOM/);
 });
+
+// ── worktrees ──
+
+const wtPath = (repo, name) => require('path').join(repo, '.wt', name);
+
+test('addWorktree: checks an existing branch out in a new folder', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+
+  await git.addWorktree(repo, wtPath(repo, 'feat'), { branch: 'feat' });
+
+  assert.ok(h.exists(repo, '.wt/feat/README.md'), 'the folder holds a checkout');
+  assert.strictEqual(h.git(wtPath(repo, 'feat'), 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'feat');
+  assert.strictEqual((await git.worktrees(repo)).list.length, 2);
+});
+
+test('addWorktree: creates the branch there when asked for a new one', async () => {
+  const repo = h.makeRepo();
+
+  await git.addWorktree(repo, wtPath(repo, 'fresh'), { newBranch: 'fresh' });
+
+  assert.strictEqual(h.git(wtPath(repo, 'fresh'), 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'fresh');
+  assert.strictEqual(h.git(repo, 'rev-parse', 'fresh').trim(), h.git(repo, 'rev-parse', 'main').trim(), 'started from HEAD');
+});
+
+test('addWorktree: refuses a branch another worktree already holds', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  await git.addWorktree(repo, wtPath(repo, 'one'), { branch: 'feat' });
+
+  await assert.rejects(git.addWorktree(repo, wtPath(repo, 'two'), { branch: 'feat' }), /already/);
+});
+
+test('removeWorktree: deletes a clean worktree, refuses a dirty one until forced', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  await git.addWorktree(repo, wtPath(repo, 'feat'), { branch: 'feat' });
+  h.write(repo, '.wt/feat/scratch.txt', 'unfinished\n');
+
+  await assert.rejects(git.removeWorktree(repo, wtPath(repo, 'feat')), /modified or untracked|--force/);
+  assert.ok(h.exists(repo, '.wt/feat/scratch.txt'), 'the refusal left the work alone');
+
+  await git.removeWorktree(repo, wtPath(repo, 'feat'), { force: true });
+
+  assert.ok(!h.exists(repo, '.wt/feat'), 'the folder is gone');
+  assert.strictEqual((await git.worktrees(repo)).list.length, 1);
+  assert.ok((await git.branches(repo)).some(b => b.name === 'feat'), 'the branch survives its worktree');
+});
+
+test('pruneWorktrees: forgets a worktree whose folder was deleted by hand', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  await git.addWorktree(repo, wtPath(repo, 'feat'), { branch: 'feat' });
+  h.remove(repo, '.wt/feat');
+  assert.strictEqual((await git.worktrees(repo)).list.length, 2, 'git still remembers it');
+
+  await git.pruneWorktrees(repo);
+
+  assert.strictEqual((await git.worktrees(repo)).list.length, 1);
+});
+
+test('lockWorktree: locks, and unlocks again', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  await git.addWorktree(repo, wtPath(repo, 'feat'), { branch: 'feat' });
+
+  await git.lockWorktree(repo, wtPath(repo, 'feat'), true);
+  assert.ok((await git.worktrees(repo)).list.find(b => b.branch === 'feat').locked);
+
+  await git.lockWorktree(repo, wtPath(repo, 'feat'), false);
+  assert.strictEqual((await git.worktrees(repo)).list.find(b => b.branch === 'feat').locked, null);
+});

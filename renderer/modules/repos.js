@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { updateSyncBadges } from './sync.js';
 import { showAccess } from './access.js';
 import { syncReleasePanel } from './release.js';
+import { dirtyBadgeTitle, worktreeTag } from '../worktree-info.js';
 
 let _onSelectRepo = null;
 
@@ -24,6 +25,8 @@ export function showRepoList() {
   $('#workspace-nav').hidden = true;
   $('#breadcrumb-sep').hidden = true;
   $('#breadcrumb-repo').hidden = true;
+  $('#breadcrumb-worktree-sep').hidden = true;
+  $('#breadcrumb-worktree').hidden = true;
   $$('#toolbar .toolbar-group button:not(#btn-open)').forEach(b => b.disabled = true);
   // No repository, nothing to push or pull — the counts must not linger on the
   // buttons from whatever was open a moment ago.
@@ -129,23 +132,39 @@ function clearDropMarks(list, except) {
 // with their badges hidden and each one fills in when its repository answers.
 // A repository that cannot answer (moved, no access) just keeps a bare row —
 // the access story belongs to opening it, not to the list.
+//
+// Every worktree counts, not just the main one: an agent's unfinished work in
+// a worktree is this repository's unfinished work, and the list is where it
+// should show before the repository is opened. The tooltip says where it is.
 async function fillDirtyBadge(item, path) {
-  let count;
-  try { count = (await window.git.status(path)).length; }
-  catch { return; }
-  if (count === 0) return;
+  let worktrees = [];
+  try { worktrees = (await window.git.worktrees(path)).list; } catch {}
+  if (!worktrees.length) worktrees = [{ path, isMain: true }];
+  const counts = await Promise.all(worktrees.map(w =>
+    window.git.status(w.path).then(files => files.length, () => 0)));
+  const total = counts.reduce((sum, n) => sum + n, 0);
+  if (total === 0) return;
+  const elsewhere = worktrees
+    .map((w, i) => ({ tag: worktreeTag(w, path), count: counts[i], isMain: w.isMain }))
+    .filter(e => !e.isMain && e.count > 0);
   // If the list re-rendered meanwhile this writes to a detached row: harmless.
   const badge = item.querySelector('.repo-item-badge');
-  badge.textContent = count;
-  badge.title = `${count} uncommitted ${count === 1 ? 'change' : 'changes'}`;
+  badge.textContent = total;
+  badge.title = dirtyBadgeTitle(total, elsewhere);
   badge.hidden = false;
 }
 
 async function openRepo() {
   const path = await window.git.openRepo();
   if (!path) return;
-  if (!state.repositories.find(r => r.path === path)) {
-    state.repositories.push({ name: path.split('/').pop(), path });
+  // A linked worktree is listed under the repository it belongs to, not as a
+  // repository of its own: this is a list of repositories, and the Worktrees
+  // section inside one is where its working copies are told apart. The folder
+  // that was picked still opens, as that worktree.
+  let main = path;
+  try { main = (await window.git.mainWorktree(path)) || path; } catch {}
+  if (!state.repositories.find(r => r.path === main)) {
+    state.repositories.push({ name: main.split('/').pop(), path: main });
     window.git.saveRepos(state.repositories);
   }
   if (_onSelectRepo) _onSelectRepo(path);

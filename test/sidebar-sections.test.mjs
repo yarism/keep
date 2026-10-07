@@ -30,7 +30,7 @@ test('sidebar: the sections the module expects are all declared in the markup', 
   const keys = sectionBlocks().map(s => s.key);
   assert.deepStrictEqual(
     keys.sort(),
-    ['branches', 'remotes', 'repositories', 'tags', 'workspace'],
+    ['branches', 'remotes', 'repositories', 'tags', 'workspace', 'worktrees'],
   );
   assert.strictEqual(new Set(keys).size, keys.length, 'section keys must be unique');
 });

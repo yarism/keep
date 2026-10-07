@@ -30,7 +30,26 @@ export const state = {
   // menus are built synchronously and cannot go and ask git first.
   remotes: [],
   repositories: [],
+  // Every working copy of the open repository (git worktree list): the main
+  // worktree's path, the path in the list that repoPath is, and the rows. A
+  // linked worktree opened by its own path has `current` other than `main`.
+  worktrees: { main: null, current: null, list: [] },
 };
+
+// Opening a working copy is app.js's enterWorkspace, which the sidebar and the
+// context menus need without importing the entry point (that would be a
+// cycle). app.js registers it once at startup.
+let _workspaceOpener = null;
+export function setWorkspaceOpener(fn) { _workspaceOpener = fn; }
+export function openWorkspace(path) { return _workspaceOpener ? _workspaceOpener(path) : undefined; }
+
+// The repository's name: the main worktree's folder, so a linked worktree
+// opened by its own path still reads as the repository it belongs to rather
+// than as a repository called "pensive-lamport-240e8b".
+export function repoName() {
+  const main = state.worktrees && state.worktrees.main;
+  return String(main || state.repoPath || '').split('/').pop();
+}
 
 export const $ = (s) => document.querySelector(s);
 export const $$ = (s) => document.querySelectorAll(s);
@@ -71,7 +90,7 @@ export function updateTitlebar() {
   }
 
   if (iconEl) iconEl.style.display = '';
-  const repoName = state.repoPath.split('/').pop();
+  const repoLabel = repoName();
   const viewLabel = viewLabels[state.currentView] || state.currentView;
   const currentBranch = state.branchList.find(b => b.current);
   const branchName = currentBranch
@@ -85,7 +104,7 @@ export function updateTitlebar() {
     detail += ` (${state.commits.length} Commits)`;
   }
 
-  textEl.textContent = `${repoName} \u2013 ${viewLabel} (${detail})`;
+  textEl.textContent = `${repoLabel} \u2013 ${viewLabel} (${detail})`;
 }
 
 // The branch we last saw HEAD pointing at. Clicking a branch or tag in the sidebar pins

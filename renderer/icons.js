@@ -14,6 +14,9 @@ export const STROKE_WIDTH = 1.75;
 const PATHS = {
   // ── Files & repositories ──
   folder: '<path d="M3 7.5A2 2 0 0 1 5 5.5h3.6a2 2 0 0 1 1.6.8l1 1.35h7.8a2 2 0 0 1 2 2v8.85a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  // A worktree: the same folder with a second one behind it, since a worktree
+  // is another working copy of a repository already on screen as a folder.
+  worktree: '<path d="M3 9.75A2 2 0 0 1 5 7.75h3.1a2 2 0 0 1 1.6.8l.9 1.2h6.15a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M7.25 5.25h3.35a2 2 0 0 1 1.6.8l.9 1.2h6.15a2 2 0 0 1 2 2v6.5"/>',
 
   // The repository list. A drive rather than a globe: a globe is what a remote
   // is, and one glyph cannot mean two things in the same window.

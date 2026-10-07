@@ -1181,3 +1181,149 @@ test('fetchPullRequest: fetches GitHub\'s pull ref into refs/keep, touching noth
   assert.strictEqual(h.git(local, 'branch', '--format=%(refname:short)').trim(), 'main');
   assert.strictEqual(h.git(local, 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'main');
 });
+
+// ── worktrees ──
+//
+// Worktrees are created inside the repository folder (under .wt/) so the
+// temp-dir cleanup takes them too. git reports their paths with symlinks
+// resolved, which on macOS turns /var into /private/var, hence the realpaths.
+const wtPath = (repo, name) => require('path').join(repo, '.wt', name);
+const real = (p) => require('fs').realpathSync(p);
+
+test('worktrees: an ordinary repository is its own, only, main worktree', async () => {
+  const repo = h.makeRepo();
+
+  const wt = await git.worktrees(repo);
+
+  assert.strictEqual(wt.list.length, 1);
+  assert.strictEqual(wt.main, real(repo));
+  assert.strictEqual(wt.current, wt.main);
+  assert.partialDeepStrictEqual(wt.list[0], {
+    path: real(repo), branch: 'main', detached: false, bare: false,
+    locked: null, prunable: null, isMain: true, isCurrent: true,
+  });
+});
+
+test('worktrees: linked worktrees are listed with their branch, a detached one with its commit', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+  h.git(repo, 'worktree', 'add', '-q', '--detach', wtPath(repo, 'det'), 'HEAD');
+  const head = h.git(repo, 'rev-parse', 'HEAD').trim();
+
+  const wt = await git.worktrees(repo);
+
+  assert.strictEqual(wt.list.length, 3);
+  assert.strictEqual(wt.list[0].isMain, true, 'git lists the main worktree first');
+  assert.partialDeepStrictEqual(wt.list.find(w => w.branch === 'feat'), {
+    path: real(wtPath(repo, 'feat')), head, detached: false, isMain: false, isCurrent: false,
+  });
+  assert.partialDeepStrictEqual(wt.list.find(w => w.detached), {
+    path: real(wtPath(repo, 'det')), head, branch: null, isMain: false,
+  });
+});
+
+test('worktrees: asked from inside a linked worktree, main is still the repository and current is the worktree', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+
+  const wt = await git.worktrees(wtPath(repo, 'feat'));
+
+  assert.strictEqual(wt.main, real(repo));
+  assert.strictEqual(wt.current, real(wtPath(repo, 'feat')));
+  assert.strictEqual(wt.list.find(w => w.isCurrent).branch, 'feat');
+  assert.strictEqual(wt.list.find(w => w.isMain).isCurrent, false);
+});
+
+test('worktrees: a locked worktree carries its reason, one whose folder is gone is prunable', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'a');
+  h.git(repo, 'branch', 'b');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'a'), 'a');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'b'), 'b');
+  h.git(repo, 'worktree', 'lock', '--reason', 'on a USB stick', wtPath(repo, 'a'));
+  h.remove(repo, '.wt/b');
+
+  const wt = await git.worktrees(repo);
+
+  assert.strictEqual(wt.list.find(w => w.branch === 'a').locked, 'on a USB stick');
+  assert.strictEqual(wt.list.find(w => w.branch === 'a').prunable, null);
+  assert.ok(wt.list.find(w => w.branch === 'b').prunable, 'a missing folder is reported as prunable');
+  assert.strictEqual(wt.list.find(w => w.isMain).locked, null);
+});
+
+test('parseWorktreeList: reads every field git can print, and tolerates a bare entry', () => {
+  const out = [
+    'worktree /repos/app',
+    'HEAD 1111111111111111111111111111111111111111',
+    'branch refs/heads/main',
+    '',
+    'worktree /repos/app-feat',
+    'HEAD 2222222222222222222222222222222222222222',
+    'branch refs/heads/feat',
+    'locked',
+    '',
+    'worktree /repos/gone',
+    'HEAD 3333333333333333333333333333333333333333',
+    'detached',
+    'prunable gitdir file points to non-existent location',
+    '',
+    'worktree /repos/bare.git',
+    'bare',
+    '',
+  ].join('\n');
+
+  const list = git.parseWorktreeList(out);
+
+  assert.deepStrictEqual(list.map(w => w.path), ['/repos/app', '/repos/app-feat', '/repos/gone', '/repos/bare.git']);
+  assert.partialDeepStrictEqual(list[0], { branch: 'main', isMain: true, locked: null });
+  assert.partialDeepStrictEqual(list[1], { branch: 'feat', locked: 'locked', isMain: false });
+  assert.partialDeepStrictEqual(list[2], { branch: null, detached: true, prunable: 'gitdir file points to non-existent location' });
+  assert.partialDeepStrictEqual(list[3], { bare: true, head: null, branch: null });
+});
+
+test('mainWorktree: a linked worktree resolves to the repository it belongs to', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+
+  assert.strictEqual(await git.mainWorktree(wtPath(repo, 'feat')), real(repo));
+  assert.strictEqual(await git.mainWorktree(repo), real(repo));
+});
+
+test('branches: a branch held by another worktree says where; the one checked out here does not', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  h.git(repo, 'branch', 'idle');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+
+  const branches = await git.branches(repo);
+
+  assert.strictEqual(branches.find(b => b.name === 'feat').worktree, real(wtPath(repo, 'feat')));
+  assert.strictEqual(branches.find(b => b.name === 'main').worktree, null, 'its own worktree is not elsewhere');
+  assert.strictEqual(branches.find(b => b.name === 'idle').worktree, null);
+});
+
+test('branches: seen from the linked worktree, the roles swap', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+
+  const branches = await git.branches(wtPath(repo, 'feat'));
+
+  assert.strictEqual(branches.find(b => b.name === 'feat').current, true);
+  assert.strictEqual(branches.find(b => b.name === 'feat').worktree, null);
+  assert.strictEqual(branches.find(b => b.name === 'main').worktree, real(repo));
+});
+
+test('repoFingerprint: adding a worktree changes it, so the poll notices', async () => {
+  const repo = h.makeRepo();
+  h.git(repo, 'branch', 'feat');
+  const before = (await git.repoFingerprint(repo)).fingerprint;
+
+  h.git(repo, 'worktree', 'add', '-q', wtPath(repo, 'feat'), 'feat');
+
+  const after = (await git.repoFingerprint(repo)).fingerprint;
+  assert.notStrictEqual(after, before);
+});

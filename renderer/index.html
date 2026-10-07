@@ -114,6 +114,15 @@
       <span class="icon" data-icon="folder" data-size="14"></span>
       <span id="breadcrumb-repo-name"></span>
     </span>
+    <!-- Only inside a linked worktree: the repository above is the one the
+         worktree belongs to, and this says which working copy of it is open.
+         Clicking the repository goes back to the main worktree. -->
+    <span id="breadcrumb-worktree-sep" class="breadcrumb-sep icon" data-icon="chevron" data-size="12" hidden></span>
+    <span id="breadcrumb-worktree" class="breadcrumb-current" hidden>
+      <span class="icon" data-icon="worktree" data-size="14"></span>
+      <span id="breadcrumb-worktree-name"></span>
+      <span class="breadcrumb-pill">worktree</span>
+    </span>
   </div>
 
   <!-- Why the workspace is empty. Persistent rather than a toast: the folder
@@ -198,6 +207,20 @@
             </button>
           </div>
           <div id="branches-list" class="section-list"></div>
+        </div>
+        <!-- Every working copy of this repository, the main one first. Agents
+             make these freely (see modules/worktrees.js), and a branch one of
+             them holds cannot be checked out here, so this list is how that
+             work is reached. -->
+        <div class="sidebar-section" data-section="worktrees">
+          <div id="worktrees-section-header" class="section-header">
+            <button type="button" class="section-toggle" aria-expanded="true" aria-controls="worktrees-list">
+              <span class="icon expand-arrow open" data-icon="chevron" data-size="11"></span>
+              <span>Worktrees</span>
+            </button>
+            <button id="btn-add-worktree" class="sidebar-add-btn" title="Add Worktree"><span class="icon" data-icon="plus" data-size="14"></span></button>
+          </div>
+          <div id="worktrees-list" class="section-list"></div>
         </div>
         <div class="sidebar-section" data-section="tags">
           <div class="section-header">

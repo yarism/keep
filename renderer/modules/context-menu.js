@@ -1,5 +1,6 @@
-import { $, state, suspendTitlebarDrag } from './state.js';
+import { $, state, suspendTitlebarDrag, openWorkspace, repoName } from './state.js';
 import { showModal, showConfirm } from './modal.js';
+import { parseCheckoutRefusal, worktreeTag } from '../worktree-info.js';
 import {
   forgeForBranch, remoteBranchName, remoteForBranch, forgeLabel, pullRequestNoun, pullRequestsNoun,
   newPullRequestUrl, branchUrl, commitUrl, pullRequestsUrl,
@@ -19,7 +20,17 @@ export async function confirmCheckout(target, refresh) {
     const ok = await showConfirm('Uncommitted Changes', `You have uncommitted changes. Checking out "${target}" may discard them.\n\nContinue?`);
     if (!ok) return;
   }
-  try { await window.git.checkout(state.repoPath, target); await refresh(); } catch (err) { alert(err.message); }
+  try { await window.git.checkout(state.repoPath, target); await refresh(); }
+  catch (err) {
+    // A branch another worktree holds (one made in a terminal since the
+    // sidebar last looked, say) cannot be checked out here, but it can be
+    // gone to, which is what was wanted.
+    const where = parseCheckoutRefusal(err.message);
+    if (!where) { alert(err.message); return; }
+    const ok = await showConfirm('Checked Out Elsewhere',
+      `"${target}" is already checked out in another worktree:\n${where}\n\nSwitch to that worktree instead?`);
+    if (ok) openWorkspace(where);
+  }
 }
 
 export function setupContextMenu() {
@@ -102,14 +113,22 @@ function forgeCommitItems(commit) {
     // A commit no remote has cannot have been built, and the card would sit
     // waiting for a run that was never asked for.
     ...(f.kind === 'github' ? [{ label: `Watch the Build for "${short}"`, disabled: !pushed, action: () => {
-      watchBuild({ repoPath: state.repoPath, repoName: state.repoPath.split('/').pop(), sha: commit.hash, forge: f, asked: true });
+      watchBuild({ repoPath: state.repoPath, repoName: repoName(), sha: commit.hash, forge: f, asked: true });
     } }] : []),
   ];
 }
 
 export function showBranchContextMenu(e, branch, refresh) {
+  // Held by another worktree: checking it out here is impossible, so the
+  // first item goes there instead. Merge and rebase still work, since the
+  // refs are shared; delete is left to git, which refuses it with a reason.
+  const held = branch.worktree
+    ? (state.worktrees.list.find(w => w.path === branch.worktree) || { path: branch.worktree })
+    : null;
   showContextMenu(e, [
-    { label: `Check Out "${branch.name}"`, disabled: branch.current, action: () => confirmCheckout(branch.name, refresh) },
+    held
+      ? { label: `Switch to Worktree "${worktreeTag(held, state.worktrees.main)}"`, action: () => openWorkspace(branch.worktree) }
+      : { label: `Check Out "${branch.name}"`, disabled: branch.current, action: () => confirmCheckout(branch.name, refresh) },
     { separator: true },
     { label: 'Pull...', action: async () => { try { await window.git.pull(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
     { label: 'Push...', action: async () => { try { await window.git.push(state.repoPath); await refresh(); } catch (err) { alert(err.message); } }},
@@ -270,7 +289,7 @@ export function showTagContextMenu(e, tag, refresh) {
     ...(buildable ? [{ label: `Watch the Build for "${tag}"`, action: () => {
       watchBuild({
         repoPath: state.repoPath,
-        repoName: state.repoPath.split('/').pop(),
+        repoName: repoName(),
         tag,
         forge,
         asked: true,

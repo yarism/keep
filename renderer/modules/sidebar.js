@@ -1,4 +1,5 @@
-import { $, escapeHtml, state, switchView } from './state.js';
+import { $, escapeHtml, state, switchView, openWorkspace } from './state.js';
+import { worktreeTag } from '../worktree-info.js';
 import {
   showBranchContextMenu, showTagContextMenu, showRemoteBranchContextMenu,
   showRemoteContextMenu, showRemotesSectionContextMenu, confirmCheckout,
@@ -88,7 +89,7 @@ export function setupSidebarResize() {
 // on screen until each list has re-fetched. Ghost rows instead, matching the
 // history skeleton on the other side of the window.
 export function resetSidebar() {
-  const sections = [['#branches-list', 4], ['#tags-list', 2], ['#remotes-list', 2]];
+  const sections = [['#branches-list', 4], ['#worktrees-list', 1], ['#tags-list', 2], ['#remotes-list', 2]];
   for (const [sel, count] of sections) {
     const list = $(sel);
     if (!list) continue;
@@ -126,11 +127,18 @@ export function renderBranches(refresh) {
     // The ahead/behind chips are what make a stale branch visible without
     // checking it out — the sidebar is where you look before deciding to.
     const chips = trackingChips(trackingFor(b.name), { showUnpublished: b.current });
+    // A branch another worktree holds cannot be checked out here. The badge
+    // says where it is, in the place HEAD would sit, and double-click goes
+    // there instead of asking git to refuse.
+    const held = b.worktree ? worktreeFor(b.worktree) : null;
+    const badge = held
+      ? `<span class="worktree-badge" title="Checked out in ${escapeHtml(b.worktree).replace(/"/g, '&quot;')}">${icon('worktree', 11)}<span>${escapeHtml(worktreeTag(held, state.worktrees.main))}</span></span>`
+      : '';
     item.innerHTML = `
       ${glyph}
       <span class="branch-name">${escapeHtml(label)}</span>
       ${chips}
-      ${b.current ? '<span class="head-badge">HEAD</span>' : ''}
+      ${b.current ? '<span class="head-badge">HEAD</span>' : badge}
     `;
     item.addEventListener('click', async () => {
       switchView('history');
@@ -141,6 +149,7 @@ export function renderBranches(refresh) {
     item.addEventListener('contextmenu', (e) => { e.preventDefault(); showBranchContextMenu(e, b, refresh); });
     item.addEventListener('dblclick', async () => {
       if (b.current) return;
+      if (b.worktree) { openWorkspace(b.worktree); return; }
       confirmCheckout(b.name, refresh);
     });
     list.appendChild(item);
@@ -149,6 +158,12 @@ export function renderBranches(refresh) {
   if (state.selectedBranch) highlightBranch(state.selectedBranch);
   // The toolbar reads the same numbers, and branchList has just been refreshed.
   updateSyncBadges();
+}
+
+// The worktree row for a path, or a stand-in when the list has not been read
+// yet (the branch list can land first), so the badge still has a folder name.
+function worktreeFor(path) {
+  return state.worktrees.list.find(w => w.path === path) || { path, isMain: false };
 }
 
 export async function refreshTags(refresh) {

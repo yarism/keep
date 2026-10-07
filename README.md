@@ -54,6 +54,11 @@ warning appears.
   the changes kept as uncommitted work
 - Tag creation
 - Multi-repository support
+- Worktrees: every working copy of a repository listed in the sidebar, with
+  the agent that made it named (Claude Code, Copilot) and its uncommitted
+  changes counted. Double-click switches the window to it; a branch another
+  worktree holds says so and double-clicks there instead of failing. Add,
+  remove, lock and prune from the same section
 - Detached HEAD state handling
 - Context menus throughout (right-click on branches, commits, files)
 - Open pull requests from GitHub, listed and reviewed in place — each one's
@@ -289,11 +294,13 @@ keep/
 │   ├── themes.js        # Colour themes as CSS custom property maps
 │   ├── icons.js         # The app's icon set
 │   ├── git-output.js    # Turns raw git output into a readable line or two
+│   ├── worktree-info.js # What a worktree row says, from its path alone
 │   └── modules/
 │       ├── state.js         # Shared state and DOM helpers
 │       ├── working-copy.js  # Working copy / staging view
 │       ├── history.js       # Commit history view
 │       ├── sidebar.js       # Sidebar (branches, tags, remotes)
+│       ├── worktrees.js     # The Worktrees section: switch, add, remove, prune
 │       ├── context-menu.js  # Right-click context menus
 │       ├── diff.js          # Diff rendering
 │       ├── modal.js         # Modal dialogs

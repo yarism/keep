@@ -23,7 +23,11 @@ function show(notice) {
   catch { /* a notification is a courtesy, not a result */ }
 }
 
-const repoName = () => (state.repoPath ? state.repoPath.split('/').pop() : null);
+// The repository's folder, not the worktree's: a pull finished in an agent's
+// worktree is still "Pull finished - keep".
+const repoName = () => (state.repoPath
+  ? ((state.worktrees && state.worktrees.main) || state.repoPath).split('/').pop()
+  : null);
 
 export function notifyAction(label, ok, message) {
   show(actionNotice(label, ok, message, repoName()));

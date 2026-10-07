@@ -1,4 +1,4 @@
-import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking } from './modules/state.js';
+import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking, setWorkspaceOpener, repoName } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
@@ -22,6 +22,8 @@ import { hydrateIcons } from './icons.js';
 import { createUnicodeToggle } from './modules/diff.js';
 import { setupSelectAll } from './modules/select-all.js';
 import { setupFind } from './modules/find.js';
+import { refreshWorktrees, renderWorktrees, resetWorktrees, setupWorktreesSection } from './modules/worktrees.js';
+import { worktreeLabel } from './worktree-info.js';
 
 // Before anything renders: the stored theme, read synchronously, so the window
 // never flashes the default palette on the way to the chosen one.
@@ -44,6 +46,7 @@ function saveSnapshot() {
     remotes: state.remotes,
     statusFiles: state.statusFiles,
     repoState: state.repoState,
+    worktrees: state.worktrees,
     // A search on screen has no history to offer; the last real one still does.
     history: historySnapshot() || (prev ? prev.history : null),
   });
@@ -68,10 +71,13 @@ async function refreshWith(pre) {
     refreshTags(refresh),
     refreshRemotes(refresh, pre.remotes),
     refreshStashes(),
+    refreshWorktrees(refresh, pre.worktrees),
   ]);
   // refreshRemotes has just settled state.remotes, which is what decides
   // whether this repository has pull requests at all.
   syncPullRequestNav();
+  // ...and refreshWorktrees which working copy of it this is.
+  updateBreadcrumb();
   updateTitlebar();
   // The branch's standing against its upstream was just re-read: if it slipped
   // behind, this is where that becomes known.
@@ -101,6 +107,7 @@ async function enterWorkspace(path) {
   // Stale remotes would put the previous repo's forge in this one's menus.
   state.remotes = [];
   resetPullRequests();
+  resetWorktrees();
   // A repository seen before this session is painted as it was last seen, over
   // the ghost rows, while the reads below find out what has changed.
   const snap = _snapshots.get(path);
@@ -110,19 +117,20 @@ async function enterWorkspace(path) {
     state.remotes = snap.remotes;
     state.statusFiles = snap.statusFiles;
     state.repoState = snap.repoState;
+    if (snap.worktrees) state.worktrees = snap.worktrees;
     renderBranches(refresh);
     renderTags(refresh);
     renderRemotes(refresh);
     renderStatus();
+    renderWorktrees(refresh);
     restoreHistory(snap.history, refresh);
     syncPullRequestNav();
   }
-  const name = path.split('/').pop();
   $('#repo-list-section').hidden = true;
   $('#workspace-nav').hidden = false;
   $('#breadcrumb-sep').hidden = false;
   $('#breadcrumb-repo').hidden = false;
-  $('#breadcrumb-repo-name').textContent = name;
+  updateBreadcrumb();
   $('#diff-filename').textContent = 'No file selected';
   $('#diff-content').innerHTML = '';
   $('#commit-subject').value = '';
@@ -140,6 +148,7 @@ async function enterWorkspace(path) {
   const accessRead = checkAccess(path);
   const remotesRead = window.git.remotes(path).catch(() => []);
   const branchesRead = window.git.branches(path).catch(() => []);
+  const worktreesRead = window.git.worktrees(path).catch(() => null);
   const changed = await statusRead;
   // Another repository (or the list) was opened meanwhile; this one's answers
   // must not be drawn into it.
@@ -165,12 +174,39 @@ async function enterWorkspace(path) {
   if (state.repoPath !== path) return;
   state.remotes = remotes;
   syncPullRequestNav();
+  // Which working copy this is decides what the breadcrumb says. Settled here,
+  // ahead of the full refresh and its slow branch pass, for the same reason as
+  // the Pull Requests item above: a worktree opened by its folder is named
+  // after the folder until this answers, and the sooner that is corrected the
+  // less it reads as a mistake being fixed.
+  const worktrees = await worktreesRead;
+  if (state.repoPath !== path) return;
+  if (worktrees) { state.worktrees = worktrees; updateBreadcrumb(); }
   const branches = await branchesRead;
   if (state.repoPath !== path) return;
-  await refreshWith({ status: changed, remotes, branches });
+  await refreshWith({ status: changed, remotes, branches, worktrees: worktrees || undefined });
   if (state.repoPath !== path) return;
   startPolling();
   startAutoFetch();
+}
+
+// The breadcrumb names the repository and, inside a linked worktree, which
+// working copy of it is open: Repositories > keep > fix-login. The repository
+// is the main worktree's folder even when the path open is a worktree's, so
+// switching worktrees never looks like switching repositories, and the
+// repository crumb is then the way back to the main one.
+function updateBreadcrumb() {
+  $('#breadcrumb-repo-name').textContent = repoName();
+  const { main, current, list } = state.worktrees;
+  const wt = main && current && current !== main ? list.find(w => w.path === current) : null;
+  $('#breadcrumb-repo').classList.toggle('is-link', Boolean(wt));
+  $('#breadcrumb-repo').title = wt ? `Back to the main worktree at ${main}` : '';
+  $('#breadcrumb-worktree-sep').hidden = !wt;
+  $('#breadcrumb-worktree').hidden = !wt;
+  if (wt) {
+    $('#breadcrumb-worktree-name').textContent = worktreeLabel(wt);
+    $('#breadcrumb-worktree').title = wt.path;
+  }
 }
 
 let _lastFingerprint = null;
@@ -315,6 +351,11 @@ function setupNavigation() {
     // The one view that costs a network request to fill, so it is filled on
     // arrival rather than on every poll tick.
     if (navItem.dataset.view === 'pull-requests') loadPullRequests();
+  });
+  // Only a link while inside a linked worktree (see updateBreadcrumb).
+  $('#breadcrumb-repo').addEventListener('click', () => {
+    const { main, current } = state.worktrees;
+    if (main && current && current !== main) enterWorkspace(main);
   });
 }
 
@@ -506,6 +547,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPanelResize('pr-resize', 'pr-list-panel', 'prListWidth', { minWidth: 260, maxWidth: 800 });
   setupRemotesSection(refresh);
   setupRepoList(enterWorkspace);
+  setWorkspaceOpener(enterWorkspace);
+  setupWorktreesSection(refresh);
   setupNavigation();
   setupToolbar();
   setupContextMenu();
@@ -530,9 +573,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 // the list and still be a working copy — a folder can be moved or deleted
 // between launches, and falling back to the repository list beats opening a
 // workspace onto nothing.
+//
+// The last place may be a linked worktree, which is not in the list itself:
+// it counts as long as the repository it belongs to is.
 async function restoreLastRepo(settings) {
   const last = settings.lastRepo;
-  if (last && state.repositories.some(r => r.path === last)) {
+  const listed = (p) => state.repositories.some(r => r.path === p);
+  if (last && listed(last)) {
     let ok = false;
     try { ok = await window.git.isRepo(last); } catch {}
     if (ok) { await enterWorkspace(last); return; }
@@ -541,6 +588,11 @@ async function restoreLastRepo(settings) {
     showRepoList();
     await checkAccess(last);
     return;
+  }
+  if (last) {
+    let main = null;
+    try { if (await window.git.isRepo(last)) main = await window.git.mainWorktree(last); } catch {}
+    if (main && listed(main)) { await enterWorkspace(last); return; }
   }
   showRepoList();
 }

@@ -368,6 +368,43 @@ ipcMain.handle('git-discard-hunk', (_, repoPath, filePath, hunkHeader, index) =>
 ipcMain.handle('git-discard-file', (_, repoPath, filePath) => git.discardFile(repoPath, filePath));
 ipcMain.handle('git-trash-file', (_, repoPath, filePath) => git.trashFile(repoPath, filePath));
 ipcMain.handle('git-show-in-finder', (_, repoPath, filePath) => git.showInFinder(repoPath, filePath));
+ipcMain.handle('git-worktrees', (_, repoPath) => git.worktrees(repoPath));
+ipcMain.handle('git-main-worktree', (_, repoPath) => git.mainWorktree(repoPath));
+ipcMain.handle('git-add-worktree', (_, repoPath, dir, opts) => git.addWorktree(repoPath, dir, opts));
+ipcMain.handle('git-remove-worktree', (_, repoPath, dir, opts) => git.removeWorktree(repoPath, dir, opts));
+ipcMain.handle('git-prune-worktrees', (_, repoPath) => git.pruneWorktrees(repoPath));
+ipcMain.handle('git-lock-worktree', (_, repoPath, dir, lock) => git.lockWorktree(repoPath, dir, lock));
+
+// Where a new worktree should go. A save dialog rather than an open one: the
+// folder does not exist yet (git creates it), and a save dialog is the one
+// that lets a name be typed for something that is not there.
+ipcMain.handle('choose-worktree-folder', async (_, defaultPath) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Add Worktree',
+    buttonLabel: 'Add Worktree',
+    nameFieldLabel: 'Folder:',
+    defaultPath: typeof defaultPath === 'string' ? defaultPath : undefined,
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  });
+  if (result.canceled || !result.filePath) return null;
+  return result.filePath;
+});
+
+// A terminal in a worktree's folder, the way Tower's Open in Terminal does it.
+// Spawned detached so the terminal outlives the call (and Keep), and answered
+// with whether the launch itself worked, which is all this side can know.
+ipcMain.handle('open-in-terminal', (_, dir) => new Promise((resolve) => {
+  if (typeof dir !== 'string' || !fs.existsSync(dir)) return resolve(false);
+  const { spawn } = require('child_process');
+  let child;
+  try {
+    if (process.platform === 'darwin') child = spawn('open', ['-a', 'Terminal', dir], { detached: true, stdio: 'ignore' });
+    else if (process.platform === 'win32') child = spawn('cmd', ['/c', 'start', '', 'cmd', '/K', `cd /d "${dir}"`], { detached: true, stdio: 'ignore', windowsHide: false });
+    else child = spawn('x-terminal-emulator', [], { cwd: dir, detached: true, stdio: 'ignore' });
+  } catch { return resolve(false); }
+  child.on('error', () => resolve(false));
+  child.on('spawn', () => { child.unref(); resolve(true); });
+}));
 
 // Releasing is the one thing here that runs a command Keep did not write, so it
 // is kept apart from the git bridge: a different module, a different channel,

@@ -367,6 +367,22 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   gap: 5px;
 }
 .breadcrumb-current .icon { color: var(--accent); }
+/* Inside a linked worktree the repository crumb is a way back to the main
+   worktree, and says so the way the Repositories crumb does. */
+#breadcrumb-repo.is-link { cursor: pointer; }
+#breadcrumb-repo.is-link:hover { color: var(--accent); }
+.breadcrumb-pill {
+  background: var(--tint-accent);
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 2px;
+}
 
 
 /* Access banner ----------------------------------------------------------- */
@@ -557,7 +573,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .sidebar-add-btn:hover { color: var(--accent); background: var(--bg-hover); }
 
 /* Every clickable sidebar row shares one shape: an inset rounded pill. */
-.nav-item, .repo-item, .branch-item, .tag-item, .remote-item {
+.nav-item, .repo-item, .branch-item, .tag-item, .remote-item, .worktree-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -570,11 +586,11 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   position: relative;
   transition: background 90ms ease, color 90ms ease;
 }
-.nav-item:hover, .repo-item:hover, .branch-item:hover, .tag-item:hover, .remote-item:hover {
+.nav-item:hover, .repo-item:hover, .branch-item:hover, .tag-item:hover, .remote-item:hover, .worktree-item:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
-.nav-item:focus-visible, .repo-item:focus-visible, .branch-item:focus-visible {
+.nav-item:focus-visible, .repo-item:focus-visible, .branch-item:focus-visible, .worktree-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -610,7 +626,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .repo-item.drop-after { box-shadow: 0 2px 0 var(--accent); }
 /* The working-copy badge's quieter cousin: says a repository has uncommitted
    work without lighting the list up in accent. */
-.repo-item-badge {
+.repo-item-badge, .worktree-item-badge {
   flex-shrink: 0;
   background: var(--bg-hover);
   color: var(--text-dim);
@@ -641,7 +657,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .sidebar-section { padding-bottom: 2px; }
 .section-list { padding: 0; }
 
-.branch-item span, .tag-item span, .remote-item span, .repo-item span, .nav-item {
+.branch-item span, .tag-item span, .remote-item span, .repo-item span, .worktree-item span, .nav-item {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -670,6 +686,48 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   letter-spacing: 0.3px;
   margin-left: auto;
 }
+
+/* A branch another worktree holds, in the place HEAD would sit. Outlined, not
+   filled: HEAD is the one filled badge in this list, and this one says "not
+   here" rather than "here". */
+.branch-item .worktree-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  max-width: 45%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.branch-item .worktree-badge .icon-svg { flex-shrink: 0; }
+
+/* Worktrees. The row is the working copy, not the branch, so the branch is the
+   label and the folder (or the agent that made it) sits on the right. The open
+   one is drawn like the checked-out branch; a detached one like a detached
+   HEAD; one whose folder is gone, faded, since there is nothing to go to. */
+.worktree-item.current { color: var(--text); font-weight: 600; }
+.worktree-item.current > .icon-svg { color: var(--accent); }
+.worktree-item.detached { color: var(--yellow); font-style: italic; }
+.worktree-item.prunable { opacity: 0.55; cursor: default; }
+.worktree-item-name { flex: 1; }
+.worktree-item-tag {
+  flex-shrink: 0;
+  max-width: 40%;
+  color: var(--text-mute);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  font-style: normal;
+}
+.worktree-item.current .worktree-item-tag { color: var(--text-dim); }
+/* The single-clicked row, the same tint a pinned branch gets. */
+.worktree-item.selected { background: var(--tint-accent); color: var(--text); }
 
 /* Remote branch tree */
 .remote-item .expand-arrow, .changeset-file-header .expand-arrow {
