@@ -288,6 +288,7 @@ ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit, opts) => git.log(repoPath, branch, limit, opts));
 ipcMain.handle('git-branches', (_, repoPath) => git.branches(repoPath));
 ipcMain.handle('git-unpushed', (_, repoPath, ref, opts) => git.unpushed(repoPath, ref, 500, opts));
+ipcMain.handle('git-incoming', (_, repoPath, ref, upstream) => git.incoming(repoPath, ref, upstream));
 ipcMain.handle('git-repo-state', (_, repoPath) => git.repoState(repoPath));
 ipcMain.handle('git-mark-resolved', (_, repoPath, filePaths) => git.markResolved(repoPath, filePaths));
 ipcMain.handle('git-use-ours', (_, repoPath, filePaths) => git.useOurs(repoPath, filePaths));

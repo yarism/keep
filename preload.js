@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('git', {
   log: (p, branch, limit, opts) => ipcRenderer.invoke('git-log', p, branch, limit, opts),
   branches: (p) => ipcRenderer.invoke('git-branches', p),
   unpushed: (p, ref, opts) => ipcRenderer.invoke('git-unpushed', p, ref, opts),
+  incoming: (p, ref, upstream) => ipcRenderer.invoke('git-incoming', p, ref, upstream),
   repoState: (p) => ipcRenderer.invoke('git-repo-state', p),
   markResolved: (p, files) => ipcRenderer.invoke('git-mark-resolved', p, files),
   useOurs: (p, files) => ipcRenderer.invoke('git-use-ours', p, files),

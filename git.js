@@ -330,9 +330,25 @@ exports.log = async (repoPath, branch, limit = 100, opts = {}) => {
   // commits past the ones already on screen.
   if (opts.skip) args.push('--skip=' + String(opts.skip));
   if (opts.all) args.push('--all', '--date-order');
-  else if (branch) args.push(branch);
+  else if (branch && opts.upstream) {
+    // A branch behind its upstream also lists what a pull would bring in, the
+    // way Tower previews it, so the commits waiting on the remote can be read
+    // before they are taken. Two tips walked at once need the same ordering as
+    // --all to keep every parent below its children, and --ignore-missing keeps
+    // the branch's own history on screen if the upstream went away since the
+    // branch list was read. git only applies it to the refs that follow it.
+    args.push('--date-order', '--ignore-missing', branch, opts.upstream);
+  } else if (branch) args.push(branch);
   const [out, remotes] = await Promise.all([run(repoPath, args), remoteNames(repoPath)]);
   return parseLog(out, remotes);
+};
+
+// The commits on `upstream` that `ref` does not have yet: what a pull would
+// bring in. Reported per commit, like `unpushed` below, so history can grey
+// each of those rows. The behind count already bounds how many there are.
+exports.incoming = async (repoPath, ref, upstream) => {
+  const out = await run(repoPath, ['rev-list', upstream, '--not', ref]).catch(() => '');
+  return out.trim().split('\n').filter(Boolean);
 };
 
 // The commits on `ref` that no remote-tracking branch contains — i.e. what a

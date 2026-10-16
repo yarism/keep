@@ -31,6 +31,10 @@ let _loadingMore = false;
 // Which ref the loaded pages belong to. Switching branch or scope asks a
 // different question, and the depth reached in the old answer means nothing.
 let _pagedRef = null;
+// The branch whose pull is being previewed and the upstream it would pull
+// from, or null. Later pages must walk the same two tips as the first one, or
+// they would skip into a different list.
+let _pullPreview = null;
 
 function refKey(branch, all) {
   return all ? '*all*' : (branch || '*head*');
@@ -58,7 +62,7 @@ async function loadMore() {
     const query = $('#search-input').value.trim();
     const page = state.searching && query
       ? await window.git.searchLog(state.repoPath, query, $('#search-field').value, branch, PAGE_SIZE, { all, skip })
-      : await window.git.log(state.repoPath, all ? null : branch, PAGE_SIZE, { all, skip });
+      : await window.git.log(state.repoPath, all ? null : branch, PAGE_SIZE, { all, skip, upstream: logUpstream(all) });
     // A short page is the end of history; the same commits coming back again
     // means the log shifted under us, and appending them would duplicate rows.
     if (page.length < PAGE_SIZE) _atEnd = true;
@@ -175,11 +179,13 @@ export function resetHistory() {
   clearTimeout(_searchTimeout);
   state.commits = [];
   state.unpushed = new Set();
+  state.incoming = new Set();
   state.searching = false;
   _depth = PAGE_SIZE;
   _atEnd = false;
   _loadingMore = false;
   _pagedRef = null;
+  _pullPreview = null;
   const input = $('#search-input');
   if (input) input.value = '';
   const clearBtn = $('#search-clear');
@@ -205,6 +211,8 @@ export function historySnapshot() {
     ref: _pagedRef,
     commits: state.commits.slice(0, PAGE_SIZE),
     unpushed: state.unpushed,
+    incoming: state.incoming,
+    pullPreview: _pullPreview,
     label: $('#history-branch-label').textContent,
   };
 }
@@ -216,6 +224,8 @@ export function restoreHistory(snap, refresh) {
   if (!snap || snap.ref !== refKey(branch, all)) return;
   state.commits = snap.commits;
   state.unpushed = snap.unpushed;
+  state.incoming = snap.incoming || new Set();
+  _pullPreview = snap.pullPreview || null;
   _pagedRef = snap.ref;
   _atEnd = snap.commits.length < PAGE_SIZE;
   $('#history-branch-label').textContent = snap.label;
@@ -280,24 +290,44 @@ export async function refreshHistory(refresh, branchOverride) {
   const key = refKey(branchName, all);
   if (key !== _pagedRef) { _depth = PAGE_SIZE; _atEnd = false; }
   _pagedRef = key;
+  // Across all branches the upstream is already in the list, so only the
+  // greying is left to do, and it is about HEAD's branch, as the header is.
+  _pullPreview = pullPreviewFor(all ? headTracking() : trackingFor(branchName));
   try {
-    // Both in one round trip: the commits, and which of them no remote has.
-    const [commits, unpushed] = await Promise.all([
-      window.git.log(state.repoPath, all ? null : branchName, _depth, { all }),
+    // All in one round trip: the commits, which of them no remote has, and
+    // which of them a pull would bring in.
+    const [commits, unpushed, incoming] = await Promise.all([
+      window.git.log(state.repoPath, all ? null : branchName, _depth, { all, upstream: logUpstream(all) }),
       window.git.unpushed(state.repoPath, all ? null : branchName, { all }).catch(() => []),
+      _pullPreview
+        ? window.git.incoming(state.repoPath, _pullPreview.branch, _pullPreview.upstream).catch(() => [])
+        : [],
     ]);
     state.commits = commits;
     _atEnd = commits.length < _depth;
     state.unpushed = new Set(unpushed);
+    state.incoming = new Set(incoming);
     const displayLabel = currentBranch && currentBranch.detached && branchName === 'HEAD'
       ? `HEAD (${currentBranch.name})`
       : (branchName || 'History');
     $('#history-branch-label').textContent = all ? 'All branches' : displayLabel;
-  } catch { state.commits = []; state.unpushed = new Set(); _atEnd = true; }
+  } catch { state.commits = []; state.unpushed = new Set(); state.incoming = new Set(); _atEnd = true; }
   // Across all branches there is no one branch the list is "about", so the
   // header falls back to reporting where HEAD stands.
   renderTracking(all ? null : branchName);
   renderCommitList(refresh);
+}
+
+// Only a branch that has fallen behind has anything to preview. One that is
+// merely ahead already has its upstream in its own history, and a gone
+// upstream has nothing left to pull.
+function pullPreviewFor(t) {
+  if (!t || !t.upstream || t.gone || !t.behind) return null;
+  return { branch: t.name, upstream: t.upstream };
+}
+
+function logUpstream(all) {
+  return !all && _pullPreview ? _pullPreview.upstream : null;
 }
 
 // The line in the History header: what this branch tracks, and how far it has
@@ -340,11 +370,16 @@ function renderCommitList(refresh) {
   state.commits.forEach((c, idx) => {
     const item = document.createElement('div');
     const unpushed = state.unpushed.has(c.hash);
+    const incoming = state.incoming.has(c.hash);
     item.className = 'commit-item'
       + (state.selectedCommit === c.hash ? ' selected' : '')
-      + (unpushed ? ' unpushed' : '');
+      + (unpushed ? ' unpushed' : '')
+      + (incoming ? ' incoming' : '');
     item.tabIndex = 0;
     if (unpushed) item.title = 'Not on any remote yet — a push would send this commit';
+    if (incoming && _pullPreview) {
+      item.title = `On ${_pullPreview.upstream} but not on ${_pullPreview.branch} yet. A pull would bring this commit in.`;
+    }
     const date = new Date(c.date).toLocaleDateString('en-CA');
     const row = graph ? graph.rows[idx] : null;
     item.innerHTML = `
@@ -440,7 +475,8 @@ function keyboardIsIdleIn(list) {
 
 // Opening History — or any list that arrives with nothing selected, such as
 // after switching branches — should show a commit, not an empty detail pane.
-// The first row is the newest commit, which is what you came to look at.
+// The first row is the newest commit, which is what you came to look at,
+// unless it is one a pull has yet to bring in: the branch's own tip is.
 function ensureSelection(refresh) {
   if (state.commits.length === 0) {
     state.selectedCommit = null;
@@ -451,7 +487,9 @@ function ensureSelection(refresh) {
   const stillListed = state.commits.some(c => c.hash === state.selectedCommit);
   // selectCommit() re-renders, and by then the selection is valid, so this
   // recurses exactly once.
-  if (!stillListed) selectCommit(state.commits[0], refresh);
+  if (!stillListed) {
+    selectCommit(state.commits.find(c => !state.incoming.has(c.hash)) || state.commits[0], refresh);
+  }
 }
 
 async function selectCommit(c, refresh) {

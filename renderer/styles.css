@@ -47,6 +47,7 @@
   /* A soft wash of a colour, for selections and status chips. */
   --tint-accent: color-mix(in srgb, var(--accent) 13%, transparent);
   --tint-accent-strong: color-mix(in srgb, var(--accent) 20%, transparent);
+  --tint-mute: color-mix(in srgb, var(--text-mute) 16%, transparent);
 
   /* Commit-graph lanes. Mixed from the theme's own colours rather than added as
    * six more tokens per theme, so a new theme still means one entry in
@@ -1450,6 +1451,13 @@ body.decode-unicode .uni-dec { display: inline; }
   border: 1px solid color-mix(in srgb, var(--text-mute) 45%, transparent);
 }
 .commit-item + .commit-item { box-shadow: 0 -1px 0 var(--border); }
+/* Commits a pull would bring in: on the upstream, not on the branch yet. A grey
+ * band, the way Tower previews a pull, so they read as not here yet while
+ * staying as clickable as any other row. Before hover and selection, which
+ * still win. */
+.commit-item.incoming { background: var(--tint-mute); }
+.commit-item.incoming .commit-author,
+.commit-item.incoming .commit-subject-text { color: var(--text-dim); }
 .commit-item:hover { background: var(--bg-hover); box-shadow: none; }
 .commit-item.selected { background: var(--tint-accent); box-shadow: none; }
 .commit-item.selected + .commit-item, .commit-item:hover + .commit-item { box-shadow: none; }
