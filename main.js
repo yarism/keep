@@ -78,9 +78,19 @@ function applyWindowChrome(win, chrome) {
   followingSystem = !!c.system;
   nativeTheme.themeSource = c.system ? 'system' : (c.dark ? 'dark' : 'light');
   const dark = c.system ? nativeTheme.shouldUseDarkColors : !!c.dark;
+  // A theme can ask for macOS's own translucent material behind the page, the
+  // way Tower's sidebar has it. The material only shows where the page is
+  // clear, and Electron clears the page for it only in a window created with
+  // vibrancy: turning it on later leaves whatever background the window was
+  // made with painted over the top. So the page's background goes transparent
+  // here explicitly, and comes back when vibrancy goes off.
+  const vibrancy = process.platform === 'darwin' && c.vibrancy ? c.vibrancy : null;
   const background = (c.system && c.backgrounds ? c.backgrounds[dark ? 'dark' : 'light'] : c.background) || '#ffffff';
-  if (win && !win.isDestroyed()) win.setBackgroundColor(background);
-  return { dark, background };
+  if (win && !win.isDestroyed()) {
+    if (process.platform === 'darwin') win.setVibrancy(vibrancy);
+    win.setBackgroundColor(vibrancy ? '#00000000' : background);
+  }
+  return { dark, background, vibrancy };
 }
 
 // macOS flips appearance on its own, at sunset or when the user changes it.
@@ -180,7 +190,12 @@ function createWindow() {
     ...(Number.isFinite(bounds.x) ? { x: bounds.x, y: bounds.y } : { center: true }),
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: chrome.background || '#ffffff',
+    // Not both: given a background colour, Electron paints the page with it
+    // even under vibrancy, and the sidebar comes out solid. Without one, a
+    // window created with vibrancy gets a clear page from the start.
+    ...(chrome.vibrancy
+      ? { vibrancy: chrome.vibrancy }
+      : { backgroundColor: chrome.background || '#ffffff' }),
     titleBarStyle: 'hiddenInset',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
@@ -284,8 +299,24 @@ ipcMain.handle('open-external', async (_, url) => {
   return true;
 });
 
+// A file's icon as Finder draws it, for the rows of the file list, the way
+// Tower shows them. Asked for at 32px and drawn at 16 so it stays sharp on a
+// Retina screen. Only paths inside the repository are looked at, and whether
+// the file is still there goes back with it: a deleted file gets the generic
+// icon, which the renderer must not keep as the icon for its whole type.
+ipcMain.handle('file-icon', async (_, repoPath, filePath) => {
+  const root = path.resolve(String(repoPath));
+  const full = path.resolve(root, String(filePath));
+  if (!full.startsWith(root + path.sep)) return null;
+  try {
+    const icon = await app.getFileIcon(full, { size: 'normal' });
+    return { url: icon.toDataURL(), exists: fs.existsSync(full) };
+  } catch { return null; }
+});
+
 ipcMain.handle('git-status', (_, repoPath) => git.status(repoPath));
 ipcMain.handle('git-log', (_, repoPath, branch, limit, opts) => git.log(repoPath, branch, limit, opts));
+ipcMain.handle('git-commit-count', (_, repoPath, branch, opts) => git.commitCount(repoPath, branch, opts));
 ipcMain.handle('git-branches', (_, repoPath) => git.branches(repoPath));
 ipcMain.handle('git-unpushed', (_, repoPath, ref, opts) => git.unpushed(repoPath, ref, 500, opts));
 ipcMain.handle('git-incoming', (_, repoPath, ref, upstream) => git.incoming(repoPath, ref, upstream));

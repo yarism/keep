@@ -38,6 +38,10 @@ let pins = [...DEFAULT_PINS];
 // time main hands back the real value, which it can read for the same reason.
 let systemDark = readSystemDark();
 
+// The tokens the theme on screen set on <html>, so the next one can take off
+// whatever it does not set itself.
+let applied = [];
+
 function readSystemDark() {
   try { return window.matchMedia('(prefers-color-scheme: dark)').matches; } catch { return false; }
 }
@@ -60,13 +64,31 @@ export function applyTheme(id) {
   // the OS flips underneath it.
   if (id === savedId && document.documentElement.dataset.theme === theme.id) return;
   const root = document.documentElement;
+  // The optional tokens are only set by the themes that want them, so the
+  // last theme's are taken off first. Left behind, Tower's solid selection
+  // would follow you into every theme picked after it.
+  for (const token of applied) {
+    if (!(token in theme.tokens)) root.style.removeProperty(`--${token}`);
+  }
   for (const [token, value] of Object.entries(theme.tokens)) {
     root.style.setProperty(`--${token}`, value);
   }
+  applied = Object.keys(theme.tokens);
   // Lets the OS style native widgets (scrollbars, form controls, the window
   // chrome behind the traffic lights) to match.
   root.style.colorScheme = theme.dark ? 'dark' : 'light';
   root.dataset.theme = theme.id;
+  // Where the window can be translucent, the page stops painting the parts
+  // the theme wants the material to show through. Decided here rather than
+  // when main answers, so the first frame is already right.
+  if (vibrancyOf(theme)) root.dataset.vibrancy = theme.vibrancy;
+  else delete root.dataset.vibrancy;
+  // The shapes a theme can ask for that tokens cannot express, each a hook
+  // for its own rules in styles.css.
+  for (const shape of ['badges', 'diff', 'smoothing', 'lists']) {
+    if (theme[shape]) root.dataset[shape] = theme[shape];
+    else delete root.dataset[shape];
+  }
   savedId = id;
   // The window frame is macOS's, not ours, so it has to be told separately —
   // otherwise a light theme sits inside a dark outline. Sent on preview too:
@@ -74,10 +96,19 @@ export function applyTheme(id) {
   windowChrome(id);
 }
 
-// The two things the main process needs to match the window to the theme.
+// Only macOS has the material, so only there does a theme get to ask for it.
+function vibrancyOf(theme) {
+  let platform = null;
+  try { platform = window.git.platform; } catch {}
+  return platform === 'darwin' && theme.vibrancy ? theme.vibrancy : null;
+}
+
+// The things the main process needs to match the window to the theme.
 function chromeOf(id) {
   const theme = resolveTheme(id, systemDark);
   const chrome = { background: theme.tokens['bg'], dark: theme.dark };
+  const vibrancy = vibrancyOf(theme);
+  if (vibrancy) chrome.vibrancy = vibrancy;
   if (isSystemTheme(id)) {
     // In system mode main decides which of the two to use, because at launch
     // it has to colour the window before the renderer exists to say what the
@@ -168,7 +199,16 @@ function watchSystemAppearance() {
 export function syncThemeFromSettings(settings) {
   syncPinsFromSettings(settings);
   const id = settings && settings.theme;
-  if (!id || id === savedId) return;
+  if (!id || id === savedId) {
+    // Same theme, but the chrome on disk can still be from before the theme
+    // learned something about the window, such as Tower's vibrancy. Main makes
+    // the window from it at launch, so it is brought up to date for the next.
+    const chrome = chromeOf(savedId);
+    if (JSON.stringify(settings && settings.themeChrome) !== JSON.stringify(chrome)) {
+      window.git.saveSettings({ themeChrome: chrome });
+    }
+    return;
+  }
   applyTheme(id);
   try { localStorage.setItem(STORAGE_KEY, savedId); } catch {}
   window.git.saveSettings({ themeChrome: chromeOf(savedId) });
@@ -309,7 +349,7 @@ function galleryCard(theme) {
           <i class="theme-mini-pill" style="background:${t['accent']}"></i>
         </div>
         <div class="theme-mini-body">
-          <div class="theme-mini-side" style="background:${t['bg-surface']};border-color:${t['border']}">
+          <div class="theme-mini-side" style="background:${t['bg-sidebar']};border-color:${t['border']}">
             ${line(t['text-mute'], '70%')}
             ${line(t['accent'], '55%')}
             ${line(t['text-mute'], '80%')}
@@ -359,7 +399,7 @@ function openThemeGallery() {
 // which is a choice rather than a preview. Note the gallery holds no system
 // entry — following the OS is a mode, not a palette, so it stays pinned to the
 // top of the popover where it is one click away rather than sitting in here
-// pretending to be an eighth theme.
+// pretending to be a ninth theme.
 function closeThemeGallery() {
   const overlay = $('#theme-gallery');
   if (!overlay || overlay.hidden) return;

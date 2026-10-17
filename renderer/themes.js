@@ -11,8 +11,9 @@
 // to whatever :root has, which is how a light theme ends up with one stray dark
 // panel, so validateTheme() is used by the tests to keep the set complete.
 export const TOKENS = [
-  // surfaces, back to front
-  'bg', 'bg-surface', 'bg-elevated', 'bg-hover', 'bg-active',
+  // surfaces, back to front. The sidebar is the surface's colour in most
+  // themes, and its own only where the theme it imitates paints it apart.
+  'bg', 'bg-surface', 'bg-sidebar', 'bg-elevated', 'bg-hover', 'bg-active',
   // lines
   'border', 'border-strong',
   // type
@@ -28,6 +29,42 @@ export const TOKENS = [
   'shadow-menu', 'shadow-modal', 'scrollbar', 'overlay',
 ];
 
+// Tokens a theme may set but need not. Everything above is a palette, and
+// every theme has one. These are for a theme that copies an application whose
+// shapes differ from Keep's own: solid selected rows, outlined ref pills, solid
+// status badges. styles.css reads each of them with a fallback that is the
+// rule Keep uses without it, so a theme that leaves them out looks exactly as
+// it did before they existed. The lanes are the exception only in where their
+// fallback lives: :root already defines them, mixed from the palette.
+export const OPTIONAL_TOKENS = [
+  // the window's chrome: title, toolbar and breadcrumb
+  'title-text', 'folder-icon', 'toolbar-text', 'toolbar-icon', 'toolbar-border',
+  // pane headers, the lighter ones over a list's columns, and the commit detail
+  'bg-header', 'bg-header-secondary', 'bg-detail', 'header-text',
+  // selected list rows, and what reads on top of them
+  'selection', 'selection-inactive', 'on-selection', 'on-selection-dim',
+  'row-separator', 'file-separator',
+  // the history list
+  'commit-author', 'graph-node-fill', 'graph-node-stroke',
+  'lane-0', 'lane-1', 'lane-2', 'lane-3', 'lane-4', 'lane-5',
+  // ref pills
+  'ref-text', 'ref-head-bg', 'ref-head-border', 'ref-branch-bg', 'ref-branch-border',
+  'ref-tag-bg', 'ref-tag-border', 'ref-remote-bg', 'ref-remote-border',
+  // file status badges: how strong the wash is, and the ink on top of it
+  'status-wash', 'status-ink', 'status-added', 'status-modified', 'status-deleted',
+  'status-renamed', 'status-untracked', 'status-untracked-ink',
+  'status-conflicted', 'status-conflicted-ink', 'status-conflicted-border',
+  'status-selected-border',
+  // the sidebar
+  'sidebar-text', 'sidebar-heading', 'sidebar-selection', 'sidebar-accent',
+  'sidebar-icon', 'sidebar-badge-bg', 'sidebar-badge-text',
+  // file names in a list, text fields, the commit detail and the diff
+  'file-text', 'placeholder', 'info-label', 'diff-text', 'diff-gutter-text',
+  // the diff a theme draws Tower's way: the gutter's rule, each run's edge, and
+  // the lines around a chunk header
+  'diff-gutter-border', 'diff-add-border', 'diff-del-border', 'diff-hunk-border',
+];
+
 export const THEMES = [
   {
     id: 'graphite-light',
@@ -36,6 +73,7 @@ export const THEMES = [
     tokens: {
       'bg': '#ffffff',
       'bg-surface': '#f1f1f4',
+      'bg-sidebar': '#f1f1f4',
       'bg-elevated': '#ffffff',
       'bg-hover': '#e7e7ec',
       'bg-active': '#dadae2',
@@ -71,6 +109,7 @@ export const THEMES = [
     tokens: {
       'bg': '#1b1b1f',
       'bg-surface': '#232328',
+      'bg-sidebar': '#232328',
       'bg-elevated': '#2a2a30',
       'bg-hover': '#2e2e35',
       'bg-active': '#3a3a44',
@@ -109,6 +148,7 @@ export const THEMES = [
     tokens: {
       'bg': '#0f0f0e',
       'bg-surface': '#161615',
+      'bg-sidebar': '#161615',
       'bg-elevated': '#1c1b1a',
       'bg-hover': '#222120',
       'bg-active': '#2e2c28',
@@ -147,6 +187,7 @@ export const THEMES = [
     tokens: {
       'bg': '#1a1614',
       'bg-surface': '#221d1a',
+      'bg-sidebar': '#221d1a',
       'bg-elevated': '#2a2320',
       'bg-hover': '#2f2825',
       'bg-active': '#3c322d',
@@ -193,6 +234,7 @@ export const THEMES = [
     tokens: {
       'bg': '#fbfcfa',
       'bg-surface': '#eef1ec',
+      'bg-sidebar': '#eef1ec',
       'bg-elevated': '#ffffff',
       'bg-hover': '#e4e9e2',
       'bg-active': '#d5ddd2',
@@ -230,6 +272,7 @@ export const THEMES = [
     tokens: {
       'bg': '#fffdf9',
       'bg-surface': '#f3efe6',
+      'bg-sidebar': '#f3efe6',
       'bg-elevated': '#fffdf9',
       'bg-hover': '#eae3d6',
       'bg-active': '#ddd4c2',
@@ -267,6 +310,7 @@ export const THEMES = [
     tokens: {
       'bg': '#16132b',
       'bg-surface': '#1e1a3b',
+      'bg-sidebar': '#1e1a3b',
       'bg-elevated': '#252048',
       'bg-hover': '#2c2555',
       'bg-active': '#3a3072',
@@ -293,6 +337,141 @@ export const THEMES = [
       'shadow-modal': '0 20px 50px rgba(8, 4, 30, 0.7)',
       'scrollbar': '#463b88',
       'overlay': 'rgba(9, 5, 28, 0.6)',
+    },
+  },
+  {
+    // Git Tower's own colours. Not sampled by eye: Tower 2 keeps its palette
+    // as named colours in its binary (commitDateFontColor, refTagBorderColor,
+    // contentAddedLineBackgroundColor and so on), and these are those values.
+    //
+    // They are declared in Generic RGB, whose gamma of 1.8 makes macOS draw
+    // every one of them lighter than its hex says: the #6c6c6c Tower names for
+    // a commit hash reaches the screen as #7f7f7f. So each is converted to the
+    // sRGB the page speaks, with ColorSync, and checked against a screenshot.
+    //
+    // The few that are not Tower's to name come from the screen instead: the
+    // selection blue and the toolbar are drawn by macOS, and the sidebar is not
+    // a colour at all but the system's translucent material, which `vibrancy`
+    // asks the window for. bg-sidebar is what stands in for it where there is
+    // none to ask for.
+    id: 'tower',
+    name: 'Tower',
+    dark: false,
+    vibrancy: 'sidebar',
+    // Tower cuts the numbers out of its sidebar badges rather than printing
+    // them on top, so the digits are whatever the badge sits on.
+    badges: 'cutout',
+    // And draws its diff with a ruled gutter, the tint on the code alone and
+    // bordered chunk buttons; see the data-diff rules in styles.css.
+    diff: 'tower',
+    // And leaves text to macOS's own rendering, which is heavier than the
+    // thinned-down glyphs Keep draws by default.
+    smoothing: 'auto',
+    // Its lists are tables: ruled rows edge to edge, folder and name as one
+    // path, and a selection that greys when the list is not focused.
+    lists: 'tower',
+    tokens: {
+      'bg': '#ffffff',
+      'bg-surface': '#f2f4f5',
+      'bg-sidebar': '#cdcfd0',
+      'bg-elevated': '#ffffff',
+      // A wash of black rather than a grey: on the sidebar a solid grey that
+      // shows against the white list would lighten the row instead.
+      'bg-hover': 'rgba(0, 0, 0, 0.055)',
+      'bg-active': 'rgba(0, 0, 0, 0.12)',
+      'border': '#d3d3d3',
+      'border-strong': '#c5c5c5',
+      'text': '#000000',
+      'text-dim': '#5c5c5c',
+      'text-mute': '#7f7f7f',
+      'accent': '#0065e2',
+      'accent-hover': '#0059c8',
+      'on-accent': '#ffffff',
+      // Tower never sets green or yellow as text, so these two are the ones
+      // that stay legible on white rather than Tower's badge fills.
+      'green': '#2a9d3f',
+      'red': '#cd2a2e',
+      'yellow': '#c79200',
+      'blue': '#56a7dc',
+      'on-status': '#ffffff',
+      'diff-add-bg': '#e4fae4',
+      'diff-add-text': '#666666',
+      'diff-del-bg': '#ffecec',
+      'diff-del-text': '#666666',
+      'diff-hunk-bg': '#ffffff',
+      'diff-hunk-text': '#666666',
+      'shadow-menu': '0 10px 28px rgba(0, 0, 0, 0.16)',
+      'shadow-modal': '0 20px 50px rgba(0, 0, 0, 0.24)',
+      'scrollbar': '#c1c1c1',
+      'overlay': 'rgba(0, 0, 0, 0.25)',
+
+      // Where Tower puts which grey. The toolbar is the darkest of the light
+      // surfaces, the bar over a pane a step lighter, and the commit area and
+      // the column headers over a list lighter again.
+      'title-text': '#454748',
+      'folder-icon': '#62c3f0',
+      'toolbar-text': '#666868',
+      'toolbar-icon': '#646667',
+      'toolbar-border': '#a4a6a5',
+      'bg-header': '#f6f6f6',
+      'bg-header-secondary': '#fbfbfb',
+      'bg-detail': '#ffffff',
+      'header-text': '#000000',
+
+      'selection': '#0065e2',
+      'selection-inactive': '#dcdcdc',
+      'on-selection': '#ffffff',
+      'on-selection-dim': 'rgba(255, 255, 255, 0.7)',
+      'row-separator': '#f0f0f0',
+      'file-separator': '#f6f6f6',
+      'commit-author': '#7f7f7f',
+      'graph-node-fill': '#ffffff',
+      'graph-node-stroke': '#797979',
+      'lane-0': '#54c7f5',
+      'lane-1': '#6ae7ea',
+      'lane-2': '#81d069',
+      'lane-3': '#f7d462',
+      'lane-4': '#f6a858',
+      'lane-5': '#ff7870',
+      'ref-text': '#000000',
+      'ref-head-bg': '#c2e5f5',
+      'ref-head-border': '#80d2f4',
+      'ref-branch-bg': '#c2e5f5',
+      'ref-branch-border': '#80d2f4',
+      'ref-tag-bg': '#f7e7b9',
+      'ref-tag-border': '#f7d462',
+      'ref-remote-bg': '#e9e9e9',
+      'ref-remote-border': '#c0c0c0',
+      'status-wash': '100%',
+      'status-ink': '#ffffff',
+      'status-added': '#81d069',
+      'status-modified': '#54c7f5',
+      'status-deleted': '#ff7870',
+      'status-renamed': '#54c7f5',
+      'status-untracked': '#e2e2e2',
+      'status-untracked-ink': '#b0b0b0',
+      'status-conflicted': '#ea9394',
+      'status-conflicted-ink': '#cd2a2e',
+      'status-conflicted-border': '#e45759',
+      'status-selected-border': '#ffffff',
+      // Washes of black rather than greys, because the sidebar behind them is
+      // the system material and changes with whatever is behind the window.
+      // Each strength is read off Tower on two different backdrops.
+      'sidebar-text': 'rgba(0, 0, 0, 0.72)',
+      'sidebar-heading': 'rgba(0, 0, 0, 0.3)',
+      'sidebar-selection': 'rgba(0, 0, 0, 0.11)',
+      'sidebar-accent': '#646667',
+      'sidebar-icon': '#646667',
+      'sidebar-badge-bg': 'rgba(0, 0, 0, 0.7)',
+      'file-text': '#262626',
+      'placeholder': '#bdbdbd',
+      'info-label': '#bebebe',
+      'diff-text': '#666666',
+      'diff-gutter-text': '#989898',
+      'diff-gutter-border': '#c5c5c5',
+      'diff-add-border': '#c1ddc5',
+      'diff-del-border': '#ffccca',
+      'diff-hunk-border': '#dbdbdb',
     },
   },
 ];
@@ -350,7 +529,7 @@ export function validateTheme(theme) {
   const defined = Object.keys(theme.tokens);
   return {
     missing: TOKENS.filter(t => !defined.includes(t)),
-    extra: defined.filter(t => !TOKENS.includes(t)),
+    extra: defined.filter(t => !TOKENS.includes(t) && !OPTIONAL_TOKENS.includes(t)),
   };
 }
 

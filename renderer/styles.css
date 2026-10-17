@@ -10,6 +10,7 @@
 :root {
   --bg: #ffffff;
   --bg-surface: #f1f1f4;
+  --bg-sidebar: #f1f1f4;
   --bg-elevated: #ffffff;
   --bg-hover: #e7e7ec;
   --bg-active: #dadae2;
@@ -43,6 +44,12 @@
   --radius-lg: 10px;
   --row-inset: 6px;
   --sidebar-width: 230px;
+  /* Sidebar rows: the room left of a row's icon, which is where a folder's
+     arrow sits, and how far each level of nesting steps in. Tower's numbers. */
+  --tree-gutter: 17px;
+  --tree-indent: 14px;
+  /* How long a section or folder takes to fold, its arrow turning with it. */
+  --fold-time: 200ms;
 
   /* A soft wash of a colour, for selections and status chips. */
   --tint-accent: color-mix(in srgb, var(--accent) 13%, transparent);
@@ -110,6 +117,10 @@ body {
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
 }
+/* A theme can keep macOS's own text rendering, whose stem darkening draws
+ * every glyph a little heavier, the way native apps such as Tower show text.
+ * Keep turns it off above for its own look. */
+:root[data-smoothing="auto"] body { -webkit-font-smoothing: auto; }
 
 /* Icons ------------------------------------------------------------------ */
 
@@ -148,17 +159,17 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   gap: 6px;
   font-size: var(--fs-md);
   font-weight: 500;
-  color: var(--text-dim);
+  color: var(--title-text, var(--text-dim));
   pointer-events: none;
   white-space: nowrap;
 }
-.titlebar-title-icon { color: var(--accent); }
+.titlebar-title-icon { color: var(--folder-icon, var(--accent)); }
 
 /* Toolbar ---------------------------------------------------------------- */
 
 #toolbar-row {
   background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--toolbar-border, var(--border));
   padding: 0 10px;
   flex-shrink: 0;
   position: relative;
@@ -194,7 +205,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 #toolbar button {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-dim);
+  color: var(--toolbar-text, var(--text-dim));
   padding: 5px 9px 4px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -210,7 +221,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 /* The glyph carries the meaning, so it stays at full strength while the label
  * sits back a step. */
-#toolbar button .icon { color: var(--text); }
+#toolbar button .icon { color: var(--toolbar-icon, var(--text)); }
 #toolbar button:disabled .icon { color: var(--text-dim); }
 #toolbar button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 #toolbar button:active:not(:disabled) { background: var(--bg-active); }
@@ -352,7 +363,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   background: var(--bg-surface);
 }
 .breadcrumb-link {
-  color: var(--text-dim);
+  color: var(--title-text, var(--text-dim));
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -361,13 +372,13 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .breadcrumb-link:hover { color: var(--accent); }
 .breadcrumb-sep { color: var(--text-mute); }
 .breadcrumb-current {
-  color: var(--text);
+  color: var(--title-text, var(--text));
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 5px;
 }
-.breadcrumb-current .icon { color: var(--accent); }
+.breadcrumb-current .icon { color: var(--folder-icon, var(--accent)); }
 /* Inside a linked worktree the repository crumb is a way back to the main
    worktree, and says so the way the Repositories crumb does. */
 #breadcrumb-repo.is-link { cursor: pointer; }
@@ -475,14 +486,22 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   width: var(--sidebar-width);
   min-width: 160px;
   max-width: 500px;
-  background: var(--bg-surface);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* Its scrollbar is drawn by modules/overlay-scrollbar.js instead. */
+  scrollbar-width: none;
   flex-shrink: 0;
   padding-bottom: 10px;
 }
+/* A theme that asks for the system's translucent sidebar gets a clear window
+ * behind the page, so the page has to stop painting over it there: the body,
+ * which is otherwise what sits behind the sidebar, and the sidebar itself.
+ * Every other pane paints its own background and stays opaque. */
+:root[data-vibrancy] body,
+:root[data-vibrancy] #sidebar { background: transparent; }
 
 #sidebar-resize {
   width: 5px;
@@ -509,31 +528,38 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 #wc-resize:hover, #wc-resize.dragging,
 #history-resize:hover, #history-resize.dragging { background: var(--tint-accent-strong); }
 
-/* Every section header is the same height whether or not it carries a button.
- * The height is fixed rather than left to the content because the "+" on
+/* Section headers, drawn the way Tower draws them: a quiet bold label in its
+ * own case, sitting further out than the rows under it, and an arrow at the
+ * right end that only shows while the pointer is over the header. The whole
+ * header folds the section (sections.js), so the arrow is a hint, not a target.
+ *
+ * Every header is the same height whether or not it carries a button. The
+ * height is fixed rather than left to the content because the "+" on
  * Repositories is taller than the label, and a header that grows around it puts
- * the word "Repositories" a few pixels below where "Workspace" sits — which
+ * the word "Repositories" a few pixels below where "Workspace" sits, which
  * reads as the sidebar jumping when you move between the two. The button is
- * free to overhang the 13px line box; the padding absorbs it. */
+ * free to overhang the 14px content box; the padding absorbs it.
+ *
+ * The spacing is Tower's, measured: 22px from a label to the middle of the
+ * first row under it, and 23px from the last row to the next label, of which
+ * the section's own 7px at its foot is the part an empty section keeps. */
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 30px;
-  padding: 12px 14px 5px;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  color: var(--text-mute);
-  letter-spacing: 0.7px;
-  font-weight: 700;
-}
-
-/* The header doubles as the section's collapse control. The button inherits the
-   header's type so the row still reads as a label, not a control. */
-.section-toggle {
-  display: flex;
-  align-items: center;
   gap: 4px;
+  height: 26px;
+  padding: 9px 11px 3px 12px;
+  font-size: var(--fs-xs);
+  color: var(--sidebar-heading, var(--text-mute));
+  font-weight: 700;
+  cursor: pointer;
+}
+/* The first label sits close under the toolbar, as Tower's does. */
+.sidebar-section:first-child > .section-header { height: 20px; padding-top: 3px; }
+
+/* The label is a button, for the keyboard and for aria-expanded. It inherits
+   the header's type so it still reads as a label, not a control. */
+.section-toggle {
   flex: 1;
   min-width: 0;
   background: none;
@@ -542,24 +568,52 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   margin: 0;
   font: inherit;
   color: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
   text-align: left;
-  cursor: pointer;
+  cursor: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.section-toggle:hover { color: var(--text-dim); }
 .section-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
-.section-header .expand-arrow {
-  color: var(--text-mute);
-  display: inline-flex;
-  margin-left: -4px;
-  transition: transform 120ms ease;
+/* Down while the section is open, right while it is folded, and out of sight
+ * until the pointer (or the keyboard) is on the header. */
+.section-header > .expand-arrow {
+  color: var(--sidebar-heading, var(--text-mute));
+  opacity: 0;
+  transition: opacity 120ms ease, transform var(--fold-time) ease;
 }
-.sidebar-section.collapsed > .section-list { display: none; }
+.section-header:hover > .expand-arrow,
+.section-header:has(.section-toggle:focus-visible) > .expand-arrow { opacity: 1; }
+
+/* Folding slides, as Tower's does: the rows under a header or a folder shrink
+ * back into it and fade, and grow out of it again, while the arrow turns. The
+ * same tools as the commit box below: interpolate-size lets the height run to
+ * and from auto, and allow-discrete keeps a folding list drawn until it has
+ * finished shrinking instead of vanishing on the first frame.
+ *
+ * A list that was not drawn at all has nothing to grow from, so it starts from
+ * the @starting-style, and that only applies to one marked .opening. Only a
+ * click sets it (sections.js), which matters for the folders: every refresh
+ * rebuilds them, and an open one must appear in place rather than slide in
+ * again each time. The list clips while it moves and lets go once it is open,
+ * so the line marking where a dragged repository will land is never cut off. */
+.section-list, .tree-children {
+  interpolate-size: allow-keywords;
+  transition:
+    height var(--fold-time) ease, opacity var(--fold-time) ease,
+    display var(--fold-time) allow-discrete;
+}
+.tree-group.collapsed > .tree-children,
+.sidebar-section.collapsed > .section-list { display: none; height: 0; opacity: 0; }
+.collapsed > .section-list, .collapsed > .tree-children,
+.opening > .section-list, .opening > .tree-children { overflow: clip; }
+@starting-style {
+  .opening > .section-list, .opening > .tree-children { height: 0; opacity: 0; }
+}
 
 .sidebar-add-btn {
   background: none;
@@ -573,21 +627,28 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 .sidebar-add-btn:hover { color: var(--accent); background: var(--bg-hover); }
 
-/* Every clickable sidebar row shares one shape: an inset rounded pill. */
-.nav-item, .repo-item, .branch-item, .tag-item, .remote-item, .worktree-item {
+/* Every clickable sidebar row shares one shape: an inset rounded pill, 24px
+ * tall and touching its neighbours, as Tower's are. What makes a row read as
+ * inside its section is where the icon starts: past the section's label, with
+ * room on its left for a folder's arrow. Each level of nesting (a remote's
+ * branches, the branches in a folder) steps in once more, by the --depth the
+ * row is given in sidebar.js. */
+.nav-item, .repo-item, .branch-item, .tag-item, .remote-item, .worktree-item, .folder-item {
+  --indent: calc(var(--tree-gutter) + var(--depth, 0) * var(--tree-indent));
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 1px var(--row-inset);
-  padding: 6px 8px;
+  height: 24px;
+  margin: 0 var(--row-inset);
+  padding: 0 8px 0 var(--indent);
   border-radius: var(--radius);
   cursor: pointer;
-  color: var(--text-dim);
+  color: var(--sidebar-text, var(--text-dim));
   font-size: var(--fs-md);
   position: relative;
   transition: background 90ms ease, color 90ms ease;
 }
-.nav-item:hover, .repo-item:hover, .branch-item:hover, .tag-item:hover, .remote-item:hover, .worktree-item:hover {
+.nav-item:hover, .repo-item:hover, .branch-item:hover, .tag-item:hover, .remote-item:hover, .worktree-item:hover, .folder-item:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -597,15 +658,36 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 
 .nav-item.active {
-  background: var(--tint-accent);
-  color: var(--text);
+  background: var(--sidebar-selection, var(--tint-accent));
+  color: var(--sidebar-text, var(--text));
   font-weight: 600;
 }
-.nav-item.active .icon { color: var(--accent); }
+.nav-item.active .icon { color: var(--sidebar-accent, var(--accent)); }
+
+/* The 14px glyphs of branches, tags, remotes and folders sit in the 16px column
+ * the Workspace icons fill, so every label in the sidebar starts at the same x.
+ * The width alone does it: the glyph keeps its 14px height and centres in the
+ * wider box. */
+.repo-item > .icon-svg, .branch-item > .icon-svg, .tag-item > .icon-svg,
+.remote-item > .icon-svg, .worktree-item > .icon-svg, .folder-item > .icon-svg { width: 16px; }
+
+/* A folder's arrow, in the room left of its icon. Unlike a section's it is
+ * always drawn: it is the only thing that says the row opens. */
+.tree-arrow {
+  position: absolute;
+  top: 6px;
+  left: calc(var(--indent) - 17px);
+  display: inline-flex;
+  transition: transform var(--fold-time) ease;
+}
+/* Row icons follow the row's ink unless the theme draws them in a colour of
+ * their own, the way Tower's are grey whatever the label is. */
+.nav-item .icon, .repo-item .icon, .branch-item .icon, .tag-item .icon,
+.remote-item .icon, .worktree-item .icon { color: var(--sidebar-icon, currentColor); }
 
 .badge {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--sidebar-badge-bg, var(--accent));
+  color: var(--sidebar-badge-text, var(--on-accent));
   font-size: var(--fs-xs);
   /* Kept shorter than the row's line box, like .repo-item-badge below: the
      counts fill in async, and a badge taller than the text would grow the row
@@ -655,31 +737,31 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .repo-item.active .repo-item-remove { color: var(--on-accent); }
 .repo-item-remove:hover { color: var(--red) !important; }
 
-.sidebar-section { padding-bottom: 2px; }
+.sidebar-section { padding-bottom: 7px; }
 .section-list { padding: 0; }
 
-.branch-item span, .tag-item span, .remote-item span, .repo-item span, .worktree-item span, .nav-item {
+.branch-item span, .tag-item span, .remote-item span, .repo-item span, .worktree-item span, .folder-item span, .nav-item {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.branch-item.current { color: var(--text); font-weight: 600; }
-.branch-item.current .icon { color: var(--accent); }
+.branch-item.current { color: var(--sidebar-text, var(--text)); font-weight: 600; }
+.branch-item.current .icon { color: var(--sidebar-accent, var(--accent)); }
 .branch-item.detached { color: var(--yellow); font-style: italic; }
 .branch-item.detached .head-badge { background: var(--yellow); }
 
 .branch-item.selected-branch, .tag-item.selected-branch {
-  background: var(--tint-accent);
-  color: var(--text);
+  background: var(--sidebar-selection, var(--tint-accent));
+  color: var(--sidebar-text, var(--text));
 }
 
 .branch-item .head-badge {
   /* The row's spans all truncate, which is right for the branch name and wrong
      for a four-letter badge — without this it renders as "HE…". */
   flex-shrink: 0;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--sidebar-badge-bg, var(--accent));
+  color: var(--sidebar-badge-text, var(--on-accent));
   font-size: var(--fs-2xs);
   padding: 2px 6px;
   border-radius: 4px;
@@ -728,16 +810,14 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 .worktree-item.current .worktree-item-tag { color: var(--text-dim); }
 /* The single-clicked row, the same tint a pinned branch gets. */
-.worktree-item.selected { background: var(--tint-accent); color: var(--text); }
+.worktree-item.selected { background: var(--sidebar-selection, var(--tint-accent)); color: var(--sidebar-text, var(--text)); }
 
-/* Remote branch tree */
-.remote-item .expand-arrow, .changeset-file-header .expand-arrow {
+.changeset-file-header .expand-arrow {
   color: var(--text-mute);
   display: inline-flex;
   transition: transform 120ms ease;
 }
 .expand-arrow.open { transform: rotate(90deg); }
-.remote-branches { padding-left: 12px; }
 
 /* Main content ------------------------------------------------------------ */
 
@@ -769,11 +849,11 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .panel-header {
   padding: 0 12px;
   height: 32px;
-  background: var(--bg-surface);
+  background: var(--bg-header, var(--bg-surface));
   border-bottom: 1px solid var(--border);
   font-weight: 600;
   font-size: var(--fs-sm);
-  color: var(--text-dim);
+  color: var(--header-text, var(--text-dim));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -821,8 +901,76 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   transition: background 90ms ease;
 }
 .file-item:hover { background: var(--bg-hover); }
-.file-item.selected { background: var(--tint-accent); }
+.file-item.selected { background: var(--selection, var(--tint-accent)); }
+.file-item .file-name { color: var(--file-text, var(--text)); }
+.file-item.selected .file-name { color: var(--on-selection, var(--file-text, var(--text))); }
+.file-item.selected .file-path { color: var(--on-selection-dim, var(--text-mute)); }
+/* A ticked box is accent on accent once the row is solid, so its edge takes the
+ * row's ink to stay a box. */
+.file-item.selected .file-checkbox:checked { border-color: var(--on-selection, var(--accent)); }
 .file-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* A theme can lay its lists out the way Tower's tables are: rows edge to edge
+ * and ruled off from each other, a little tighter, and a file's folder in
+ * front of its name as one path rather than set apart on the right. */
+:root[data-lists="tower"] .file-list { padding: 0; }
+:root[data-lists="tower"] .file-item {
+  margin: 0;
+  /* 24px a row, Tower's, against Keep's own 26: its 16px badge and 4px above
+   * and below, in Tower's 12px type. */
+  padding: 4px 8px;
+  border-radius: 0;
+  font-size: var(--fs-sm);
+  box-shadow: inset 0 -1px 0 var(--file-separator, var(--row-separator, var(--border)));
+}
+:root[data-lists="tower"] .file-item.selected { box-shadow: none; }
+:root[data-lists="tower"] .file-item .file-checkbox,
+:root[data-lists="tower"] .file-item .file-status,
+:root[data-lists="tower"] .file-item .file-icon { order: -1; }
+/* Tower's status column: a square badge set well clear of the checkbox, then
+ * the file's icon, and the name after it. */
+:root[data-lists="tower"] .file-item .file-status {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0 5px 0 19px;
+  border-radius: 3px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: 16px;
+}
+/* And its header is a strip over the columns rather than a title bar. */
+:root[data-lists="tower"] #wc-files-panel .panel-header {
+  height: 22px;
+  font-weight: 400;
+}
+:root[data-lists="tower"] .file-item .file-path {
+  order: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: inherit;
+  color: var(--file-text, var(--text));
+  /* Cancels the row's gap, so folder and name read as one path. */
+  margin-right: -8px;
+}
+:root[data-lists="tower"] .file-item .file-path:empty { display: none; }
+:root[data-lists="tower"] .file-item .file-path::after { content: '/'; }
+:root[data-lists="tower"] .file-item.selected .file-path { color: var(--on-selection, var(--file-text, var(--text))); }
+:root[data-lists="tower"] .file-item .file-name { order: 1; }
+:root[data-lists="tower"] .file-item .conflict-kind { order: 2; }
+/* And a selected row is only solid while its list has the focus. Anywhere
+ * else it greys, as rows in a macOS list do, and its text goes back to its
+ * own colours: clearing the on-selection tokens leaves every rule above on
+ * its fallback. */
+:root[data-lists="tower"] .file-list:not(:focus-within),
+:root[data-lists="tower"] .commit-list:not(:focus-within) {
+  --selection: var(--selection-inactive, var(--bg-active));
+  --on-selection: initial;
+  --on-selection-dim: initial;
+  --status-selected-border: initial;
+}
 
 .file-checkbox {
   appearance: none;
@@ -857,12 +1005,19 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   flex-shrink: 0;
   font-family: var(--font-mono);
 }
-.file-status.modified  { background: color-mix(in srgb, var(--yellow) 20%, transparent); color: var(--yellow); }
-.file-status.added     { background: color-mix(in srgb, var(--green) 20%, transparent);  color: var(--green); }
-.file-status.deleted   { background: color-mix(in srgb, var(--red) 20%, transparent);    color: var(--red); }
-.file-status.untracked { background: color-mix(in srgb, var(--text-dim) 18%, transparent); color: var(--text-dim); }
-.file-status.renamed   { background: color-mix(in srgb, var(--blue) 20%, transparent);   color: var(--blue); }
-.file-status.conflicted { background: var(--red); color: var(--on-status); }
+.file-status.modified  { background: color-mix(in srgb, var(--status-modified, var(--yellow)) var(--status-wash, 20%), transparent); color: var(--status-ink, var(--status-modified, var(--yellow))); }
+.file-status.added     { background: color-mix(in srgb, var(--status-added, var(--green)) var(--status-wash, 20%), transparent);  color: var(--status-ink, var(--status-added, var(--green))); }
+.file-status.deleted   { background: color-mix(in srgb, var(--status-deleted, var(--red)) var(--status-wash, 20%), transparent);    color: var(--status-ink, var(--status-deleted, var(--red))); }
+.file-status.untracked { background: color-mix(in srgb, var(--status-untracked, var(--text-dim)) var(--status-wash, 18%), transparent); color: var(--status-untracked-ink, var(--status-untracked, var(--text-dim))); }
+.file-status.renamed   { background: color-mix(in srgb, var(--status-renamed, var(--blue)) var(--status-wash, 20%), transparent);   color: var(--status-ink, var(--status-renamed, var(--blue))); }
+.file-status.conflicted {
+  background: var(--status-conflicted, var(--red));
+  color: var(--status-conflicted-ink, var(--on-status));
+  box-shadow: inset 0 0 0 1px var(--status-conflicted-border, transparent);
+}
+/* Ringed on a selected row, for the theme whose selection is as solid as its
+ * badges. */
+.file-item.selected .file-status { box-shadow: inset 0 0 0 1px var(--status-selected-border, transparent); }
 
 /* Conflicts ---------------------------------------------------------------
  * A conflicted row keeps the shape of every other file row, but it is the one
@@ -872,6 +1027,9 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .file-item.conflicted { background: color-mix(in srgb, var(--red) 8%, transparent); }
 .file-item.conflicted:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
 .file-item.conflicted.selected { background: color-mix(in srgb, var(--red) 20%, transparent); }
+/* The header over the file list sits where Tower has its column headers, which
+ * are a step lighter than the headers over whole panes. */
+#wc-files-panel .panel-header { background: var(--bg-header-secondary, var(--bg-header, var(--bg-surface))); }
 /* Where the conflicts end and the files that came through cleanly begin: the
  * list's own header, said again inside it. */
 .file-list-divider {
@@ -880,7 +1038,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   height: 28px;
   margin: 6px 0 4px;
   padding: 0 12px;
-  background: var(--bg-surface);
+  background: var(--bg-header-secondary, var(--bg-surface));
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   font-weight: 600;
@@ -898,6 +1056,17 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   flex-shrink: 0;
 }
 .badge.conflict { background: var(--red); }
+/* A theme can have its badges' text cut out of them instead of printed on top,
+ * so the digits show whatever is behind the badge: the selected row, the
+ * sidebar, or the system's translucent material under it. The two mask layers
+ * are the badge and its glyphs, and xor leaves the badge with the glyphs gone.
+ * Black is the mask's opacity, not a colour anyone sees. */
+:root[data-badges="cutout"] .badge,
+:root[data-badges="cutout"] .branch-item .head-badge {
+  -webkit-mask-image: linear-gradient(black 0 0), linear-gradient(black 0 0);
+  -webkit-mask-clip: border-box, text;
+  -webkit-mask-composite: xor;
+}
 
 /* The banner: what you are in the middle of, and the way out of it. */
 .op-banner {
@@ -1073,13 +1242,17 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 }
 
 .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The file's own icon, as Finder draws it. Kept in place but unseen until it
+ * arrives, so the name does not shift across when it does. */
+.file-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.file-icon:not([src]) { visibility: hidden; }
 .file-path { color: var(--text-mute); font-size: var(--fs-sm); white-space: nowrap; }
 
 /* Commit box */
 #commit-box {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
+  background: var(--bg-header-secondary, var(--bg-surface));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1096,7 +1269,7 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   font-family: inherit;
   outline: none;
 }
-#commit-subject::placeholder { color: var(--text-mute); }
+#commit-subject::placeholder { color: var(--placeholder, var(--text-mute)); }
 #commit-subject:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--tint-accent);
@@ -1116,10 +1289,52 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
   line-height: 1.45;
   outline: none;
 }
-#commit-body::placeholder { color: var(--text-mute); }
+#commit-body::placeholder { color: var(--placeholder, var(--text-mute)); }
 #commit-body:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--tint-accent);
+}
+/* The description folds away the way Tower's does: only the subject line
+ * shows until you click into the commit box, so the file list gets the room.
+ * A description with something written in it stays, because hiding words you
+ * typed would read as losing them; so does anything amend filled in.
+ *
+ * It slides rather than snaps, as Tower's does. Folded, the box has no height,
+ * padding, border or opacity, and a negative margin swallows the box's gap
+ * above it, so nothing jumps when display finally goes to none. Each of those
+ * eases back on the way out, from the same values in @starting-style, and
+ * interpolate-size lets the height run to and from auto.
+ *
+ * The height is forced, because dragging the resize grip leaves a height on
+ * the element itself that would otherwise outrank the fold. And nothing
+ * animates while the grip is held (:active), or the box would trail the
+ * pointer through every step of the drag. */
+#commit-body {
+  interpolate-size: allow-keywords;
+  transition:
+    height 200ms ease, min-height 200ms ease, padding 200ms ease,
+    border-width 200ms ease, margin 200ms ease, opacity 160ms ease,
+    display 200ms allow-discrete;
+}
+#commit-body:active { transition: none; }
+#commit-box:not(:focus-within) #commit-body:placeholder-shown {
+  display: none;
+  height: 0 !important;
+  min-height: 0;
+  padding-block: 0;
+  border-block-width: 0;
+  margin-top: -8px;
+  opacity: 0;
+}
+@starting-style {
+  #commit-body {
+    height: 0 !important;
+    min-height: 0;
+    padding-block: 0;
+    border-block-width: 0;
+    margin-top: -8px;
+    opacity: 0;
+  }
 }
 
 /* Amending rewrites history, so the toggle stays quiet until it is on. */
@@ -1250,13 +1465,13 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .diff-hunk-header button.hunk-discard:hover { background: var(--red); color: var(--on-status); }
 .diff-hunk-header button.hunk-stage:hover { background: var(--accent); color: var(--on-accent); }
 
-.diff-line { padding: 0 12px 0 0; white-space: pre-wrap; word-break: break-all; display: flex; }
+.diff-line { padding: 0 12px 0 0; white-space: pre-wrap; word-break: break-all; display: flex; color: var(--diff-text, var(--text)); }
 .diff-line-num {
   display: inline-block;
   width: 46px;
   min-width: 46px;
   text-align: right;
-  color: var(--text-mute);
+  color: var(--diff-gutter-text, var(--text-mute));
   padding-right: 8px;
   user-select: none;
   font-size: var(--fs-code-sm);
@@ -1265,6 +1480,56 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 .diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-text); }
 .diff-line.del { background: var(--diff-del-bg); color: var(--diff-del-text); }
 .diff-line.hunk { background: var(--diff-hunk-bg); color: var(--diff-hunk-text); }
+
+/* A theme can draw the diff the way Tower does. The gutter is ruled off from
+ * the code and stays clean, the tint of an added or removed line sits on the
+ * code alone, each run of them is edged in a stronger shade of its tint, and
+ * the chunk header carries real buttons instead of quiet text. A conflict's
+ * two-sided diff keeps its own colours: those lines are sides, not changes. */
+/* Both are Menlo at 11px already; Tower's lines are 18px apart, not 17. */
+:root[data-diff="tower"] .diff-view,
+:root[data-diff="tower"] .changeset-file-diff { line-height: 1.64; }
+:root[data-diff="tower"] .diff-line.add:not(.two-sided .diff-line),
+:root[data-diff="tower"] .diff-line.del:not(.two-sided .diff-line) { background: none; }
+:root[data-diff="tower"] .diff-line.add:not(.two-sided .diff-line) .diff-line-content { background: var(--diff-add-bg); }
+:root[data-diff="tower"] .diff-line.del:not(.two-sided .diff-line) .diff-line-content { background: var(--diff-del-bg); }
+:root[data-diff="tower"] .diff-line-num {
+  font-family: var(--font-ui);
+  font-size: var(--fs-code);
+  box-shadow: inset -1px 0 0 var(--diff-gutter-border, var(--border));
+}
+/* The tint runs to the pane's edge, as Tower's does, so the row's own right
+ * padding moves inside the code. */
+:root[data-diff="tower"] .diff-line { padding-right: 0; }
+:root[data-diff="tower"] .diff-line-content { padding: 0 12px 0 8px; }
+/* The number carries the sign, so a changed line says which side it is on
+ * even where the tint is too faint to tell. */
+:root[data-diff="tower"] .diff-line.add .diff-line-num:nth-child(2)::before { content: '+'; }
+:root[data-diff="tower"] .diff-line.del .diff-line-num:first-child::before { content: '-'; }
+/* The edges of a run: a line at the top where the run starts and one at the
+ * bottom where it ends, drawn as shadows so no row grows taller than its
+ * neighbours in the gutter. */
+:root[data-diff="tower"] .diff-line-content { box-shadow: var(--run-top, 0 0 transparent), var(--run-bottom, 0 0 transparent); }
+:root[data-diff="tower"] .diff-line.add:not(.diff-line.add + .diff-line.add) { --run-top: inset 0 1px 0 var(--diff-add-border, transparent); }
+:root[data-diff="tower"] .diff-line.add:not(:has(+ .diff-line.add)) { --run-bottom: inset 0 -1px 0 var(--diff-add-border, transparent); }
+:root[data-diff="tower"] .diff-line.del:not(.diff-line.del + .diff-line.del) { --run-top: inset 0 1px 0 var(--diff-del-border, transparent); }
+:root[data-diff="tower"] .diff-line.del:not(:has(+ .diff-line.del)) { --run-bottom: inset 0 -1px 0 var(--diff-del-border, transparent); }
+:root[data-diff="tower"] .diff-hunk-header {
+  font-weight: 400;
+  font-size: var(--fs-code);
+  padding: 6px 12px;
+  border-color: var(--diff-hunk-border, var(--border));
+}
+:root[data-diff="tower"] .diff-hunk-header button {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 2px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+:root[data-diff="tower"] .diff-hunk-header button.hunk-discard:hover,
+:root[data-diff="tower"] .diff-hunk-header button.hunk-stage:hover { background: var(--bg-hover); color: var(--text); }
 
 /* \uXXXX escapes. Both forms are always in the DOM; the body class picks which
    one is shown, so the toggle costs no re-render. */
@@ -1354,7 +1619,7 @@ body.decode-unicode .uni-dec { display: inline; }
   width: 150px;
   outline: none;
 }
-#search-input::placeholder { color: var(--text-mute); }
+#search-input::placeholder { color: var(--placeholder, var(--text-mute)); }
 
 /* Sits inside the field, so it stays a small square glyph rather than
  * inheriting the toolbar button's label-sized box. */
@@ -1407,7 +1672,7 @@ body.decode-unicode .uni-dec { display: inline; }
 /* The hairline separates the text, not the graph — a rule drawn across the
  * lanes reads as part of the drawing. */
 #history-list .commit-item + .commit-item { box-shadow: none; }
-#history-list .commit-item + .commit-item .commit-body { box-shadow: 0 -1px 0 var(--border); }
+#history-list .commit-item + .commit-item .commit-body { box-shadow: 0 -1px 0 var(--row-separator, var(--border)); }
 #history-list .commit-item:hover .commit-body,
 #history-list .commit-item.selected .commit-body,
 #history-list .commit-item:hover + .commit-item .commit-body,
@@ -1429,8 +1694,8 @@ body.decode-unicode .uni-dec { display: inline; }
   stroke-width: 1.75;
 }
 .commit-graph .graph-node {
-  fill: currentColor;
-  stroke: currentColor;
+  fill: var(--graph-node-fill, currentColor);
+  stroke: var(--graph-node-stroke, currentColor);
   stroke-width: 2;
 }
 /* Hollow = this commit exists here and on no remote. */
@@ -1450,7 +1715,7 @@ body.decode-unicode .uni-dec { display: inline; }
   color: var(--text-mute);
   border: 1px solid color-mix(in srgb, var(--text-mute) 45%, transparent);
 }
-.commit-item + .commit-item { box-shadow: 0 -1px 0 var(--border); }
+.commit-item + .commit-item { box-shadow: 0 -1px 0 var(--row-separator, var(--border)); }
 /* Commits a pull would bring in: on the upstream, not on the branch yet. A grey
  * band, the way Tower previews a pull, so they read as not here yet while
  * staying as clickable as any other row. Before hover and selection, which
@@ -1459,7 +1724,23 @@ body.decode-unicode .uni-dec { display: inline; }
 .commit-item.incoming .commit-author,
 .commit-item.incoming .commit-subject-text { color: var(--text-dim); }
 .commit-item:hover { background: var(--bg-hover); box-shadow: none; }
-.commit-item.selected { background: var(--tint-accent); box-shadow: none; }
+.commit-item.selected { background: var(--selection, var(--tint-accent)); box-shadow: none; }
+/* What reads on a selected row. Each falls back to the colour the text has
+ * anyway, so this only does anything for a theme that paints the row solid. */
+.commit-item.selected .commit-subject-text,
+.pr-item.selected .pr-title { color: var(--on-selection, var(--text)); }
+.commit-item.selected .commit-author { color: var(--on-selection-dim, var(--commit-author, var(--text))); }
+.commit-item.incoming.selected .commit-author,
+.commit-item.incoming.selected .commit-subject-text { color: var(--on-selection, var(--text-dim)); }
+.commit-item.selected .commit-hash,
+.commit-item.selected .commit-date { color: var(--on-selection-dim, var(--text-mute)); }
+.pr-item.selected .pr-item-header,
+.pr-item.selected .pr-number,
+.pr-item.selected .pr-branches { color: var(--on-selection-dim, var(--text-dim)); }
+.commit-item.selected .commit-local {
+  color: var(--on-selection-dim, var(--text-mute));
+  border-color: color-mix(in srgb, var(--on-selection-dim, var(--text-mute)) 45%, transparent);
+}
 .commit-item.selected + .commit-item, .commit-item:hover + .commit-item { box-shadow: none; }
 .commit-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -1469,7 +1750,7 @@ body.decode-unicode .uni-dec { display: inline; }
   gap: 8px;
   margin-bottom: 3px;
 }
-.commit-author { font-weight: 600; font-size: var(--fs-base); }
+.commit-author { font-weight: 600; font-size: var(--fs-base); color: var(--commit-author, var(--text)); }
 .commit-date { color: var(--text-mute); font-size: var(--fs-sm); margin-left: auto; }
 .commit-hash {
   font-family: var(--font-mono);
@@ -1491,15 +1772,27 @@ body.decode-unicode .uni-dec { display: inline; }
   font-weight: 600;
   margin-left: 4px;
 }
-.commit-ref.head { background: var(--accent); color: var(--on-accent); }
-.commit-ref.branch { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
-.commit-ref.tag { background: color-mix(in srgb, var(--yellow) 22%, transparent); color: var(--yellow); }
+.commit-ref.head {
+  background: var(--ref-head-bg, var(--accent));
+  color: var(--ref-text, var(--on-accent));
+  box-shadow: inset 0 0 0 1px var(--ref-head-border, transparent);
+}
+.commit-ref.branch {
+  background: var(--ref-branch-bg, color-mix(in srgb, var(--green) 22%, transparent));
+  color: var(--ref-text, var(--green));
+  box-shadow: inset 0 0 0 1px var(--ref-branch-border, transparent);
+}
+.commit-ref.tag {
+  background: var(--ref-tag-bg, color-mix(in srgb, var(--yellow) 22%, transparent));
+  color: var(--ref-text, var(--yellow));
+  box-shadow: inset 0 0 0 1px var(--ref-tag-border, transparent);
+}
 /* A remote-tracking ref is where the branch is *published*, so it reads as the
  * quieter, outlined twin of the local branch chip. */
 .commit-ref.remote {
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--text-mute) 60%, transparent);
-  color: var(--text-dim);
+  background: var(--ref-remote-bg, transparent);
+  border: 1px solid var(--ref-remote-border, color-mix(in srgb, var(--text-mute) 60%, transparent));
+  color: var(--ref-text, var(--text-dim));
   padding: 0 5px;
 }
 /* On a row the chips lead the subject, so the gap goes after them. */
@@ -1590,12 +1883,12 @@ body.decode-unicode .uni-dec { display: inline; }
 #commit-info {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
+  background: var(--bg-detail, var(--bg-surface));
   flex-shrink: 0;
 }
 #commit-info table { width: 100%; font-size: var(--fs-base); }
 #commit-info td { padding: 2px 8px; vertical-align: top; }
-#commit-info td:first-child { color: var(--text-mute); white-space: nowrap; width: 108px; }
+#commit-info td:first-child { color: var(--info-label, var(--text-mute)); white-space: nowrap; width: 108px; }
 
 /* The message reads as one block under the table: subject on top, body below
  * it. The 8px matches the table cells so the text lines up with them. Bodies
@@ -1678,7 +1971,7 @@ body.decode-unicode .uni-dec { display: inline; }
   font-family: inherit;
   font-size: var(--fs-sm);
 }
-#find-input::placeholder { color: var(--text-mute); }
+#find-input::placeholder { color: var(--placeholder, var(--text-mute)); }
 .find-count {
   min-width: 34px;
   font-size: var(--fs-xs);
@@ -1774,7 +2067,7 @@ body.decode-unicode .uni-dec { display: inline; }
   outline: none;
   margin-bottom: 14px;
 }
-.modal-input::placeholder { color: var(--text-mute); }
+.modal-input::placeholder { color: var(--placeholder, var(--text-mute)); }
 .modal-input:focus, .modal-select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--tint-accent);
@@ -2482,6 +2775,36 @@ body.decode-unicode .uni-dec { display: inline; }
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-mute); background-clip: content-box; }
 
+/* The sidebar's bar, which floats over the rows and shows only while they
+ * scroll (modules/overlay-scrollbar.js). The script sizes the rail to the
+ * scroller and moves the thumb; this is how it looks. Matched to Tower's by
+ * eye: a slim pill 2px clear of the sidebar's border, a quarter-strength grey
+ * with a faintly darker hairline round it. */
+.overlay-scrollbar {
+  position: fixed;
+  z-index: 11;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.overlay-scrollbar.visible { opacity: 1; transition-duration: 80ms; }
+.overlay-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  /* The rail includes the sidebar's 1px border. */
+  right: 3px;
+  width: 5.5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 27%, transparent);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--text) 6%, transparent);
+  transition: background-color 120ms ease;
+}
+.overlay-scrollbar.visible .overlay-scrollbar-thumb { pointer-events: auto; }
+.overlay-scrollbar-thumb:hover,
+.overlay-scrollbar.dragging .overlay-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
 /* Pull Requests -----------------------------------------------------------
  * The same two-panel shape as History, and deliberately the same classes for
  * the rows: a pull request is another change to read, and it should not look
@@ -2505,7 +2828,7 @@ body.decode-unicode .uni-dec { display: inline; }
 #pr-resize:hover, #pr-resize.dragging { background: var(--tint-accent-strong); }
 
 .pr-item { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; }
-.pr-item + .pr-item { box-shadow: 0 -1px 0 var(--border); }
+.pr-item + .pr-item { box-shadow: 0 -1px 0 var(--row-separator, var(--border)); }
 .pr-item:hover, .pr-item.selected { box-shadow: none; }
 .pr-item-header { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-dim); }
 .pr-number { font-family: var(--font-mono); color: var(--text-dim); }
@@ -3046,6 +3369,10 @@ body.decode-unicode .uni-dec { display: inline; }
   to { background-position: -200% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
+  #commit-body { transition: none; }
+  .section-list, .tree-children { transition: none; }
+  /* Nothing moves, so nothing says when an opening list has finished. */
+  .opening > .section-list, .opening > .tree-children { overflow: visible; }
   .skeleton-line { animation: none; background: var(--bg-hover); }
 }
 
@@ -3055,12 +3382,14 @@ body.decode-unicode .uni-dec { display: inline; }
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 1px var(--row-inset);
-  padding: 6px 8px;
+  height: 24px;
+  margin: 0 var(--row-inset);
+  padding: 0 8px 0 var(--tree-gutter);
 }
 .skeleton-side-row .skeleton-dot {
   width: 14px;
   height: 14px;
+  margin: 0 1px;
   border-radius: 4px;
   flex-shrink: 0;
 }

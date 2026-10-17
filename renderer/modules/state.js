@@ -10,6 +10,9 @@ export const state = {
   // files are still unmerged. Empty when nothing is in flight.
   repoState: { kind: null, conflicts: [], branch: null, step: 0, total: 0 },
   commits: [],
+  // How many commits History is listing in all, for its title. `commits` only
+  // holds the pages loaded so far. Null until read.
+  commitCount: null,
   // Hashes of commits no remote has yet — history draws these as hollow nodes,
   // so "what would a push send?" is answerable by looking rather than counting.
   unpushed: new Set(),
@@ -24,6 +27,8 @@ export const state = {
   searching: false,
   branchList: [],
   tagList: [],
+  // How many stashes the repository has, for the Stashes title. Null until read.
+  stashCount: null,
   // Open pull requests, once the Pull Requests view has been opened at least
   // once — unlike the rest of the sidebar this is not kept fresh by the poll,
   // because every refresh is a network round trip against a rate limit.
@@ -79,6 +84,14 @@ const viewLabels = {
   'settings': 'Settings',
 };
 
+// The checked-out branch, or for a detached HEAD the commit it sits on, as the
+// title and the breadcrumb both name it. Empty until the branches are read.
+export function currentBranchLabel() {
+  const current = state.branchList.find(b => b.current);
+  if (!current) return '';
+  return current.detached ? `HEAD detached at ${current.name}` : current.name;
+}
+
 export function updateTitlebar() {
   const titleEl = $('#titlebar-title');
   const textEl = $('#titlebar-title-text');
@@ -95,19 +108,27 @@ export function updateTitlebar() {
   if (iconEl) iconEl.style.display = '';
   const repoLabel = repoName();
   const viewLabel = viewLabels[state.currentView] || state.currentView;
-  const currentBranch = state.branchList.find(b => b.current);
-  const branchName = currentBranch
-    ? (currentBranch.detached ? `${currentBranch.name} (detached)` : currentBranch.name)
-    : '';
-
-  let detail = branchName;
-  if (state.currentView === 'working-copy' && state.statusFiles.length > 0) {
-    detail += ` \u2013 ${state.statusFiles.length} Changed File${state.statusFiles.length !== 1 ? 's' : ''}`;
-  } else if (state.currentView === 'history' && state.commits.length > 0) {
-    detail += ` (${state.commits.length} Commits)`;
+  // Like Tower: "keep – Working Copy (main – 10 Changed Files)", "keep – History
+  // (721 Commits)", "keep – Stashes (55 Stashes)". Only Working Copy names the
+  // branch; the breadcrumb carries it for the rest.
+  const detail = [];
+  if (state.currentView === 'working-copy') {
+    const branch = currentBranchLabel();
+    if (branch) detail.push(branch);
+    if (state.statusFiles.length > 0) {
+      detail.push(`${state.statusFiles.length} Changed File${state.statusFiles.length !== 1 ? 's' : ''}`);
+    }
+  } else if (state.currentView === 'history') {
+    // The whole branch (or repository), not the rows loaded so far. A search
+    // lists matches rather than history, so it leaves the count out.
+    if (!state.searching && state.commitCount !== null) {
+      detail.push(`${state.commitCount} Commit${state.commitCount !== 1 ? 's' : ''}`);
+    }
+  } else if (state.currentView === 'stashes' && state.stashCount !== null) {
+    detail.push(`${state.stashCount} Stash${state.stashCount !== 1 ? 'es' : ''}`);
   }
 
-  textEl.textContent = `${repoLabel} \u2013 ${viewLabel} (${detail})`;
+  textEl.textContent = `${repoLabel} \u2013 ${viewLabel}` + (detail.length ? ` (${detail.join(' \u2013 ')})` : '');
 }
 
 // The branch we last saw HEAD pointing at. Clicking a branch or tag in the sidebar pins

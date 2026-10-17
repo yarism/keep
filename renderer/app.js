@@ -1,4 +1,4 @@
-import { $, $$, state, switchView, updateTitlebar, reconcileSelectedBranch, resetHeadTracking, setWorkspaceOpener, repoName } from './modules/state.js';
+import { $, $$, state, switchView, updateTitlebar, currentBranchLabel, reconcileSelectedBranch, resetHeadTracking, setWorkspaceOpener, repoName } from './modules/state.js';
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
@@ -21,6 +21,7 @@ import { describeResult } from './git-output.js';
 import { hydrateIcons } from './icons.js';
 import { createUnicodeToggle } from './modules/diff.js';
 import { setupSelectAll } from './modules/select-all.js';
+import { overlayScrollbar } from './modules/overlay-scrollbar.js';
 import { setupFind } from './modules/find.js';
 import { refreshWorktrees, renderWorktrees, resetWorktrees, setupWorktreesSection } from './modules/worktrees.js';
 import { worktreeLabel } from './worktree-info.js';
@@ -98,6 +99,8 @@ async function enterWorkspace(path) {
   _lastFingerprint = null;
   state.selectedFile = null;
   state.selectedCommit = null;
+  // The Stashes title must not show the previous repository's count.
+  state.stashCount = null;
   // One of these views is on screen the moment the workspace opens, so the
   // previous repository's commits, refs and changed files must be gone before
   // this one's have loaded.
@@ -190,15 +193,18 @@ async function enterWorkspace(path) {
   startAutoFetch();
 }
 
-// The breadcrumb names the repository and, inside a linked worktree, which
-// working copy of it is open: Repositories > keep > fix-login. The repository
-// is the main worktree's folder even when the path open is a worktree's, so
-// switching worktrees never looks like switching repositories, and the
-// repository crumb is then the way back to the main one.
+// The breadcrumb names the repository and its branch, like Tower: Repositories >
+// keep (main). Inside a linked worktree it also says which working copy of it
+// is open: Repositories > keep > fix-login. The repository is the main
+// worktree's folder even when the path open is a worktree's, so switching
+// worktrees never looks like switching repositories, and the repository crumb
+// is then the way back to the main one. The worktree crumb already names the
+// branch there, so the repository crumb leaves it off.
 function updateBreadcrumb() {
-  $('#breadcrumb-repo-name').textContent = repoName();
   const { main, current, list } = state.worktrees;
   const wt = main && current && current !== main ? list.find(w => w.path === current) : null;
+  const branch = wt ? '' : currentBranchLabel();
+  $('#breadcrumb-repo-name').textContent = branch ? `${repoName()} (${branch})` : repoName();
   $('#breadcrumb-repo').classList.toggle('is-link', Boolean(wt));
   $('#breadcrumb-repo').title = wt ? `Back to the main worktree at ${main}` : '';
   $('#breadcrumb-worktree-sep').hidden = !wt;
@@ -542,6 +548,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   setupCollapsibleSections(settings);
   setupSidebarResize();
+  overlayScrollbar($('#sidebar'));
   setupPanelResize('wc-resize', 'wc-files-panel', 'wcFilesWidth', { minWidth: 220, maxWidth: 600 });
   setupPanelResize('history-resize', 'history-list-panel', 'historyListWidth', { minWidth: 300, maxWidth: 800 });
   setupPanelResize('pr-resize', 'pr-list-panel', 'prListWidth', { minWidth: 260, maxWidth: 800 });

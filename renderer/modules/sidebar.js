@@ -1,4 +1,4 @@
-import { $, escapeHtml, state, switchView, openWorkspace } from './state.js';
+import { $, escapeHtml, state, switchView, openWorkspace, updateTitlebar } from './state.js';
 import { worktreeTag } from '../worktree-info.js';
 import {
   showBranchContextMenu, showTagContextMenu, showRemoteBranchContextMenu,
@@ -7,6 +7,7 @@ import {
 import { icon } from '../icons.js';
 import { refreshHistory } from './history.js';
 import { trackingFor, trackingChips, updateSyncBadges } from './sync.js';
+import { isCollapsed, toggleFolder, slide, settleWhenOpen } from './sections.js';
 
 // Adding a remote is rare enough — most repositories arrive with origin
 // already set by the clone that made them — that it does not earn a
@@ -105,6 +106,79 @@ export function resetSidebar() {
   }
 }
 
+// Branch names are paths, and the sidebar draws them the way Tower does: every
+// part before the last is a folder, so "claude/fix-login" is a row called
+// "fix-login" inside a folder called "claude". A folder takes the place of its
+// first branch, which keeps git's alphabetical order. Git will not let "a" and
+// "a/b" both exist, so a name is never both a branch and a folder.
+function pathTree(items, nameOf) {
+  const root = [];
+  const folders = new Map();
+  for (const item of items) {
+    const parts = nameOf(item).split('/');
+    let level = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const path = parts.slice(0, i + 1).join('/');
+      let folder = folders.get(path);
+      if (!folder) {
+        folder = { name: parts[i], path, children: [] };
+        folders.set(path, folder);
+        level.push(folder);
+      }
+      level = folder.children;
+    }
+    level.push({ name: parts[parts.length - 1], item });
+  }
+  return root;
+}
+
+// Appends what pathTree() built to `list`. `leaf(item, name, depth)` makes a
+// branch's row; the folders are made here, and remember being folded under
+// "<keyBase>/<their path>".
+function appendTree(list, nodes, depth, keyBase, leaf) {
+  for (const node of nodes) {
+    if (!node.children) {
+      list.appendChild(leaf(node.item, node.name, depth));
+      continue;
+    }
+    const { group, children } = foldingRow(node.name, depth, `${keyBase}/${node.path}`, 'folder', 'folder-item');
+    appendTree(children, node.children, depth + 1, keyBase, leaf);
+    list.appendChild(group);
+  }
+}
+
+// A row that opens and closes the rows under it: a remote, or a folder of
+// branches. Which ones are folded is kept with the sections' (sections.js), so
+// a refresh, which rebuilds every row, puts them back the way they were.
+function foldingRow(label, depth, key, glyph, className) {
+  const open = !isCollapsed(key);
+  const group = document.createElement('div');
+  group.className = 'tree-group' + (open ? '' : ' collapsed');
+  const row = document.createElement('div');
+  row.className = className;
+  setDepth(row, depth);
+  row.innerHTML = `
+    <span class="tree-arrow expand-arrow${open ? ' open' : ''}">${icon('chevron', 12)}</span>
+    ${icon(glyph, 14)}
+    <span>${escapeHtml(label)}</span>
+  `;
+  const children = document.createElement('div');
+  children.className = 'tree-children';
+  settleWhenOpen(group, children);
+  row.addEventListener('click', () => {
+    const folded = toggleFolder(key);
+    row.querySelector('.tree-arrow').classList.toggle('open', !folded);
+    slide(group, folded);
+  });
+  group.append(row, children);
+  return { group, row, children };
+}
+
+// How many levels in a row sits; styles.css turns it into indentation.
+function setDepth(row, depth) {
+  if (depth) row.style.setProperty('--depth', depth);
+}
+
 // `preloaded` is a branch list someone has already read (opening a repository
 // starts that read early, alongside its others), so it is not read twice.
 export async function refreshBranches(refresh, preloaded) {
@@ -118,12 +192,14 @@ export async function refreshBranches(refresh, preloaded) {
 export function renderBranches(refresh) {
   const list = $('#branches-list');
   list.innerHTML = '';
-  state.branchList.filter(b => !b.isRemote).forEach(b => {
+  const local = state.branchList.filter(b => !b.isRemote);
+  appendTree(list, pathTree(local, b => b.name), 0, 'branches', (b, name, depth) => {
     const item = document.createElement('div');
     item.className = 'branch-item' + (b.current ? ' current' : '') + (b.detached ? ' detached' : '');
     item.dataset.branch = b.name;
+    setDepth(item, depth);
     const glyph = icon(b.detached ? 'alert' : 'branch', 14);
-    const label = b.detached ? `(HEAD detached at ${b.name})` : b.name;
+    const label = b.detached ? `(HEAD detached at ${b.name})` : name;
     // The ahead/behind chips are what make a stale branch visible without
     // checking it out — the sidebar is where you look before deciding to.
     const chips = trackingChips(trackingFor(b.name), { showUnpublished: b.current });
@@ -152,7 +228,7 @@ export function renderBranches(refresh) {
       if (b.worktree) { openWorkspace(b.worktree); return; }
       confirmCheckout(b.name, refresh);
     });
-    list.appendChild(item);
+    return item;
   });
   // Rebuilding the list drops the class, so restore it from state
   if (state.selectedBranch) highlightBranch(state.selectedBranch);
@@ -212,32 +288,22 @@ export function renderRemotes(refresh) {
   const remoteBranches = state.branchList.filter(b => b.isRemote);
   list.innerHTML = '';
   remotes.forEach(r => {
-    // Remote header (collapsible)
-    const remoteEl = document.createElement('div');
-    remoteEl.className = 'remote-group';
+    // The remote is a folder of its branches, one level in from the section,
+    // and its branches' own folders go in from there.
+    const key = `remotes/${r.name}`;
+    const { group, row, children } = foldingRow(r.name, 0, key, 'cloud', 'remote-item');
+    row.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteContextMenu(e, r, refresh); });
 
-    const header = document.createElement('div');
-    header.className = 'remote-item';
-    header.innerHTML = `
-      <span class="expand-arrow open">${icon('chevron', 12)}</span>
-      ${icon('cloud', 14)}
-      <span>${escapeHtml(r.name)}</span>
-    `;
-
-    const branchContainer = document.createElement('div');
-    branchContainer.className = 'remote-branches';
-
-    // Filter branches for this remote
     const prefix = r.name + '/';
-    remoteBranches.filter(b => b.name.startsWith(prefix)).forEach(b => {
-      const shortName = b.name.substring(prefix.length);
-      if (shortName === 'HEAD') return; // skip origin/HEAD
+    const mine = remoteBranches.filter(b => b.name.startsWith(prefix) && b.name !== prefix + 'HEAD');
+    appendTree(children, pathTree(mine, b => b.name.substring(prefix.length)), 1, key, (b, name, depth) => {
       const branchEl = document.createElement('div');
       branchEl.className = 'branch-item remote-branch-item';
       branchEl.dataset.branch = b.name;
+      setDepth(branchEl, depth);
       branchEl.innerHTML = `
         ${icon('branch', 14)}
-        <span>${escapeHtml(shortName)}</span>
+        <span>${escapeHtml(name)}</span>
       `;
       branchEl.addEventListener('click', () => {
         switchView('history');
@@ -246,20 +312,10 @@ export function renderRemotes(refresh) {
         refreshHistory(refresh, b.name);
       });
       branchEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteBranchContextMenu(e, b, refresh); });
-      branchContainer.appendChild(branchEl);
+      return branchEl;
     });
 
-    header.addEventListener('click', () => {
-      const arrow = header.querySelector('.expand-arrow');
-      const isOpen = arrow.classList.contains('open');
-      arrow.classList.toggle('open');
-      branchContainer.hidden = isOpen;
-    });
-    header.addEventListener('contextmenu', (e) => { e.preventDefault(); showRemoteContextMenu(e, r, refresh); });
-
-    remoteEl.appendChild(header);
-    remoteEl.appendChild(branchContainer);
-    list.appendChild(remoteEl);
+    list.appendChild(group);
   });
   if (state.selectedBranch) highlightBranch(state.selectedBranch);
 }
@@ -267,6 +323,8 @@ export function renderRemotes(refresh) {
 export async function refreshStashes() {
   try {
     const stashes = await window.git.stashes(state.repoPath);
+    state.stashCount = stashes.length;
+    updateTitlebar();
     const list = $('#stash-list');
     list.innerHTML = '';
     if (stashes.length === 0) { list.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">No stashes</div>'; return; }

@@ -7,13 +7,18 @@ contextBridge.exposeInMainWorld('git', {
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (s) => ipcRenderer.invoke('save-settings', s),
   setWindowChrome: (c) => ipcRenderer.invoke('set-window-chrome', c),
+  // Read synchronously by the theme before the first paint: only macOS can
+  // put its translucent material behind the page.
+  platform: process.platform,
   setAppIcon: (i) => ipcRenderer.invoke('set-app-icon', i),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  fileIcon: (repoPath, filePath) => ipcRenderer.invoke('file-icon', repoPath, filePath),
   // Pushed, not asked for: macOS changes appearance on its own, and while the
   // window follows the OS the main process is the only side that can see it.
   onSystemTheme: (cb) => ipcRenderer.on('system-theme', (_, s) => cb(s)),
   status: (p) => ipcRenderer.invoke('git-status', p),
   log: (p, branch, limit, opts) => ipcRenderer.invoke('git-log', p, branch, limit, opts),
+  commitCount: (p, branch, opts) => ipcRenderer.invoke('git-commit-count', p, branch, opts),
   branches: (p) => ipcRenderer.invoke('git-branches', p),
   unpushed: (p, ref, opts) => ipcRenderer.invoke('git-unpushed', p, ref, opts),
   incoming: (p, ref, upstream) => ipcRenderer.invoke('git-incoming', p, ref, upstream),

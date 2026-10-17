@@ -343,6 +343,16 @@ exports.log = async (repoPath, branch, limit = 100, opts = {}) => {
   return parseLog(out, remotes);
 };
 
+// How many commits the log above would list if it were not paged, for the
+// History title: one branch's ancestry, or every ref with `all`. Only `branch`
+// is counted, never a pull preview's upstream, because the commits a pull
+// would bring in are not on the branch yet.
+exports.commitCount = async (repoPath, branch, opts = {}) => {
+  const scope = opts.all ? '--all' : (branch || 'HEAD');
+  const out = await run(repoPath, ['rev-list', '--count', scope, '--']);
+  return parseInt(out.trim(), 10) || 0;
+};
+
 // The commits on `upstream` that `ref` does not have yet: what a pull would
 // bring in. Reported per commit, like `unpushed` below, so history can grey
 // each of those rows. The behind count already bounds how many there are.

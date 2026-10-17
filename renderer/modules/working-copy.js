@@ -4,6 +4,7 @@ import { showContextMenu } from './context-menu.js';
 import { showConfirm } from './modal.js';
 import { toast } from './toast.js';
 import { offerChess } from './chess.js';
+import { fileIconNow, paintFileIcon } from './file-icons.js';
 import {
   bannerText, conflictCaption, conflictsFirst, describeConflict, describeSides, nextConflict, sideActions,
 } from './conflicts.js';
@@ -292,13 +293,16 @@ function renderFileList() {
     // neither staged nor unstaged, and ticking it marks the file resolved, the
     // way it does in Tower. That is `git add` and nothing more, so
     // resolveConflicts asks first when the file still has markers in it.
+    const iconUrl = fileIconNow(f.filePath);
     item.innerHTML = `
       <input type="checkbox" class="file-checkbox" ${f.staged ? 'checked' : ''} tabindex="-1"${f.conflicted ? ' title="Mark resolved"' : ''}>
       <span class="file-status ${f.status}">${f.conflicted ? '!' : f.status[0].toUpperCase()}</span>
+      <img class="file-icon" alt="" aria-hidden="true"${iconUrl ? ` src="${iconUrl}"` : ''}>
       <span class="file-name" title="${f.filePath}">${f.filePath.split('/').pop()}</span>
       <span class="file-path">${f.filePath.includes('/') ? f.filePath.substring(0, f.filePath.lastIndexOf('/')) : ''}</span>
       ${f.conflicted ? `<span class="conflict-kind">${f.conflictKind}</span>` : ''}
     `;
+    paintFileIcon(item.querySelector('.file-icon'), state.repoPath, f.filePath);
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('file-checkbox')) return;
       handleFileClick(idx, e);

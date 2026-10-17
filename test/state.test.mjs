@@ -15,8 +15,8 @@ const {
 
 const DEFAULTS = {
   repoPath: null, currentView: 'welcome', selectedFile: null, selectedCommit: null,
-  selectedBranch: null, statusFiles: [], commits: [], branchList: [], tagList: [],
-  repositories: [],
+  selectedBranch: null, statusFiles: [], commits: [], commitCount: null, searching: false,
+  branchList: [], tagList: [], stashCount: null, repositories: [],
 };
 
 // The module exports a single shared object, so every test starts from scratch.
@@ -76,7 +76,7 @@ test('updateTitlebar: names the repo, view and current branch', () => {
   assert.strictEqual(icon.style.display, '', 'the icon comes back once a repo is open');
 });
 
-test('updateTitlebar: pluralises the changed-file count', () => {
+test('updateTitlebar: the working copy adds the changed-file count after the branch', () => {
   reset({
     repoPath: '/tmp/keep',
     currentView: 'working-copy',
@@ -86,39 +86,87 @@ test('updateTitlebar: pluralises the changed-file count', () => {
   const { text } = stubTitlebar();
 
   updateTitlebar();
-  assert.match(text.textContent, /1 Changed File\)$/);
+  assert.strictEqual(text.textContent, 'keep – Working Copy (main – 1 Changed File)');
 
   state.statusFiles = [{ filePath: 'a' }, { filePath: 'b' }];
   updateTitlebar();
-  assert.match(text.textContent, /2 Changed Files\)$/);
+  assert.strictEqual(text.textContent, 'keep – Working Copy (main – 2 Changed Files)');
 });
 
-test('updateTitlebar: counts commits in the history view', () => {
+test('updateTitlebar: the history view counts every commit and leaves the branch to the breadcrumb', () => {
+  // History loads in pages, so the rows on screen are only the first of them.
   reset({
     repoPath: '/tmp/keep',
     currentView: 'history',
     branchList: [{ name: 'main', current: true }],
     commits: [{}, {}, {}],
-    statusFiles: [{ filePath: 'ignored-in-this-view' }],
+    commitCount: 721,
   });
   const { text } = stubTitlebar();
 
   updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – History (721 Commits)', 'the total, not the loaded rows');
 
-  assert.strictEqual(text.textContent, 'keep – History (main (3 Commits))');
+  state.commitCount = 1;
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – History (1 Commit)');
+
+  state.commitCount = null;
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – History', 'nothing until the count is read');
+});
+
+test('updateTitlebar: a search on screen leaves the commit count out', () => {
+  reset({
+    repoPath: '/tmp/keep',
+    currentView: 'history',
+    branchList: [{ name: 'main', current: true }],
+    commits: [{}, {}],
+    commitCount: 721,
+    searching: true,
+  });
+  const { text } = stubTitlebar();
+
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – History');
+
+  state.searching = false;
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – History (721 Commits)', 'back once the search is cleared');
+});
+
+test('updateTitlebar: the stashes view counts the stashes, none included', () => {
+  reset({
+    repoPath: '/tmp/keep',
+    currentView: 'stashes',
+    branchList: [{ name: 'main', current: true }],
+    stashCount: 0,
+  });
+  const { text } = stubTitlebar();
+
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – Stashes (0 Stashes)');
+
+  state.stashCount = 1;
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – Stashes (1 Stash)');
+
+  state.stashCount = null;
+  updateTitlebar();
+  assert.strictEqual(text.textContent, 'keep – Stashes', 'nothing until the stashes are read');
 });
 
 test('updateTitlebar: marks a detached HEAD', () => {
   reset({
     repoPath: '/tmp/keep',
-    currentView: 'history',
+    currentView: 'working-copy',
     branchList: [{ name: 'a1b2c3d', current: true, detached: true }],
   });
   const { text } = stubTitlebar();
 
   updateTitlebar();
 
-  assert.match(text.textContent, /a1b2c3d \(detached\)/);
+  assert.strictEqual(text.textContent, 'keep – Working Copy (HEAD detached at a1b2c3d)');
 });
 
 test('updateTitlebar: falls back to the raw view name for unlabelled views', () => {
@@ -127,7 +175,7 @@ test('updateTitlebar: falls back to the raw view name for unlabelled views', () 
 
   updateTitlebar();
 
-  assert.strictEqual(text.textContent, 'keep – welcome ()');
+  assert.strictEqual(text.textContent, 'keep – welcome');
 });
 
 // ── reconcileSelectedBranch ──

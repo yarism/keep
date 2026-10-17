@@ -69,7 +69,7 @@ warning appears.
   Comment. Drafts survive a quit and nothing reaches GitHub until you submit
 - Links out to GitHub, GitLab and Bitbucket — open a pull request from a
   branch, or view a branch or commit on the web, straight from the context menu
-- Seven colour themes, switchable from the toolbar
+- Eight colour themes, switchable from the toolbar
 - Progress and results reported for every toolbar command
 - System notifications for what finishes while Keep is in the background:
   pulls, pushes, releases, GitHub builds, and the moment your branch falls
@@ -151,6 +151,7 @@ remembered between launches.
 | **Sage** | cool light greys with a green cast, deep teal accent |
 | **Ember** | warm charcoal with amber — the dark one that isn't blue |
 | **Synthwave** | deep indigo with magenta and mint — the loud one |
+| **Tower** | Git Tower's own colour table: translucent macOS sidebar, solid blue selection, Tower's ref pills and status badges |
 
 A theme is just a map of CSS custom properties in `renderer/themes.js` — no
 colour is written literally in `styles.css`, so adding one means adding an entry

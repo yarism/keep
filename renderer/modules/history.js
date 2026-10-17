@@ -72,7 +72,6 @@ async function loadMore() {
     state.commits = state.commits.concat(fresh);
     _depth = state.commits.length;
     renderCommitList(_refresh);
-    updateTitlebar();
   } catch (e) {
     console.error('[history] load more failed:', e);
     _atEnd = true;
@@ -108,6 +107,8 @@ async function doSearch() {
   const field = $('#search-field').value;
   const { branch, all } = historyRef();
   state.searching = true;
+  // The title's commit count describes history, not the matches.
+  updateTitlebar();
   _depth = PAGE_SIZE;
   _atEnd = false;
   _pagedRef = null;
@@ -178,6 +179,7 @@ export function historyRef() {
 export function resetHistory() {
   clearTimeout(_searchTimeout);
   state.commits = [];
+  state.commitCount = null;
   state.unpushed = new Set();
   state.incoming = new Set();
   state.searching = false;
@@ -210,6 +212,7 @@ export function historySnapshot() {
   return {
     ref: _pagedRef,
     commits: state.commits.slice(0, PAGE_SIZE),
+    commitCount: state.commitCount,
     unpushed: state.unpushed,
     incoming: state.incoming,
     pullPreview: _pullPreview,
@@ -223,6 +226,7 @@ export function restoreHistory(snap, refresh) {
   const { branch, all } = historyRef();
   if (!snap || snap.ref !== refKey(branch, all)) return;
   state.commits = snap.commits;
+  state.commitCount = snap.commitCount ?? null;
   state.unpushed = snap.unpushed;
   state.incoming = snap.incoming || new Set();
   _pullPreview = snap.pullPreview || null;
@@ -294,16 +298,19 @@ export async function refreshHistory(refresh, branchOverride) {
   // greying is left to do, and it is about HEAD's branch, as the header is.
   _pullPreview = pullPreviewFor(all ? headTracking() : trackingFor(branchName));
   try {
-    // All in one round trip: the commits, which of them no remote has, and
-    // which of them a pull would bring in.
-    const [commits, unpushed, incoming] = await Promise.all([
+    // All in one round trip: the commits, how many there are past the loaded
+    // pages, which of them no remote has, and which of them a pull would bring
+    // in. The count leaves those last ones out: the branch does not have them.
+    const [commits, count, unpushed, incoming] = await Promise.all([
       window.git.log(state.repoPath, all ? null : branchName, _depth, { all, upstream: logUpstream(all) }),
+      window.git.commitCount(state.repoPath, all ? null : branchName, { all }).catch(() => null),
       window.git.unpushed(state.repoPath, all ? null : branchName, { all }).catch(() => []),
       _pullPreview
         ? window.git.incoming(state.repoPath, _pullPreview.branch, _pullPreview.upstream).catch(() => [])
         : [],
     ]);
     state.commits = commits;
+    state.commitCount = count;
     _atEnd = commits.length < _depth;
     state.unpushed = new Set(unpushed);
     state.incoming = new Set(incoming);
@@ -311,11 +318,14 @@ export async function refreshHistory(refresh, branchOverride) {
       ? `HEAD (${currentBranch.name})`
       : (branchName || 'History');
     $('#history-branch-label').textContent = all ? 'All branches' : displayLabel;
-  } catch { state.commits = []; state.unpushed = new Set(); state.incoming = new Set(); _atEnd = true; }
+  } catch { state.commits = []; state.commitCount = null; state.unpushed = new Set(); state.incoming = new Set(); _atEnd = true; }
   // Across all branches there is no one branch the list is "about", so the
   // header falls back to reporting where HEAD stands.
   renderTracking(all ? null : branchName);
   renderCommitList(refresh);
+  // Now rather than when the whole refresh lands, and also for a branch picked
+  // in the sidebar, which refreshes History alone.
+  updateTitlebar();
 }
 
 // Only a branch that has fallen behind has anything to preview. One that is
