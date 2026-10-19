@@ -59,7 +59,7 @@ function renderRepoList() {
     fillDirtyBadge(item, r.path);
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('repo-item-remove')) return;
-      if (_onSelectRepo) _onSelectRepo(r.path);
+      openListed(r);
     });
     item.addEventListener('keydown', (e) => {
       const items = list.querySelectorAll('.repo-item');
@@ -72,7 +72,7 @@ function renderRepoList() {
         const prev = items[i - 1];
         if (prev) prev.focus();
       } else if (e.key === 'Enter') {
-        if (_onSelectRepo) _onSelectRepo(r.path);
+        openListed(r);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         state.repositories.splice(i, 1);
         window.git.saveRepos(state.repositories);
@@ -120,6 +120,17 @@ function renderRepoList() {
     });
     list.appendChild(item);
   });
+}
+
+// A repository opens on the worktree it was left in (noted by enterWorkspace),
+// as long as that folder is still a worktree of this repository: an agent's
+// worktree is often removed once its work lands, and then the main one opens.
+async function openListed(r) {
+  let path = r.path;
+  if (r.worktree) {
+    try { if (await window.git.mainWorktree(r.worktree) === r.path) path = r.worktree; } catch {}
+  }
+  if (_onSelectRepo) _onSelectRepo(path);
 }
 
 function clearDropMarks(list, except) {

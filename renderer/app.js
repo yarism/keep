@@ -184,13 +184,27 @@ async function enterWorkspace(path) {
   // less it reads as a mistake being fixed.
   const worktrees = await worktreesRead;
   if (state.repoPath !== path) return;
-  if (worktrees) { state.worktrees = worktrees; updateBreadcrumb(); }
+  if (worktrees) { state.worktrees = worktrees; updateBreadcrumb(); rememberWorktree(worktrees); }
   const branches = await branchesRead;
   if (state.repoPath !== path) return;
   await refreshWith({ status: changed, remotes, branches, worktrees: worktrees || undefined });
   if (state.repoPath !== path) return;
   startPolling();
   startAutoFetch();
+}
+
+// The repository list opens a repository where it was left, so the worktree
+// open now is noted on its entry: going into another repository and coming
+// back must not land on the main worktree when the work was in an agent's.
+// Opening the main worktree clears the note, since that is a choice as well.
+function rememberWorktree({ main, current }) {
+  const repo = state.repositories.find(r => r.path === main);
+  if (!repo || !current) return;
+  const worktree = current !== main ? current : undefined;
+  if (repo.worktree === worktree) return;
+  if (worktree) repo.worktree = worktree;
+  else delete repo.worktree;
+  window.git.saveRepos(state.repositories);
 }
 
 // The breadcrumb names the repository and its branch, like Tower: Repositories >
