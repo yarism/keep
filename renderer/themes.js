@@ -56,8 +56,8 @@ export const OPTIONAL_TOKENS = [
   'status-conflicted', 'status-conflicted-ink', 'status-conflicted-border',
   'status-selected-border',
   // the sidebar
-  'sidebar-text', 'sidebar-heading', 'sidebar-selection', 'sidebar-accent',
-  'sidebar-icon', 'sidebar-badge-bg', 'sidebar-badge-text',
+  'sidebar-text', 'sidebar-heading', 'sidebar-selection', 'sidebar-on-selection',
+  'sidebar-accent', 'sidebar-icon', 'sidebar-badge-bg', 'sidebar-badge-text',
   // file names in a list, text fields, the commit detail and the diff
   'file-text', 'placeholder', 'info-label', 'diff-text', 'diff-gutter-text',
   // the diff a theme draws Tower's way: the gutter's rule, each run's edge, and
@@ -337,6 +337,84 @@ export const THEMES = [
       'shadow-modal': '0 20px 50px rgba(8, 4, 30, 0.7)',
       'scrollbar': '#463b88',
       'overlay': 'rgba(9, 5, 28, 0.6)',
+    },
+  },
+  {
+    // Slack's Halloween theme. The surfaces, the type and the two loud colours
+    // are read off a screenshot of it: near-black sidebar, slime green for
+    // the selected sidebar row, pumpkin for whatever wants attention. The rest
+    // (red, blue, the diffs, the lanes) are not Slack's to name, so they are
+    // chosen to sit beside those two.
+    id: 'halloween',
+    name: 'Halloween',
+    dark: true,
+    // Its selected sidebar row is solid green with dark ink, and that ink has
+    // to reach everything in the row; see the data-sidebar rule in styles.css.
+    sidebar: 'solid',
+    tokens: {
+      'bg': '#1a1d21',
+      'bg-surface': '#0e1111',
+      'bg-sidebar': '#0e1111',
+      'bg-elevated': '#222529',
+      'bg-hover': '#26292e',
+      'bg-active': '#33373c',
+      'border': '#2b302f',
+      'border-strong': '#45484d',
+      'text': '#f8f8f8',
+      'text-dim': '#b9babd',
+      'text-mute': '#84858a',
+      'accent': '#ff6a00',
+      'accent-hover': '#ff8a33',
+      'on-accent': '#0e1111',
+      'green': '#39ff13',
+      'red': '#ff5c5c',
+      'yellow': '#f8c800',
+      'blue': '#5cb8f0',
+      'on-status': '#0e1111',
+      'diff-add-bg': 'rgba(57, 255, 19, 0.12)',
+      'diff-add-text': '#8dff77',
+      'diff-del-bg': 'rgba(255, 92, 92, 0.14)',
+      'diff-del-text': '#ff9c9c',
+      'diff-hunk-bg': 'rgba(255, 106, 0, 0.13)',
+      'diff-hunk-text': '#ffa060',
+      'shadow-menu': '0 10px 28px rgba(0, 0, 0, 0.6)',
+      'shadow-modal': '0 20px 50px rgba(0, 0, 0, 0.7)',
+      'scrollbar': '#3a3d42',
+      'overlay': 'rgba(0, 0, 0, 0.6)',
+
+      // Solid green is for the one row in the sidebar. Across a commit or a
+      // file it is a wall of colour with a paragraph on it, so the lists get
+      // a wash of it, and the quiet text a step up to stay readable there.
+      'selection': 'rgba(57, 255, 19, 0.16)',
+      'on-selection': '#f8f8f8',
+      'on-selection-dim': '#b9babd',
+      'sidebar-text': '#bcb9c1',
+      'sidebar-heading': '#bcb9c1',
+      'sidebar-selection': '#39ff13',
+      'sidebar-on-selection': '#001300',
+      // Pumpkin first and no neon: the default lanes give the theme's green a
+      // line of its own, and one that bright outshouts the row it runs past.
+      'lane-0': '#ff6a00',
+      'lane-1': '#a78bfa',
+      'lane-2': '#f8c800',
+      'lane-3': '#ff5c5c',
+      'lane-4': '#5cb8f0',
+      'lane-5': '#30c058',
+      // Dark pills and solid badges: the washes the other themes use go muddy
+      // on a row that is already tinted green.
+      'ref-text': '#f8f8f8',
+      'ref-head-bg': '#3a1c06',
+      'ref-head-border': '#ff6a00',
+      'ref-branch-bg': '#0f2b0a',
+      'ref-branch-border': '#39ff13',
+      'ref-tag-bg': '#2e2608',
+      'ref-tag-border': '#f8c800',
+      'ref-remote-bg': '#1a1d21',
+      'ref-remote-border': '#5b5e63',
+      'status-wash': '100%',
+      'status-ink': '#0e1111',
+      'status-untracked': '#b9babd',
+      'status-untracked-ink': '#0e1111',
     },
   },
   {

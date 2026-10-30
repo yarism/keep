@@ -812,6 +812,17 @@ body.titlebar-locked #titlebar { -webkit-app-region: no-drag; }
 /* The single-clicked row, the same tint a pinned branch gets. */
 .worktree-item.selected { background: var(--sidebar-selection, var(--tint-accent)); color: var(--sidebar-text, var(--text)); }
 
+/* A theme can paint the selected row solid, the way Slack does. The row's text
+ * is one colour for selected and not then, so it takes its own ink here, and
+ * so does whatever in the row carries a colour of its own and has no fill to
+ * stand on. The badges with a surface behind them keep theirs. */
+:root[data-sidebar="solid"] :is(.nav-item.active, .branch-item.selected-branch, .tag-item.selected-branch, .worktree-item.selected) {
+  color: var(--sidebar-on-selection);
+}
+:root[data-sidebar="solid"] :is(.nav-item.active, .branch-item.selected-branch, .tag-item.selected-branch, .worktree-item.selected) :is(.icon, .icon-svg, .worktree-item-tag, .track-chip) {
+  color: inherit;
+}
+
 .changeset-file-header .expand-arrow {
   color: var(--text-mute);
   display: inline-flex;

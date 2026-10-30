@@ -85,7 +85,7 @@ export function applyTheme(id) {
   else delete root.dataset.vibrancy;
   // The shapes a theme can ask for that tokens cannot express, each a hook
   // for its own rules in styles.css.
-  for (const shape of ['badges', 'diff', 'smoothing', 'lists']) {
+  for (const shape of ['badges', 'diff', 'smoothing', 'lists', 'sidebar']) {
     if (theme[shape]) root.dataset[shape] = theme[shape];
     else delete root.dataset[shape];
   }
