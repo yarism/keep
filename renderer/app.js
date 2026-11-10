@@ -2,7 +2,7 @@ import { $, $$, state, switchView, updateTitlebar, currentBranchLabel, reconcile
 import { setupRepoList, showRepoList } from './modules/repos.js';
 import { setupContextMenu } from './modules/context-menu.js';
 import { showModal, showConfirm, showSelect } from './modules/modal.js';
-import { refreshStatus, renderStatus, resetWorkingCopy, setupCommitBox, setupOpBanner } from './modules/working-copy.js';
+import { refreshStatus, renderStatus, resetWorkingCopy, setupCommitBox, setupOpBanner, showChangedCount } from './modules/working-copy.js';
 import { refreshHistory, resetHistory, historySnapshot, restoreHistory, setupHistorySearch, setupHistoryScope, setupHistoryPaging } from './modules/history.js';
 import { setupPullRequests, loadPullRequests, syncPullRequestNav, resetPullRequests } from './modules/pull-requests.js';
 import { setupSidebarResize, setupPanelResize, setupRemotesSection, refreshBranches, refreshTags, refreshRemotes, refreshStashes, resetSidebar, renderBranches, renderTags, renderRemotes } from './modules/sidebar.js';
@@ -156,10 +156,7 @@ async function enterWorkspace(path) {
   // Another repository (or the list) was opened meanwhile; this one's answers
   // must not be drawn into it.
   if (state.repoPath !== path) return;
-  const badge = $('#wc-badge');
-  if (changed.length > 0) { badge.textContent = changed.length; badge.hidden = false; }
-  else { badge.hidden = true; }
-  badge.classList.toggle('conflict', changed.some(f => f.conflicted));
+  showChangedCount(changed.length, changed.some(f => f.conflicted));
   switchView(changed.length > 0 ? 'working-copy' : 'history');
   // A release begun in this repository keeps its terminal with it: walking
   // back in brings the panel back, still running or already settled.

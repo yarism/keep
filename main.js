@@ -288,6 +288,16 @@ ipcMain.handle('set-app-icon', (_, chosen) => {
   return true;
 });
 
+// The open repository's changed-file count, as the red pill on the Dock icon
+// (the way Slack shows unread messages). Nothing when it is clean or when no
+// repository is open. Linux gets the same through setBadgeCount where the
+// desktop supports it.
+ipcMain.on('set-dock-badge', (_, count) => {
+  const n = Number.isInteger(count) && count > 0 ? count : 0;
+  if (process.platform === 'darwin') app.dock.setBadge(n ? String(n) : '');
+  else app.setBadgeCount(n);
+});
+
 // The renderer builds forge URLs (renderer/modules/forge.js) but must not be
 // trusted to hand the OS an arbitrary string — a file: or a custom scheme would
 // launch whatever is registered for it. Only ordinary web pages get through.

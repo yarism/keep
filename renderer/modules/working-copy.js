@@ -74,15 +74,28 @@ function landOnFirstConflict() {
   state.selectedFile = fileKey(state.statusFiles[first]);
 }
 
+// The changed-file count in its two places: the pill beside Working Copy in the
+// sidebar and the badge on the Dock icon, so the open repository's uncommitted
+// work shows even while Keep is in the background. Zero hides both. The Dock
+// is only told when the number actually moves.
+let _dockCount = null;
+
+export function showChangedCount(count, conflicted = false) {
+  const badge = $('#wc-badge');
+  if (count > 0) { badge.textContent = count; badge.hidden = false; }
+  else { badge.hidden = true; }
+  badge.classList.toggle('conflict', conflicted);
+  if (count === _dockCount) return;
+  _dockCount = count;
+  window.git.setDockBadge(count);
+}
+
 // Everything refreshStatus draws, from state alone, so a repository can be
 // painted from what it looked like last time before git has answered.
 export function renderStatus() {
-  const badge = $('#wc-badge');
-  if (state.statusFiles.length > 0) { badge.textContent = state.statusFiles.length; badge.hidden = false; }
-  else { badge.hidden = true; }
   // An unresolved conflict is not just another changed file, so the count stops
   // looking like an ordinary one.
-  badge.classList.toggle('conflict', conflictCount() > 0);
+  showChangedCount(state.statusFiles.length, conflictCount() > 0);
   renderOpBanner();
   syncAmendAvailability();
   renderFileList();

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('git', {
   // put its translucent material behind the page.
   platform: process.platform,
   setAppIcon: (i) => ipcRenderer.invoke('set-app-icon', i),
+  setDockBadge: (count) => ipcRenderer.send('set-dock-badge', count),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   fileIcon: (repoPath, filePath) => ipcRenderer.invoke('file-icon', repoPath, filePath),
   // Pushed, not asked for: macOS changes appearance on its own, and while the

@@ -1,6 +1,7 @@
 import { $, $$, escapeHtml, state, switchView } from './state.js';
 import { icon } from '../icons.js';
 import { updateSyncBadges } from './sync.js';
+import { showChangedCount } from './working-copy.js';
 import { showAccess } from './access.js';
 import { syncReleasePanel } from './release.js';
 import { dirtyBadgeTitle, worktreeTag } from '../worktree-info.js';
@@ -32,6 +33,8 @@ export function showRepoList() {
   // buttons from whatever was open a moment ago.
   state.branchList = [];
   updateSyncBadges();
+  // Nor the changed-file count on the Dock icon.
+  showChangedCount(0);
   switchView('welcome');
   // A release terminal belongs to its repository, and no repository is open
   // here: the run, if one is going, carries on out of sight.
