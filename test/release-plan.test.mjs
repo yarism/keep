@@ -144,30 +144,48 @@ test('lifecycleSteps: nothing is promised for a command that is not a version bu
 
 // ── the working copy ──
 
-test('blockedByWorkingCopy: uncommitted changes are named before the wait', () => {
-  const message = P.blockedByWorkingCopy([
+test('stashNotice: the files about to be stashed are named before anything moves', () => {
+  const message = P.stashNotice([
     { filePath: 'git.js', status: 'modified' },
     { filePath: 'README.md', status: 'modified' },
   ]);
+  assert.match(message, /^2 changed files/);
   assert.match(message, /git\.js/);
   assert.match(message, /README\.md/);
+  assert.match(message, /put back/);
 });
 
-// npm's own check ignores untracked files, so a stray scratch file must not
-// stop a release that would have worked.
-test('blockedByWorkingCopy: untracked files do not block', () => {
-  assert.strictEqual(P.blockedByWorkingCopy([{ filePath: 'notes.txt', status: 'untracked' }]), null);
-  assert.strictEqual(P.blockedByWorkingCopy([]), null);
+// npm's own check ignores untracked files, so a stray scratch file on its own
+// is no reason to stash anything.
+test('stashNotice: untracked files alone start no stash', () => {
+  assert.strictEqual(P.stashNotice([{ filePath: 'notes.txt', status: 'untracked' }]), null);
+  assert.strictEqual(P.stashNotice([]), null);
+});
+
+// Once something is being stashed, the untracked files go with it, so the
+// count has to include them or it undersells what is about to leave.
+test('stashNotice: untracked files are counted once there is a stash', () => {
+  const message = P.stashNotice([
+    { filePath: 'git.js', status: 'modified' },
+    { filePath: 'notes.txt', status: 'untracked' },
+  ]);
+  assert.match(message, /^2 changed files/);
+  assert.match(message, /notes\.txt/);
+});
+
+test('stashLabel: the stash says which release it was for', () => {
+  assert.strictEqual(P.stashLabel('1.2.0'), 'Keep: before release 1.2.0');
+  assert.strictEqual(P.stashLabel(null), 'Keep: before release');
 });
 
 // A file staged *and* modified appears twice in a status list, and counting
 // entries rather than paths would report one file as two.
-test('blockedByWorkingCopy: a file changed twice over is still one file', () => {
-  const message = P.blockedByWorkingCopy([
+test('stashNotice: a file changed twice over is still one file', () => {
+  const message = P.stashNotice([
     { filePath: 'git.js', status: 'modified', staged: true },
     { filePath: 'git.js', status: 'modified', staged: false },
   ]);
-  assert.doesNotMatch(message, /and \d+ more/);
+  assert.match(message, /^1 changed file /);
 });
 
 // ── reading the result back ──

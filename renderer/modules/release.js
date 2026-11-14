@@ -3,7 +3,8 @@
 // Cutting a release is one command typed in a terminal, and the reason it is
 // worth a panel is not the typing — it is everything around it. The command is
 // different in every repository, the number it produces is easy to get wrong by
-// hand, it refuses to run against a dirty working copy, and it takes as long as
+// hand, it refuses to run against a dirty working copy (so Keep stashes that
+// for the length of the run and puts it back), and it takes as long as
 // the test suite does while printing the only evidence that it is working at
 // all. So the panel shows the command it is about to run before running it,
 // counts the next version itself, and puts the output on screen as it arrives.
@@ -33,7 +34,7 @@ import { forgeForBranch, releasesUrl } from './forge.js';
 import { watchBuild } from './build-watch.js';
 import {
   BUMPS, BUMP_MEANING, nextVersion, isSemver, detectCommand, takesBump,
-  fillCommand, lifecycleSteps, blockedByWorkingCopy, versionFromOutput,
+  fillCommand, lifecycleSteps, stashNotice, stashLabel, versionFromOutput,
 } from '../release-plan.js';
 
 let refreshAll = null;
@@ -81,7 +82,7 @@ export function setupRelease(refresh) {
     if (!$('#release-overlay').hidden) {
       // The setup modal owns the window while it is up, as modals do.
       if (e.key === 'Escape') closeModal();
-      if (e.key === 'Enter' && !session.blocked) start();
+      if (e.key === 'Enter') start();
       return;
     }
     // The run panel does not own the window, so Escape only means it when
@@ -196,7 +197,7 @@ async function openRelease() {
     reason: saved ? 'Saved for this repository.' : detected.reason,
     command: saved || detected.command,
     bump: 'patch',
-    blocked: blockedByWorkingCopy(status),
+    stash: stashNotice(status),
     running: false,
   };
 
@@ -208,8 +209,9 @@ async function openRelease() {
   $('#release-reason').textContent = session.reason;
 
   const block = $('#release-block');
-  block.hidden = !session.blocked;
-  block.textContent = session.blocked || '';
+  block.hidden = !session.stash;
+  block.textContent = session.stash || '';
+  $('#release-go').textContent = session.stash ? 'Stash and release' : 'Release';
 
   renderChoices();
 
@@ -249,7 +251,7 @@ function renderChoices() {
   }
 
   renderSteps();
-  $('#release-go').disabled = Boolean(session.blocked) || !session.command.trim();
+  $('#release-go').disabled = !session.command.trim();
 }
 
 // What the command will do on its way past. A release that takes forty seconds
@@ -268,7 +270,7 @@ function renderSteps() {
 // ── Running ──
 
 async function start() {
-  if (!session || session.running || session.blocked) return;
+  if (!session || session.running) return;
 
   const template = $('#release-command').value.trim();
   if (!template) return;
@@ -292,7 +294,10 @@ async function start() {
   $('#release-result').hidden = true;
   openPanel();
 
-  const result = await window.release.run(session.repoPath, command);
+  const result = await window.release.run(session.repoPath, command, {
+    stash: Boolean(session.stash),
+    stashLabel: stashLabel(next),
+  });
   session.running = false;
   $('#release-spinner').hidden = true;
   $('#release-panel-close').textContent = 'Close';
@@ -315,13 +320,20 @@ async function finish(result) {
   el.hidden = false;
   el.className = `release-result ${result.ok ? 'ok' : 'bad'}`;
 
+  // Changes that did not come back are said wherever the ending is said, the
+  // Stop included: they are the one thing here that cannot wait to be noticed.
+  const stranded = result.stash && !result.stash.restored ? result.stash.message : '';
+
   // A cancelled run is not an ending worth announcing: the person who pressed
   // Stop is the one person guaranteed to know already.
   if (!result.ok) {
-    el.innerHTML = `<div class="release-result-text">${escapeHtml(result.message || 'The command failed.')}</div>`;
+    const message = [result.message || 'The command failed.', stranded].filter(Boolean).join('\n');
+    el.innerHTML = `<div class="release-result-text">${escapeHtml(message)}</div>`;
     if (!result.cancelled) {
-      toast(locate(result.message || 'Release failed'), { type: 'error', prose: true });
-      notifyRelease(false, result.message || 'Release failed', repoName);
+      toast(locate(message), { type: 'error', prose: true });
+      notifyRelease(false, message, repoName);
+    } else if (stranded) {
+      toast(locate(stranded), { type: 'error', prose: true });
     }
     return;
   }
@@ -361,11 +373,13 @@ async function finish(result) {
   // for those ten minutes, and it opens the run itself.
   const linkable = url && !watching;
   el.innerHTML = `<div class="release-result-text">${escapeHtml(done + next)}</div>` +
+    (stranded ? `<div class="release-result-text">${escapeHtml(stranded)}</div>` : '') +
     (linkable ? `<button type="button" class="release-link" id="release-open">${icon('cloud', 14)}<span>View releases</span></button>` : '');
   if (linkable) {
     $('#release-open').addEventListener('click', () => window.git.openExternal(url));
   }
   toast(locate(done), { prose: true });
+  if (stranded) toast(locate(stranded), { type: 'error', prose: true });
   notifyRelease(true, done + (watching ? ' GitHub is building the installers.' : ''), repoName);
 }
 

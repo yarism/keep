@@ -454,8 +454,8 @@ ipcMain.handle('open-in-terminal', (_, dir) => new Promise((resolve) => {
 // takes as long as the repository's tests do, and a panel that says nothing
 // until then is indistinguishable from a hung one.
 ipcMain.handle('release-inspect', (_, repoPath) => release.inspect(repoPath));
-ipcMain.handle('release-run', (event, repoPath, command) =>
+ipcMain.handle('release-run', (event, repoPath, command, options) =>
   release.run(repoPath, command, (chunk) => {
     if (!event.sender.isDestroyed()) event.sender.send('release-output', chunk);
-  }));
+  }, options));
 ipcMain.handle('release-cancel', () => release.cancel());

@@ -129,6 +129,95 @@ test('run: an empty command is refused rather than run', async () => {
   assert.match(result.message, /No command/);
 });
 
+// ── setting the working copy aside ──
+//
+// The promise is that changes are out of the way while the command runs and
+// back when it is over, however it ends.
+
+const stashCount = (repo) => h.git(repo, 'stash', 'list').split('\n').filter(Boolean).length;
+
+test('run: a stashed release sees a clean working copy and gives the changes back', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'README.md', '# Edited\n');
+  h.git(repo, 'add', 'README.md');
+  h.write(repo, 'scratch.txt', 'untracked\n');
+
+  const result = await release.run(repo, 'git status --porcelain; cat README.md', null, { stash: true });
+
+  assert.strictEqual(result.ok, true);
+  assert.match(result.output, /^# Test repo/);
+  assert.deepStrictEqual(result.stash, { restored: true });
+  assert.strictEqual(h.read(repo, 'README.md'), '# Edited\n');
+  assert.strictEqual(h.read(repo, 'scratch.txt'), 'untracked\n');
+  // Staged before, staged after.
+  assert.match(h.git(repo, 'status', '--porcelain'), /^M  README\.md/m);
+  assert.strictEqual(stashCount(repo), 0);
+});
+
+test('run: the changes come back when the command fails', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'README.md', '# Edited\n');
+
+  const result = await release.run(repo, 'exit 2', null, { stash: true });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.stash.restored, true);
+  assert.strictEqual(h.read(repo, 'README.md'), '# Edited\n');
+});
+
+test('run: the changes come back when the release is stopped', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'README.md', '# Edited\n');
+  const running = release.run(repo, 'sleep 30', null, { stash: true });
+
+  await new Promise(r => setTimeout(r, 400));
+  release.cancel();
+  const result = await running;
+
+  assert.strictEqual(result.cancelled, true);
+  assert.strictEqual(h.read(repo, 'README.md'), '# Edited\n');
+  assert.strictEqual(release.isRunning(), false);
+});
+
+// The command committing to the same lines is the one way a pop goes wrong,
+// and then the stash has to survive it.
+test('run: changes that conflict with the release stay in the stash', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'README.md', '# Mine\n');
+
+  const result = await release.run(repo,
+    'echo "# Theirs" > README.md && git commit -qam release', null,
+    { stash: true, stashLabel: 'Keep: before release 9.9.9' });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.stash.restored, false);
+  assert.strictEqual(result.stash.conflicts, true);
+  assert.match(result.stash.message, /Keep: before release 9\.9\.9/);
+  assert.match(h.git(repo, 'stash', 'list'), /Keep: before release 9\.9\.9/);
+});
+
+// A stash of the command's own must not be mistaken for ours.
+test('run: the right stash comes back when the command stashes too', async () => {
+  const repo = h.makeRepo();
+  h.write(repo, 'README.md', '# Mine\n');
+
+  const result = await release.run(repo,
+    'echo other > README.md && git stash push -q -m theirs', null, { stash: true });
+
+  assert.strictEqual(result.stash.restored, true);
+  assert.strictEqual(h.read(repo, 'README.md'), '# Mine\n');
+  assert.match(h.git(repo, 'stash', 'list'), /theirs/);
+});
+
+test('run: nothing to stash is not a failure', async () => {
+  const repo = h.makeRepo();
+
+  const result = await release.run(repo, 'echo fine', null, { stash: true });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.stash, undefined);
+});
+
 // ── the PATH the command runs with ──
 //
 // An app launched from Finder inherits launchd's environment, where npm is not

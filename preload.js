@@ -106,7 +106,7 @@ contextBridge.exposeInMainWorld('git', {
 // than as the return value of a call.
 contextBridge.exposeInMainWorld('release', {
   inspect: (p) => ipcRenderer.invoke('release-inspect', p),
-  run: (p, command) => ipcRenderer.invoke('release-run', p, command),
+  run: (p, command, options) => ipcRenderer.invoke('release-run', p, command, options),
   cancel: () => ipcRenderer.invoke('release-cancel'),
   onOutput: (cb) => ipcRenderer.on('release-output', (_, chunk) => cb(chunk)),
 });

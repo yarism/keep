@@ -154,10 +154,80 @@ exports.cancel = () => {
   return true;
 };
 
+// ── Setting the working copy aside ──
+//
+// Most release commands refuse a working copy with changes in it, and the
+// honest fix is the one done by hand every time: stash, release, pop. Done
+// here it gains two things. The tests a `preversion` runs see exactly the
+// commit being released, untracked files included, rather than that commit
+// plus whatever was half-written on top of it. And the pop cannot be
+// forgotten, because it happens whichever way the command ends.
+
+function git(repoPath, args) {
+  return new Promise((resolve) => {
+    execFile('git', args,
+      { cwd: repoPath, env: nonInteractiveEnv(), maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout, stderr) => resolve({
+        ok: !err,
+        stdout: String(stdout || ''),
+        text: [stdout, stderr || (err && err.message)].filter(Boolean).join('\n').trim(),
+      }));
+  });
+}
+
+async function stashTop(repoPath) {
+  const top = await git(repoPath, ['rev-parse', '-q', '--verify', 'refs/stash']);
+  return top.ok ? top.stdout.trim() : null;
+}
+
+// The stash is remembered by its commit, not by its place in the list: the
+// release command is the user's, and if it stashes anything itself, stash@{0}
+// is no longer ours by the time it is wanted back.
+async function setAside(repoPath, label) {
+  const before = await stashTop(repoPath);
+  const saved = await git(repoPath, ['stash', 'push', '--include-untracked', '-m', label]);
+  if (!saved.ok) return { ok: false, message: lastMeaningfulLine(saved.text) };
+  const hash = await stashTop(repoPath);
+  // Nothing to stash is not a failure, only a pop that must not happen.
+  return { ok: true, hash: hash && hash !== before ? hash : null, label };
+}
+
+async function putBack(repoPath, stash) {
+  const kept = `They are safe in the stash "${stash.label}".`;
+  const list = await git(repoPath, ['stash', 'list', '--format=%H']);
+  const index = list.stdout.split('\n').map(l => l.trim()).indexOf(stash.hash);
+  if (index === -1) {
+    return { restored: false, message: `Your changes were stashed as "${stash.label}", but that stash is no longer in the list.` };
+  }
+  const ref = `stash@{${index}}`;
+  // --index puts staged changes back as staged. Git refuses it outright, before
+  // touching anything, when the staged half no longer applies; the changes
+  // coming back unstaged beats them not coming back.
+  let popped = await git(repoPath, ['stash', 'pop', '--index', ref]);
+  if (!popped.ok && /without --index/i.test(popped.text)) {
+    popped = await git(repoPath, ['stash', 'pop', ref]);
+  }
+  if (popped.ok) return { restored: true };
+  if (/CONFLICT/.test(popped.text)) {
+    return {
+      restored: false,
+      conflicts: true,
+      message: 'Your changes came back with conflicts against what the release committed. ' +
+        `Resolve them in the working copy. The stash "${stash.label}" is kept until you drop it.`,
+    };
+  }
+  const why = lastMeaningfulLine(popped.text);
+  return { restored: false, message: `Your changes could not be put back${why ? ` (${why})` : ''}. ${kept}` };
+}
+
 // `onChunk` is called with output as it arrives; the promise settles when the
 // command is done. Resolves either way — a command that failed is a result to
 // show, not an exception to throw.
-exports.run = async (repoPath, command, onChunk) => {
+//
+// `options.stash` sets the working copy aside first and puts it back after,
+// under `options.stashLabel`. The result then carries `stash`, which says
+// whether the changes came back and, when they did not, where they are.
+exports.run = async (repoPath, command, onChunk, options = {}) => {
   if (current) return { ok: false, message: 'A release is already running.' };
   const text = String(command || '').trim();
   if (!text) return { ok: false, message: 'No command to run.' };
@@ -166,10 +236,40 @@ exports.run = async (repoPath, command, onChunk) => {
   // takes long enough for a second click to get past a check made later.
   const state = { child: null, cancelled: false, timedOut: false, output: '' };
   current = state;
+  // Released only once the changes are back: a second release started between
+  // the command ending and the pop would stash nothing and run against less
+  // than the whole working copy.
+  const done = (result) => { current = null; return result; };
+  const note = (line) => { if (onChunk) onChunk({ stream: 'note', text: line }); };
 
   const env = await childEnv();
-  if (state.cancelled) { current = null; return { ok: false, cancelled: true, message: 'Stopped.', output: '' }; }
+  if (state.cancelled) return done({ ok: false, cancelled: true, message: 'Stopped.', output: '' });
 
+  let stash = null;
+  if (options.stash) {
+    stash = await setAside(repoPath, options.stashLabel || 'Keep: before release');
+    if (!stash.ok) {
+      return done({
+        ok: false,
+        output: '',
+        message: `Could not stash the working copy${stash.message ? `: ${stash.message}` : '.'}`,
+      });
+    }
+    if (stash.hash) note(`Stashed the working copy as "${stash.label}".\n\n`);
+  }
+
+  const result = state.cancelled
+    ? { ok: false, cancelled: true, message: 'Stopped.', output: '' }
+    : await execute(state, repoPath, text, env, onChunk);
+
+  if (stash && stash.hash) {
+    result.stash = await putBack(repoPath, stash);
+    note(`\n${result.stash.restored ? 'Put the working copy back.' : result.stash.message}\n`);
+  }
+  return done(result);
+};
+
+function execute(state, repoPath, text, env, onChunk) {
   const [file, args] = isWindows
     ? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', text]]
     : ['/bin/sh', ['-c', text]];
@@ -202,7 +302,6 @@ exports.run = async (repoPath, command, onChunk) => {
   return new Promise((resolve) => {
     const settle = (result) => {
       clearTimeout(timer);
-      current = null;
       resolve({ ...result, output: state.output });
     };
 
@@ -226,7 +325,7 @@ exports.run = async (repoPath, command, onChunk) => {
       settle({ ok: false, code, message: explainFailure(text, state.output, code) });
     });
   });
-};
+}
 
 // The last line of a failed command is usually the point of it, but three
 // failures are worth naming outright because their own wording sends you

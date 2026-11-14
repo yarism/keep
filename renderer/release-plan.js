@@ -135,15 +135,25 @@ export function lifecycleSteps(scripts = {}, command = '') {
 }
 
 // npm refuses to bump a dirty working copy, and says so only after you have
-// waited for the tests. Untracked files are fine by it, so they are fine here.
-export function blockedByWorkingCopy(status) {
-  const changed = (status || []).filter(f => f.status !== 'untracked');
-  if (changed.length === 0) return null;
-  const names = [...new Set(changed.map(f => f.filePath))];
+// waited for the tests. So the working copy is stashed for the length of the
+// release and put back after it, and this is the sentence that says so before
+// anything moves. Untracked files are fine by npm, so on their own they start
+// nothing; once there is a stash, though, they go into it with the rest, so
+// the tests see the commit being released and nothing else.
+export function stashNotice(status) {
+  const all = status || [];
+  if (!all.some(f => f.status !== 'untracked')) return null;
+  const names = [...new Set(all.map(f => f.filePath))];
   const list = names.slice(0, 3).join(', ');
   const rest = names.length > 3 ? `, and ${names.length - 3} more` : '';
-  return `Commit or stash first: the working copy has uncommitted changes (${list}${rest}). ` +
-    'Most release commands refuse to run against one.';
+  const count = names.length === 1 ? '1 changed file' : `${names.length} changed files`;
+  return `${count} (${list}${rest}) will be stashed for the release and put back afterwards.`;
+}
+
+// The name the stash goes under. It is what is left to find in the stash list
+// if the changes could not be put back, so it says what it was for.
+export function stashLabel(version) {
+  return version ? `Keep: before release ${version}` : 'Keep: before release';
 }
 
 // The version a finished run landed on, read back from what it printed rather
