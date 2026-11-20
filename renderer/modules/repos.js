@@ -5,6 +5,9 @@ import { showChangedCount } from './working-copy.js';
 import { showAccess } from './access.js';
 import { syncReleasePanel } from './release.js';
 import { dirtyBadgeTitle, worktreeTag } from '../worktree-info.js';
+import { showContextMenu } from './context-menu.js';
+import { pickRepoIcon } from './repo-icon-picker.js';
+import { validIcon } from '../repo-icon.js';
 
 let _onSelectRepo = null;
 
@@ -54,7 +57,7 @@ function renderRepoList() {
     item.className = 'repo-item' + (state.repoPath === r.path ? ' active' : '');
     item.tabIndex = 0;
     item.innerHTML = `
-      ${icon('folder', 14)}
+      ${repoGlyph(r)}
       <span class="repo-item-name">${escapeHtml(r.name)}</span>
       <span class="repo-item-badge" hidden></span>
       <button class="repo-item-remove" title="Remove" tabindex="-1">${icon('close', 12)}</button>
@@ -63,6 +66,21 @@ function renderRepoList() {
     item.addEventListener('click', (e) => {
       if (e.target.classList.contains('repo-item-remove')) return;
       openListed(r);
+    });
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e, [
+        { label: 'Change Icon…', action: () => changeIcon(r) },
+        ...(validIcon(r.icon) ? [{ label: 'Use the Folder Icon', action: () => setIcon(r, null) }] : []),
+        { separator: true },
+        { label: 'Remove from List', action: () => {
+          const at = state.repositories.indexOf(r);
+          if (at < 0) return;
+          state.repositories.splice(at, 1);
+          window.git.saveRepos(state.repositories);
+          renderRepoList();
+        } },
+      ]);
     });
     item.addEventListener('keydown', (e) => {
       const items = list.querySelectorAll('.repo-item');
@@ -123,6 +141,29 @@ function renderRepoList() {
     });
     list.appendChild(item);
   });
+}
+
+// The row's picture: the one chosen for it, or the folder. Both kinds are
+// checked by validIcon before they reach the markup, so an entry edited by
+// hand cannot put anything but an emoji or a PNG in the list.
+function repoGlyph(r) {
+  const chosen = validIcon(r.icon);
+  if (chosen?.emoji) return `<span class="repo-item-emoji" aria-hidden="true">${escapeHtml(chosen.emoji)}</span>`;
+  if (chosen?.image) return `<img class="repo-item-image" src="${chosen.image}" alt="" draggable="false">`;
+  return icon('folder', 14);
+}
+
+async function changeIcon(r) {
+  const chosen = await pickRepoIcon(r);
+  if (chosen === undefined) return;
+  setIcon(r, chosen);
+}
+
+function setIcon(r, chosen) {
+  if (chosen) r.icon = chosen;
+  else delete r.icon;
+  window.git.saveRepos(state.repositories);
+  renderRepoList();
 }
 
 // A repository opens on the worktree it was left in (noted by enterWorkspace),

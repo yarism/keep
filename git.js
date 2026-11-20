@@ -202,6 +202,16 @@ const CONFLICT_KINDS = {
   UU: 'both modified',
 };
 
+// Every picture in the working copy that git would show: tracked, plus
+// untracked files that are not ignored, so node_modules and build output stay
+// out of it. The pathspecs keep a big repository's answer to its images rather
+// than every file it has. Used to find a repository's own icon.
+exports.imageFiles = async (repoPath, extensions) => {
+  const specs = extensions.map(ext => `:(glob,icase)**/*.${ext}`);
+  const out = await run(repoPath, ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...specs]);
+  return [...new Set(out.split('\0').filter(Boolean))];
+};
+
 exports.status = async (repoPath) => {
   // -z gives NUL-terminated records and turns off C-style quoting, so paths with
   // spaces or non-ASCII characters arrive verbatim instead of as `"sp ace.txt"`

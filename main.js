@@ -247,6 +247,50 @@ ipcMain.handle('open-repo', async () => {
   return result.filePaths[0];
 });
 
+// ── A repository's icon in the list ──
+//
+// Main reads the bytes and the renderer draws them: an <img> understands .ico,
+// .svg and .webp where nativeImage does not, and the renderer scales whatever
+// it gets down to the small PNG that is actually kept.
+const REPO_ICON_TYPES = {
+  png: 'image/png', svg: 'image/svg+xml', ico: 'image/x-icon', jpg: 'image/jpeg',
+  jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+};
+const MAX_REPO_ICON_BYTES = 5 * 1024 * 1024;
+
+function imageDataUrl(file) {
+  const type = REPO_ICON_TYPES[path.extname(file).slice(1).toLowerCase()];
+  if (!type) return null;
+  const stat = fs.statSync(file);
+  if (!stat.isFile() || stat.size > MAX_REPO_ICON_BYTES) return null;
+  return `data:${type};base64,${fs.readFileSync(file).toString('base64')}`;
+}
+
+ipcMain.handle('repo-icon-files', async (_, repoPath) => {
+  try { return await git.imageFiles(String(repoPath), Object.keys(REPO_ICON_TYPES)); }
+  catch { return []; }
+});
+
+// A picture found by the search above, so the path is the repository's own and
+// must stay inside it.
+ipcMain.handle('repo-icon-read', (_, repoPath, filePath) => {
+  const root = path.resolve(String(repoPath));
+  const full = path.resolve(root, String(filePath));
+  if (!full.startsWith(root + path.sep)) return null;
+  try { return imageDataUrl(full); } catch { return null; }
+});
+
+ipcMain.handle('repo-icon-choose', async (_, defaultPath) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose an Icon',
+    defaultPath: defaultPath ? String(defaultPath) : undefined,
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: Object.keys(REPO_ICON_TYPES) }],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  try { return imageDataUrl(result.filePaths[0]); } catch { return null; }
+});
+
 ipcMain.handle('load-repos', () => loadRepos());
 ipcMain.handle('save-repos', (_, repos) => { saveRepos(repos); return true; });
 

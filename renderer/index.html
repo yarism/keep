@@ -452,6 +452,25 @@
     </div>
   </div>
 
+  <!-- A repository's icon in the list: its own favicon or app icon if it has
+       one, an emoji, or any picture on disk. -->
+  <div id="repo-icon-overlay" class="modal-overlay" hidden>
+    <div class="modal repo-icon-modal" role="dialog" aria-labelledby="repo-icon-title">
+      <div class="modal-title" id="repo-icon-title"></div>
+      <div class="repo-icon-label" id="repo-icon-found-label">From this repository</div>
+      <div class="repo-icon-found" id="repo-icon-found"></div>
+      <div class="repo-icon-label">Emoji</div>
+      <div class="repo-icon-grid" id="repo-icon-emoji"></div>
+      <div class="repo-icon-footer">
+        <button type="button" id="repo-icon-reset" class="repo-icon-reset">Use the folder again</button>
+        <div class="modal-actions">
+          <button type="button" id="repo-icon-cancel">Cancel</button>
+          <button type="button" id="repo-icon-choose">Choose Image…</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Keep Chess, the world's shared game, offered after a commit. Its own
        overlay rather than #modal-overlay so it can never collide with a real
        dialog the refresh happens to open. -->
